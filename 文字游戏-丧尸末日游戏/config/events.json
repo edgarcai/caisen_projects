@@ -1,0 +1,268 @@
+{
+  "schema_version": 1,
+  "events": [
+    {
+      "id": "bank",
+      "category": "discovery",
+      "weight": 1,
+      "title": "废弃银行",
+      "intro": "你来到一家门窗破碎的银行，柜台后仍有可以使用的旧硬币。",
+      "result": "你快速搜寻了一圈，带回{coins}枚金币。",
+      "effects": [
+        {"target": "player.coins", "operation": "add", "amount": [50, 89], "token": "coins"}
+      ]
+    },
+    {
+      "id": "elder",
+      "category": "discovery",
+      "weight": 1,
+      "title": "街角的老人",
+      "intro": "一位饥饿的老人靠在路牌旁，腰间别着一把保存完好的猎刀。",
+      "choices": [
+        {
+          "id": "help",
+          "label": "给他10份食物",
+          "requirements": [
+            {"target": "player.food", "operator": "gte", "value": 10}
+          ],
+          "result": "老人收下食物，把猎刀交给你。食物-{food_cost}，攻击+{attack_gain}。",
+          "effects": [
+            {"target": "player.food", "operation": "subtract", "amount": 10, "token": "food_cost"},
+            {"target": "player.attack", "operation": "add", "amount": 10, "token": "attack_gain"}
+          ]
+        },
+        {
+          "id": "leave",
+          "label": "谨慎离开",
+          "result": "你向老人点头致意，保持距离离开了街角。",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "medical_pod",
+      "category": "discovery",
+      "weight": 1,
+      "title": "大型医疗仓",
+      "intro": "一台应急医疗仓仍有电力，舱门上的绿灯正在闪烁。",
+      "result": "医疗仓完成了全身治疗，你的生命恢复至{health}。",
+      "effects": [
+        {"target": "player.health", "operation": "set", "amount": 100, "token": "health"}
+      ]
+    },
+    {
+      "id": "thief",
+      "category": "ambush",
+      "weight": 1,
+      "title": "幸存者小偷",
+      "intro": "两名幸存者撞过你的肩膀后钻进小巷，你发现钱袋轻了。",
+      "pre_result": "他们先摸走了你钱袋中的{stolen}枚金币。",
+      "pre_effects": [
+        {"target": "player.coins", "operation": "subtract", "amount": [1, 36], "token": "stolen", "limit_to_available": true}
+      ],
+      "choices": [
+        {
+          "id": "track",
+          "label": "追踪他们",
+          "outcomes": [
+            {"weight": 1, "result": "雨水冲掉了足迹，你跟丢了他们。", "effects": []},
+            {
+              "weight": 1,
+              "result": "你认错了一伙幸存者，被训斥后赔了{coins}枚金币，避难所活跃度-{activity}。",
+              "effects": [
+                {"target": "player.coins", "operation": "subtract", "amount": [1, 10], "token": "coins"},
+                {"target": "shelter.activity", "operation": "subtract", "amount": [1, 10], "token": "activity"}
+              ]
+            },
+            {
+              "weight": 1,
+              "result": "你抓住了小偷，并从他们的赃物里收回{coins}枚金币。",
+              "effects": [
+                {"target": "player.coins", "operation": "add", "amount": [1, 45], "token": "coins"}
+              ]
+            },
+            {
+              "weight": 1,
+              "result": "小偷把你引向丧尸群，你受到了{damage}点伤害。",
+              "effects": [
+                {"target": "player.health", "operation": "subtract", "amount": [5, 34], "token": "damage"}
+              ]
+            },
+            {
+              "weight": 1,
+              "result": "你闯进了对方的营地，被抢走{coins}枚金币并受到{damage}点伤害。",
+              "effects": [
+                {"target": "player.coins", "operation": "subtract", "amount": [1, 36], "token": "coins"},
+                {"target": "player.health", "operation": "subtract", "amount": [40, 60], "token": "damage"}
+              ]
+            },
+            {
+              "weight": 1,
+              "result": "你在超市堵住了他们，带回一批补给：药品、金币、属性与零件各+25，饥饿值-25，活跃度+20。",
+              "effects": [
+                {"target": "player.medical_supplies", "operation": "add", "amount": 25, "token": "medical_supplies"},
+                {"target": "player.coins", "operation": "add", "amount": 25, "token": "coins"},
+                {"target": "player.attack", "operation": "add", "amount": 25, "token": "attack"},
+                {"target": "player.defense", "operation": "add", "amount": 25, "token": "defense"},
+                {"target": "player.agility", "operation": "add", "amount": 25, "token": "agility"},
+                {"target": "player.parts", "operation": "add", "amount": 25, "token": "parts"},
+                {"target": "player.hunger", "operation": "subtract", "amount": 25, "token": "hunger"},
+                {"target": "shelter.activity", "operation": "add", "amount": 20, "token": "activity"}
+              ]
+            },
+            {
+              "weight": 1,
+              "result": "你踩中了他们留下的陷阱，受到{damage}点伤害。",
+              "effects": [
+                {"target": "player.health", "operation": "subtract", "amount": [5, 25], "token": "damage"}
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ignore",
+          "label": "穷寇莫追",
+          "result": "你记下这条路线，优先保证自己安全。",
+          "effects": []
+        },
+        {
+          "id": "scavenge",
+          "label": "在附近搜索物资",
+          "result": "你没有追赶，而是在附近找到{parts}个可用零件。",
+          "effects": [
+            {"target": "player.parts", "operation": "add", "amount": [3, 12], "token": "parts"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hospital",
+      "category": "discovery",
+      "weight": 1,
+      "title": "市立医院",
+      "intro": "医院大厅满是灰尘，但药房的防盗门还没有被撬开。",
+      "outcomes": [
+        {
+          "weight": 1,
+          "result": "你带回{medical_supplies}份医疗用品和1支解毒剂。",
+          "effects": [
+            {"target": "player.medical_supplies", "operation": "add", "amount": [15, 58], "token": "medical_supplies"},
+            {"target": "player.antidotes", "operation": "add", "amount": 1, "token": "antidotes"}
+          ]
+        },
+        {
+          "weight": 1,
+          "result": "你带回{medical_supplies}份药品和干净被褥，避难所活跃度+{activity}。",
+          "effects": [
+            {"target": "player.medical_supplies", "operation": "add", "amount": [15, 58], "token": "medical_supplies"},
+            {"target": "player.antidotes", "operation": "add", "amount": 1, "token": "antidotes"},
+            {"target": "shelter.activity", "operation": "add", "amount": [5, 27], "token": "activity"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "commercial_street",
+      "category": "discovery",
+      "weight": 1,
+      "title": "废弃商业街",
+      "intro": "一整条商业街横在面前，摇摇欲坠的招牌在风中碰撞。",
+      "choices": [
+        {
+          "id": "enter",
+          "label": "进入搜索",
+          "outcomes": [
+            {
+              "weight": 1,
+              "result": "服装店招牌砸中了你，生命-{damage}；但衣物让伙伴们很开心，活跃度+{activity}，绷带恢复{heal}点生命。",
+              "effects": [
+                {"target": "player.health", "operation": "subtract", "amount": [10, 30], "token": "damage"},
+                {"target": "shelter.activity", "operation": "add", "amount": [18, 39], "token": "activity"},
+                {"target": "player.health", "operation": "add", "amount": [5, 26], "token": "heal"}
+              ]
+            },
+            {
+              "weight": 1,
+              "result": "五金店仓库里还有{parts}个可用零件。",
+              "effects": [
+                {"target": "player.parts", "operation": "add", "amount": [20, 48], "token": "parts"}
+              ]
+            },
+            {
+              "weight": 1,
+              "result": "你从书店带回一批读物，避难所活跃度+{activity}，书本+{books}。",
+              "effects": [
+                {"target": "shelter.activity", "operation": "add", "amount": [10, 30], "token": "activity"},
+                {"target": "shelter.books", "operation": "add", "amount": [3, 8], "token": "books"}
+              ]
+            },
+            {
+              "weight": 1,
+              "result": "你在药店获得了{medical_supplies}份医疗用品。",
+              "effects": [
+                {"target": "player.medical_supplies", "operation": "add", "amount": [1, 26], "token": "medical_supplies"}
+              ]
+            },
+            {
+              "weight": 1,
+              "result": "你在食品店获得了{food}份食物。",
+              "effects": [
+                {"target": "player.food", "operation": "add", "amount": [5, 46], "token": "food"}
+              ]
+            }
+          ]
+        },
+        {
+          "id": "leave",
+          "label": "绕路离开",
+          "result": "你没有冒险进入危楼，安全返回了主路。",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "skyscraper",
+      "category": "discovery",
+      "weight": 1,
+      "title": "摩天大楼",
+      "intro": "一座遍布裂痕的摩天大楼挡住去路，门厅深处隐约有金属反光。",
+      "choices": [
+        {
+          "id": "enter",
+          "label": "进入大楼",
+          "result": "坠落的重物造成{damage}点伤害，你仍找到{coins}枚金币。",
+          "effects": [
+            {"target": "player.health", "operation": "subtract", "amount": [8, 35], "token": "damage"},
+            {"target": "player.coins", "operation": "add", "amount": [5, 28], "token": "coins"}
+          ]
+        },
+        {
+          "id": "leave",
+          "label": "立刻离开",
+          "result": "撤离途中，你捡到一把还能使用的枪，攻击+{attack}。",
+          "effects": [
+            {"target": "player.attack", "operation": "add", "amount": 20, "token": "attack"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "quiet_street",
+      "category": "common",
+      "weight": 4,
+      "title": "寂静街区",
+      "intro": "街区安静得异常，只有远处废弃广告牌的吱呀声。",
+      "outcomes": [
+        {"weight": 2, "result": "你避开了游荡的丧尸，没有找到物资，但安全回到了避难所。", "effects": []},
+        {
+          "weight": 1,
+          "result": "你在公交站后找到一个遗落背包，获得{food}份食物和{parts}个零件。",
+          "effects": [
+            {"target": "player.food", "operation": "add", "amount": [2, 8], "token": "food"},
+            {"target": "player.parts", "operation": "add", "amount": [1, 5], "token": "parts"}
+          ]
+        }
+      ]
+    }
+  ]
+}

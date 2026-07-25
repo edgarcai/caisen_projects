@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "from_version": 1,
+  "to_version": 2,
+  "state_defaults": {
+    "story": {
+      "current_scene_id": "last_pot_of_porridge",
+      "chapter_id": "chapter_1_hunger_speaks",
+      "humanity": 0,
+      "evidence": 0,
+      "infection_pressure": 0,
+      "completed_scene_ids": [],
+      "flags": ["legacy_save"],
+      "key_items": [],
+      "boss_outcomes": {}
+    },
+    "companions": [
+      {
+        "companion_id": "yangguan",
+        "trust": 0,
+        "status": "active"
+      },
+      {
+        "companion_id": "haocai",
+        "trust": 0,
+        "status": "active"
+      },
+      {
+        "companion_id": "linlan",
+        "trust": 0,
+        "status": "locked"
+      },
+      {
+        "companion_id": "xiaoman",
+        "trust": 0,
+        "status": "locked"
+      }
+    ],
+    "facility_levels": {
+      "field_kitchen": 0,
+      "machine_workshop": 0,
+      "infirmary": 0,
+      "radio_room": 0,
+      "hydroponic_greenhouse": 0,
+      "outer_wall": 0
+    },
+    "battle": null,
+    "pending_exploration": null,
+    "ending": null
+  },
+  "legacy_failure": {
+    "ending_id": "legacy_failure",
+    "outcome": "failure"
+  }
+}

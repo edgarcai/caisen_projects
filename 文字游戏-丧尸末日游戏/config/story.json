@@ -1,0 +1,2265 @@
+{
+  "schema_version": 1,
+  "campaign_id": "embers_era_main_campaign",
+  "title": "避难所：余烬纪元",
+  "tagline": "当尸群仍记得自己，人类该如何定义怪物？",
+  "world": {
+    "outbreak_year": 2166,
+    "signal_time": "03:17",
+    "yangguan_days_since_bite": 47,
+    "quarantine_years": 18,
+    "virus_name": "回声菌株",
+    "city_name": "晦城",
+    "player_shelter_name": "B-17避难所",
+    "white_tower_name": "白塔神经医学中心",
+    "shepherd_protocol_name": "牧羊人协议"
+  },
+  "defaults": {
+    "story_state": {
+      "current_scene_id": "last_pot_of_porridge",
+      "chapter_id": "chapter_1_hunger_speaks",
+      "humanity": 0,
+      "evidence": 0,
+      "infection_pressure": 0,
+      "completed_scene_ids": [],
+      "flags": [],
+      "key_items": [],
+      "boss_outcomes": {}
+    },
+    "companions": [
+      {"companion_id": "haocai", "trust": 0, "status": "active"},
+      {"companion_id": "yangguan", "trust": 0, "status": "active"},
+      {"companion_id": "linlan", "trust": 0, "status": "locked"},
+      {"companion_id": "xiaoman", "trust": 0, "status": "locked"}
+    ],
+    "facility_levels": {
+      "field_kitchen": 0,
+      "machine_workshop": 0,
+      "infirmary": 0,
+      "radio_room": 0,
+      "hydroponic_greenhouse": 0,
+      "outer_wall": 0
+    },
+    "limits": {
+      "humanity_min": -10,
+      "humanity_max": 20,
+      "evidence_min": 0,
+      "evidence_max": 20,
+      "infection_pressure_min": 0,
+      "infection_pressure_max": 10,
+      "trust_min": -5,
+      "trust_max": 5,
+      "minimum_choices_per_scene": 2,
+      "maximum_choices_per_scene": 3
+    }
+  },
+  "chapters": [
+    {
+      "chapter_id": "chapter_1_hunger_speaks",
+      "number": 1,
+      "title": "饥饿会说话",
+      "summary": "最后一锅粥和一段神秘广播，将 B-17 引向被尸群看守的污染粮车。",
+      "scene_ids": [
+        "last_pot_of_porridge",
+        "money_and_secrets",
+        "doctor_in_the_rain",
+        "rail_butcher"
+      ]
+    },
+    {
+      "chapter_id": "chapter_2_city_sings",
+      "number": 2,
+      "title": "尸群在唱谁的名字",
+      "summary": "阳关的秘密浮出水面，伙伴们必须追踪连接全城感染者的歌声。",
+      "scene_ids": [
+        "yangguans_day_forty_seven",
+        "patient_zero_archive",
+        "the_city_starts_singing",
+        "chorus_matriarch"
+      ]
+    },
+    {
+      "chapter_id": "chapter_3_human_lies",
+      "number": 3,
+      "title": "人比末日更会撒谎",
+      "summary": "看似富足的灯塔避难所揭开饥荒的真凶，豪菜也不得不面对封城之夜。",
+      "scene_ids": [
+        "three_dishes_and_soup",
+        "haocais_old_key",
+        "seventeen_minutes"
+      ]
+    },
+    {
+      "chapter_id": "chapter_4_after_embers",
+      "number": 4,
+      "title": "余烬之后是什么",
+      "summary": "无冕王并非灾难源头。最后一条广播，将决定晦城与所有幸存者的未来。",
+      "scene_ids": [
+        "the_uncrowned_king",
+        "the_last_broadcast"
+      ]
+    }
+  ],
+  "companions": [
+    {
+      "companion_id": "haocai",
+      "name": "豪菜",
+      "role": "基地指挥官与工程师",
+      "initial_status": "active",
+      "recruit_scene_id": null,
+      "portrait_key": "companion_haocai",
+      "introduction": "擅长维护设施、分配物资和用冷笑话稳定士气。他做的饭是否算食物，在避难所里仍有争议。",
+      "secret": "十八年前是白塔维护员，亲手执行封城程序，并保留着牧羊人协议的维护密钥。",
+      "trust_perks": [
+        {
+          "perk_id": "haocai_field_repair",
+          "name": "就地取材",
+          "unlock_trust": 1,
+          "description": "设施维修与升级消耗的零件减少。",
+          "effects": [
+            {"target": "rules.facility_parts_cost_percent", "operation": "subtract", "amount": 10}
+          ]
+        },
+        {
+          "perk_id": "haocai_maintenance_memory",
+          "name": "维护员记忆",
+          "unlock_trust": 3,
+          "description": "高级设施升级所需零件进一步减少。",
+          "effects": [
+            {"target": "rules.facility_parts_cost_percent", "operation": "subtract", "amount": 10}
+          ]
+        }
+      ]
+    },
+    {
+      "companion_id": "yangguan",
+      "name": "阳关",
+      "role": "侦察手与共鸣者",
+      "initial_status": "active",
+      "recruit_scene_id": null,
+      "portrait_key": "companion_yangguan",
+      "introduction": "行动敏捷、嘴比刀快。总能提前避开尸群，却从不解释自己为何知道它们会往哪里走。",
+      "secret": "被咬伤四十七天仍未异变，可以听见群巢记忆，是牧羊人协议需要的生物密钥。",
+      "trust_perks": [
+        {
+          "perk_id": "yangguan_scout_route",
+          "name": "尸群盲区",
+          "unlock_trust": 1,
+          "description": "城市探索遭遇伏击的概率降低。",
+          "effects": [
+            {"target": "rules.ambush_weight_percent", "operation": "subtract", "amount": 15}
+          ]
+        },
+        {
+          "perk_id": "yangguan_echo_warning",
+          "name": "回声预警",
+          "unlock_trust": 3,
+          "description": "提前感知首领行动，使首领造成的伤害降低。",
+          "effects": [
+            {"target": "rules.boss_damage_percent", "operation": "subtract", "amount": 15}
+          ]
+        }
+      ]
+    },
+    {
+      "companion_id": "linlan",
+      "name": "林岚",
+      "role": "医生与病毒学家",
+      "initial_status": "locked",
+      "recruit_scene_id": "doctor_in_the_rain",
+      "portrait_key": "companion_linlan",
+      "introduction": "来自白塔的医生，理性得近乎冷酷，却会把最后一支止痛剂留给伤员。",
+      "secret": "曾是顾长昼的学生，并偷偷修改过一批回声菌株的侵蚀参数，间接造就阳关的抗性。",
+      "trust_perks": [
+        {
+          "perk_id": "linlan_triage",
+          "name": "战地分诊",
+          "unlock_trust": 1,
+          "description": "医疗用品的治疗量提高。",
+          "effects": [
+            {"target": "rules.medicine_heal_percent", "operation": "add", "amount": 20}
+          ]
+        },
+        {
+          "perk_id": "linlan_echo_research",
+          "name": "回声抑制",
+          "unlock_trust": 3,
+          "description": "完成回声研究后，医疗用品的治疗量进一步提高。",
+          "effects": [
+            {"target": "rules.medicine_heal_percent", "operation": "add", "amount": 15}
+          ]
+        }
+      ]
+    },
+    {
+      "companion_id": "xiaoman",
+      "name": "小满",
+      "role": "无线电操作员与密码分析员",
+      "initial_status": "locked",
+      "recruit_scene_id": "patient_zero_archive",
+      "portrait_key": "companion_xiaoman",
+      "introduction": "十二岁的无线电天才，在医院应急舱里靠定时广播坚持求救。吐槽豪菜时尤其精准。",
+      "secret": "她记住了母亲在灾变当晚播出的完整疏散旋律，那正是逆向频率缺失的一段。",
+      "trust_perks": [
+        {
+          "perk_id": "xiaoman_signal_scan",
+          "name": "频段扫描",
+          "unlock_trust": 1,
+          "description": "隐藏探索线索出现概率提高。",
+          "effects": [
+            {"target": "rules.discovery_weight_percent", "operation": "add", "amount": 20}
+          ]
+        },
+        {
+          "perk_id": "xiaoman_remote_trade",
+          "name": "无线电议价",
+          "unlock_trust": 3,
+          "description": "友好商人的买入价格下降。",
+          "effects": [
+            {"target": "rules.trade_buy_price_percent", "operation": "subtract", "amount": 10}
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": [
+    {
+      "scene_id": "last_pot_of_porridge",
+      "chapter_id": "chapter_1_hunger_speaks",
+      "order": 1,
+      "title": "最后一锅粥",
+      "location": "B-17避难所",
+      "entry_requirements": [],
+      "body": "2166年1月1日清晨六点，豪菜把锅刮得叮当作响，最后只刮出一勺灰白色的粥。他认真宣布：‘别担心，这不是锅底，是高纤维装甲饼。’\n\n就在众人沉默时，废弃电台响起女孩断断续续的声音：‘不要去丰收仓……粮食会咬人……三、一、七……’随后，避难所铁门外也传来三下、一下、七下敲击。",
+      "objective": "决定如何分配最后的口粮，并调查广播提到的丰收仓。",
+      "choices": [
+        {
+          "choice_id": "share_rations",
+          "label": "平分最后的口粮",
+          "result_text": "粥稀得能照见天花板，但每个人都端到了一碗。豪菜郑重宣布：‘今天的菜名叫众生平等。’避难所久违地响起笑声。",
+          "requirements": [
+            {"type": "attribute", "target": "player.food", "operator": "gte", "value": 6}
+          ],
+          "effects": [
+            {"target": "player.food", "operation": "subtract", "amount": 6},
+            {"target": "player.hunger", "operation": "subtract", "amount": 10},
+            {"target": "shelter.group_hunger", "operation": "subtract", "amount": 15},
+            {"target": "shelter.activity", "operation": "add", "amount": 8},
+            {"target": "story.humanity", "operation": "add", "amount": 1},
+            {"target": "companion.haocai.trust", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["rations_shared"],
+          "add_key_items": [],
+          "next_scene_id": "money_and_secrets"
+        },
+        {
+          "choice_id": "give_up_share",
+          "label": "把自己的那份让给伙伴",
+          "result_text": "你把碗推回桌子中央。阳关没说谢谢，只把自己的猎刀悄悄放到了离你更近的位置。",
+          "requirements": [],
+          "effects": [
+            {"target": "player.hunger", "operation": "add", "amount": 5},
+            {"target": "shelter.group_hunger", "operation": "subtract", "amount": 20},
+            {"target": "story.humanity", "operation": "add", "amount": 2},
+            {"target": "companion.yangguan.trust", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["leader_skipped_meal"],
+          "add_key_items": [],
+          "next_scene_id": "money_and_secrets"
+        },
+        {
+          "choice_id": "seal_rations",
+          "label": "封存口粮，立刻出发",
+          "result_text": "锅被重新锁进储藏柜。没人反对，但铁锁落下的声音比外面的敲门声更冷。",
+          "requirements": [],
+          "effects": [
+            {"target": "shelter.activity", "operation": "subtract", "amount": 5},
+            {"target": "companion.haocai.trust", "operation": "subtract", "amount": 1}
+          ],
+          "add_flags": ["strict_rationing"],
+          "add_key_items": [],
+          "next_scene_id": "money_and_secrets"
+        }
+      ]
+    },
+    {
+      "scene_id": "money_and_secrets",
+      "chapter_id": "chapter_1_hunger_speaks",
+      "order": 2,
+      "title": "钱已经没用了，秘密还值钱",
+      "location": "A市旧银行",
+      "entry_requirements": [
+        {"type": "scene_completed", "scene_id": "last_pot_of_porridge"}
+      ],
+      "body": "A市银行里铺满旧钞，阳关抓起一沓看了看：‘我们发财了，前提是丧尸重新开始收税。’\n\n地下金库的终端仍在闪烁，屏幕显示一笔来自白塔的异常付款：十八年前，消防队曾护送一列密封粮车进入B市第七号线。角落里，一名老人正用猎刀敲击暖气管，节奏同样是三、一、七。",
+      "objective": "找到粮车去向，并决定钱、账本和陌生人哪个更值得冒险。",
+      "choices": [
+        {
+          "choice_id": "loot_vault",
+          "label": "先搜刮仍可流通的旧硬币",
+          "result_text": "你找到一箱自动售货机仍能识别的合金币。阳关评价：‘很好，至少末日里还能买到过期十八年的汽水。’",
+          "requirements": [],
+          "effects": [
+            {"target": "player.coins", "operation": "add", "amount": [50, 89]}
+          ],
+          "add_flags": ["bank_vault_looted"],
+          "add_key_items": [],
+          "next_scene_id": "doctor_in_the_rain"
+        },
+        {
+          "choice_id": "decrypt_ledger",
+          "label": "拆零件解密白塔账本",
+          "result_text": "终端恢复了最后一页转运记录：‘丰收七号，禁止食用；第七号线，消防封锁。’付款签名来自一个名为晨曦计划的项目。",
+          "requirements": [
+            {"type": "attribute", "target": "player.intelligence", "operator": "gte", "value": 100},
+            {"type": "attribute", "target": "player.parts", "operator": "gte", "value": 3}
+          ],
+          "effects": [
+            {"target": "player.parts", "operation": "subtract", "amount": 3},
+            {"target": "story.evidence", "operation": "add", "amount": 2}
+          ],
+          "add_flags": ["white_tower_ledger_decrypted"],
+          "add_key_items": ["dawn_ledger"],
+          "next_scene_id": "doctor_in_the_rain"
+        },
+        {
+          "choice_id": "help_elder",
+          "label": "给老人食物，听完他的故事",
+          "result_text": "老人收下食物，把一枚刻着‘陆沉’的消防员铭牌和猎刀交给你。他压低声音：‘那列车上的东西，不是在被丧尸抢，是被它们看守。’",
+          "requirements": [
+            {"type": "attribute", "target": "player.food", "operator": "gte", "value": 5}
+          ],
+          "effects": [
+            {"target": "player.food", "operation": "subtract", "amount": 5},
+            {"target": "player.attack", "operation": "add", "amount": 5},
+            {"target": "story.humanity", "operation": "add", "amount": 1},
+            {"target": "story.evidence", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["elder_helped"],
+          "add_key_items": ["lu_badge"],
+          "next_scene_id": "doctor_in_the_rain"
+        }
+      ]
+    },
+    {
+      "scene_id": "doctor_in_the_rain",
+      "chapter_id": "chapter_1_hunger_speaks",
+      "order": 3,
+      "title": "雨中的白大褂",
+      "location": "A市至B市高架路",
+      "entry_requirements": [
+        {"type": "scene_completed", "scene_id": "money_and_secrets"}
+      ],
+      "body": "去往地铁的路上，一辆救护车被尸群困在十字路口。车内的林岚穿着带有白塔标记的研究服。她隔着玻璃写下四个字：‘粮食有毒。’\n\n豪菜小声说：‘一般来说，医生说东西有毒，比厨师说更可信。尤其那个厨师是我的时候。’",
+      "objective": "救出林岚，确认她是否知道丰收七号的真相。",
+      "choices": [
+        {
+          "choice_id": "medical_rescue",
+          "label": "使用医疗工具安全破窗救援",
+          "result_text": "你用急救切割器打开车门。林岚先把两支解毒剂塞进你手里，才允许自己被扶下车：‘别误会，这是为了保证样本搬运工活着。’",
+          "requirements": [
+            {"type": "attribute", "target": "player.medical_supplies", "operator": "gte", "value": 5}
+          ],
+          "effects": [
+            {"target": "player.medical_supplies", "operation": "subtract", "amount": 5},
+            {"target": "player.antidotes", "operation": "add", "amount": 2},
+            {"target": "shelter.population", "operation": "add", "amount": 1},
+            {"target": "companion.linlan.trust", "operation": "add", "amount": 2}
+          ],
+          "add_flags": ["linlan_joined", "linlan_rescued_safely"],
+          "add_key_items": [],
+          "next_scene_id": "rail_butcher"
+        },
+        {
+          "choice_id": "force_rescue",
+          "label": "冲进尸群，强行把她救出来",
+          "result_text": "阳关引开大半尸群，你扛着林岚撞出包围。她检查完你的伤口，只说了一句：‘鲁莽，但还算有用。’",
+          "requirements": [],
+          "effects": [
+            {"target": "player.health", "operation": "subtract", "amount": [8, 18]},
+            {"target": "shelter.population", "operation": "add", "amount": 1},
+            {"target": "companion.linlan.trust", "operation": "add", "amount": 1},
+            {"target": "companion.yangguan.trust", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["linlan_joined", "roadside_rescue_fought"],
+          "add_key_items": [],
+          "next_scene_id": "rail_butcher"
+        },
+        {
+          "choice_id": "coded_rescue",
+          "label": "用账本中的白塔代码开启救护车",
+          "result_text": "旧代码仍然有效。车门弹开的瞬间，林岚看见你手中的账本，脸色比外面的尸体还白：‘你们不该看到这个。’",
+          "requirements": [
+            {"type": "key_item", "key_item_id": "dawn_ledger"}
+          ],
+          "effects": [
+            {"target": "shelter.population", "operation": "add", "amount": 1},
+            {"target": "story.evidence", "operation": "add", "amount": 1},
+            {"target": "companion.linlan.trust", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["linlan_joined", "linlan_recognized_ledger"],
+          "add_key_items": [],
+          "next_scene_id": "rail_butcher"
+        }
+      ]
+    },
+    {
+      "scene_id": "rail_butcher",
+      "chapter_id": "chapter_1_hunger_speaks",
+      "order": 4,
+      "title": "铁轨屠夫·陆沉",
+      "location": "B市第七号线",
+      "entry_requirements": [
+        {"type": "scene_completed", "scene_id": "doctor_in_the_rain"}
+      ],
+      "body": "地铁深处停着一列密封粮车。一个穿着消防外骨骼的巨大感染者拖着消防斧巡视月台。他没有扑向你，反而一次次把试图靠近粮车的普通丧尸劈开。\n\n墙上留着一行指甲刻出的字：‘不要开仓。’每当广播响起三、一、七的节奏，他都会痛苦地捂住耳朵。",
+      "objective": "突破陆沉的封锁，查明粮车里究竟装着什么。",
+      "boss_id": "rail_butcher",
+      "next_scene_id": "yangguans_day_forty_seven",
+      "choices": [
+        {
+          "choice_id": "kill_lu_chen",
+          "label": "正面击杀铁轨屠夫",
+          "result_text": "陆沉倒下时仍挡在粮车前。你拆下外骨骼零件，却发现斧柄上刻着一行小字：‘消防员最后离开。’",
+          "requirements": [
+            {"type": "computed_attribute", "target": "active_player.combat_power", "operator": "gte", "value": 28}
+          ],
+          "effects": [
+            {"target": "battle.rail_butcher.starting_health_percent", "operation": "set", "amount": 100},
+            {"target": "player.health", "operation": "subtract", "amount": [20, 35]},
+            {"target": "player.parts", "operation": "add", "amount": 30},
+            {"target": "story.humanity", "operation": "subtract", "amount": 1},
+            {"target": "companion.linlan.trust", "operation": "subtract", "amount": 1},
+            {"target": "story.evidence", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["boss_rail_killed", "grain_contamination_confirmed"],
+          "add_key_items": ["grain_sample"],
+          "next_scene_id": "yangguans_day_forty_seven",
+          "boss_id": "rail_butcher",
+          "boss_resolution": "killed"
+        },
+        {
+          "choice_id": "overload_rail",
+          "label": "过载轨道电网将他击倒",
+          "result_text": "蓝色电弧掠过月台，陆沉重重跪下。你从他护住的车门后找到污染警告，也看见他仍在用身体挡住泄漏的菌雾。",
+          "requirements": [
+            {"type": "attribute", "target": "player.parts", "operator": "gte", "value": 8}
+          ],
+          "effects": [
+            {"target": "battle.rail_butcher.starting_health_percent", "operation": "set", "amount": 70},
+            {"target": "player.parts", "operation": "subtract", "amount": 8},
+            {"target": "player.health", "operation": "subtract", "amount": [4, 10]},
+            {"target": "story.humanity", "operation": "add", "amount": 1},
+            {"target": "story.evidence", "operation": "add", "amount": 2}
+          ],
+          "add_flags": ["boss_rail_spared", "grain_contamination_confirmed"],
+          "add_key_items": ["grain_sample", "firefighter_lullaby"],
+          "next_scene_id": "yangguans_day_forty_seven",
+          "boss_id": "rail_butcher",
+          "boss_resolution": "spared"
+        },
+        {
+          "choice_id": "call_his_name",
+          "label": "叫出陆沉的名字",
+          "result_text": "你举起铭牌，或播放账本里的消防录音。巨斧停在离你额头一指的位置。陆沉用变形的手打开粮车，把录音器推来：‘如果我已经不像人，请记住，我仍在救人。’",
+          "requirements": [
+            {
+              "type": "any_key_item",
+              "key_item_ids": ["lu_badge", "dawn_ledger"]
+            }
+          ],
+          "effects": [
+            {"target": "battle.rail_butcher.starting_health_percent", "operation": "set", "amount": 45},
+            {"target": "story.humanity", "operation": "add", "amount": 2},
+            {"target": "story.evidence", "operation": "add", "amount": 3},
+            {"target": "companion.yangguan.trust", "operation": "add", "amount": 1},
+            {"target": "companion.linlan.trust", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["boss_rail_awakened", "grain_contamination_confirmed"],
+          "add_key_items": ["grain_sample", "firefighter_lullaby"],
+          "next_scene_id": "yangguans_day_forty_seven",
+          "boss_id": "rail_butcher",
+          "boss_resolution": "awakened"
+        }
+      ]
+    },
+    {
+      "scene_id": "yangguans_day_forty_seven",
+      "chapter_id": "chapter_2_city_sings",
+      "order": 5,
+      "title": "阳关的第四十七天",
+      "location": "B-17避难所外门",
+      "entry_requirements": [
+        {"type": "boss_resolved", "boss_id": "rail_butcher"}
+      ],
+      "body": "凌晨三点十七分，避难所警报响起。阳关独自站在门外，瞳孔周围浮现黑色血丝。尸群从他身后经过，却没有攻击。\n\n他终于承认自己四十七天前就被咬伤了。他能听到感染者的低语，也正是他一直在夜里回应门外的敲击。‘我不是怕你们杀我，’他说，‘我是怕有一天，我会求你们别杀我。’",
+      "objective": "决定如何对待阳关，并带他的血样前往C市医院。",
+      "choices": [
+        {
+          "choice_id": "study_yangguan",
+          "label": "相信阳关，让林岚为他检查",
+          "result_text": "林岚确认病毒没有吞噬阳关的高级神经。他第一次在检查中睡着，因为有人替他守着门。",
+          "requirements": [
+            {"type": "attribute", "target": "player.medical_supplies", "operator": "gte", "value": 5}
+          ],
+          "effects": [
+            {"target": "player.medical_supplies", "operation": "subtract", "amount": 5},
+            {"target": "companion.yangguan.trust", "operation": "add", "amount": 2},
+            {"target": "companion.linlan.trust", "operation": "add", "amount": 1},
+            {"target": "story.evidence", "operation": "add", "amount": 1},
+            {"target": "story.infection_pressure", "operation": "subtract", "amount": 1}
+          ],
+          "add_flags": ["yangguan_studied", "yangguan_present"],
+          "add_key_items": ["yangguan_blood_sample"],
+          "next_scene_id": "patient_zero_archive"
+        },
+        {
+          "choice_id": "restrain_yangguan",
+          "label": "暂时隔离并束缚他",
+          "result_text": "隔离门合拢。阳关把手伸进采血孔，仍然开了个玩笑：‘单间不错，就是差个窗。’没人笑。",
+          "requirements": [],
+          "effects": [
+            {"target": "shelter.activity", "operation": "add", "amount": 3},
+            {"target": "companion.yangguan.trust", "operation": "subtract", "amount": 2}
+          ],
+          "add_flags": ["yangguan_restrained", "yangguan_present"],
+          "add_key_items": ["yangguan_blood_sample"],
+          "next_scene_id": "patient_zero_archive"
+        },
+        {
+          "choice_id": "exile_yangguan",
+          "label": "将阳关逐出避难所",
+          "result_text": "阳关背起包，没有争辩。走到门口时他说：‘前面是阳关道，可惜我还是走了独木桥。’第二天，灯塔的巡逻车带走了他。",
+          "requirements": [],
+          "effects": [
+            {"target": "shelter.activity", "operation": "subtract", "amount": 10},
+            {"target": "story.humanity", "operation": "subtract", "amount": 2},
+            {"target": "companion.yangguan.trust", "operation": "subtract", "amount": 3},
+            {"target": "companion.haocai.trust", "operation": "subtract", "amount": 1}
+          ],
+          "add_flags": ["yangguan_exiled", "secret_ending_locked"],
+          "add_key_items": ["yangguan_blood_sample"],
+          "next_scene_id": "patient_zero_archive"
+        }
+      ]
+    },
+    {
+      "scene_id": "patient_zero_archive",
+      "chapter_id": "chapter_2_city_sings",
+      "order": 6,
+      "title": "第零号病历",
+      "location": "C市中央医院",
+      "entry_requirements": [
+        {"type": "scene_completed", "scene_id": "yangguans_day_forty_seven"}
+      ],
+      "body": "医院备用电源只能维持一个区域。档案库里保存着回声菌株的原始病历；药房里有足够大家撑过一个月的药；儿童应急舱中则躺着一直通过无线电求救的小满。\n\n林岚低声承认，她曾是顾长昼的学生。十八年前，她偷偷修改了一批菌株的神经侵蚀参数。阳关正是那一批实验对象的后代。",
+      "objective": "在电力耗尽前选择要挽救的人、药品或真相。",
+      "choices": [
+        {
+          "choice_id": "restore_power_grid",
+          "label": "修复配电，同时启动档案库和应急舱",
+          "result_text": "电力在两条线路间稳定下来。小满醒来的第一句话是：‘你们迟到了六千五百七十二次广播。’档案屏幕上，YG-07病历也终于解锁。",
+          "requirements": [
+            {"type": "attribute", "target": "player.intelligence", "operator": "gte", "value": 120},
+            {"type": "attribute", "target": "player.parts", "operator": "gte", "value": 12}
+          ],
+          "effects": [
+            {"target": "player.parts", "operation": "subtract", "amount": 12},
+            {"target": "shelter.population", "operation": "add", "amount": 1},
+            {"target": "shelter.activity", "operation": "add", "amount": 12},
+            {"target": "story.evidence", "operation": "add", "amount": 2},
+            {"target": "story.humanity", "operation": "add", "amount": 1},
+            {"target": "companion.linlan.trust", "operation": "add", "amount": 1},
+            {"target": "companion.xiaoman.trust", "operation": "add", "amount": 2}
+          ],
+          "add_flags": ["xiaoman_joined", "hospital_archive_restored"],
+          "add_key_items": ["yg07_record"],
+          "next_scene_id": "the_city_starts_singing"
+        },
+        {
+          "choice_id": "rescue_xiaoman",
+          "label": "把全部电力送往小满的应急舱",
+          "result_text": "舱门打开，小满抱着坏掉的收音机走出来。她看了一眼豪菜：‘广播里那个自称优秀厨师的人就是你？信号里的噪声原来有来源。’",
+          "requirements": [],
+          "effects": [
+            {"target": "shelter.population", "operation": "add", "amount": 1},
+            {"target": "shelter.activity", "operation": "add", "amount": 10},
+            {"target": "story.humanity", "operation": "add", "amount": 2},
+            {"target": "companion.xiaoman.trust", "operation": "add", "amount": 2}
+          ],
+          "add_flags": ["xiaoman_joined", "hospital_archive_lost"],
+          "add_key_items": [],
+          "next_scene_id": "the_city_starts_singing"
+        },
+        {
+          "choice_id": "raid_pharmacy",
+          "label": "关闭应急舱，开启药房与部分档案",
+          "result_text": "药柜全部解锁，屏幕上也恢复了一段残缺记录。但应急舱的指示灯永远熄灭了。林岚背对着你清点药品，一句话也没说。",
+          "requirements": [],
+          "effects": [
+            {"target": "player.medical_supplies", "operation": "add", "amount": 25},
+            {"target": "player.antidotes", "operation": "add", "amount": 2},
+            {"target": "story.evidence", "operation": "add", "amount": 1},
+            {"target": "story.humanity", "operation": "subtract", "amount": 2},
+            {"target": "companion.linlan.trust", "operation": "subtract", "amount": 2}
+          ],
+          "add_flags": ["xiaoman_lost", "hospital_pharmacy_looted"],
+          "add_key_items": ["partial_yg07_record"],
+          "next_scene_id": "the_city_starts_singing"
+        }
+      ]
+    },
+    {
+      "scene_id": "the_city_starts_singing",
+      "chapter_id": "chapter_2_city_sings",
+      "order": 7,
+      "title": "整座城市开始唱歌",
+      "location": "D市广播塔外围",
+      "entry_requirements": [
+        {"type": "scene_completed", "scene_id": "patient_zero_archive"}
+      ],
+      "body": "越靠近广播塔，尸群越整齐。数千感染者同时转头，唱着一首残缺的摇篮曲。歌里夹着阳关、陆沉以及你的名字。\n\n灯塔避难所首领沈砺接入频道，主动提出用火箭弹替你炸开入口。他的语气可靠得像灾前保险推销员。",
+      "objective": "选择进入广播塔的方式，并判断是否接受灯塔的帮助。",
+      "choices": [
+        {
+          "choice_id": "accept_lighthouse_strike",
+          "label": "接受灯塔的火箭弹支援",
+          "result_text": "火箭弹撕开塔门，也让仍在塔内重复疏散指令的感染者彻底安静。沈砺提醒你：‘灯塔从不白白开火。’",
+          "requirements": [],
+          "effects": [
+            {"target": "story.humanity", "operation": "subtract", "amount": 1},
+            {"target": "battle.chorus_matriarch.starting_health_percent", "operation": "subtract", "amount": 20}
+          ],
+          "add_flags": ["lighthouse_debt", "tower_struck"],
+          "add_key_items": [],
+          "next_scene_id": "chorus_matriarch"
+        },
+        {
+          "choice_id": "rooftop_infiltration",
+          "label": "从高楼滑索潜入",
+          "result_text": "滑索在风里发出尖叫。你落进塔顶控制间，避开了正门尸群，也截获了一段带有灯塔加密头的控制信号。",
+          "requirements": [
+            {"type": "attribute", "target": "player.agility", "operator": "gte", "value": 12}
+          ],
+          "effects": [
+            {"target": "player.health", "operation": "subtract", "amount": [4, 8]},
+            {"target": "story.evidence", "operation": "add", "amount": 1},
+            {"target": "companion.yangguan.trust", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["tower_rooftop_entry", "lighthouse_signal_intercepted"],
+          "add_key_items": [],
+          "next_scene_id": "chorus_matriarch"
+        },
+        {
+          "choice_id": "follow_hive_song",
+          "label": "让阳关带路穿过尸群",
+          "result_text": "阳关哼出尸群的旋律，感染者像潮水般让开。他努力笑着说：‘看，我现在也算有粉丝了。’没人敢回头看那些同步转动的脸。",
+          "requirements": [
+            {"type": "flag_absent", "flag_id": "yangguan_exiled"},
+            {"type": "attribute", "target": "companion.yangguan.trust", "operator": "gte", "value": 0}
+          ],
+          "effects": [
+            {"target": "story.infection_pressure", "operation": "add", "amount": 2},
+            {"target": "companion.yangguan.trust", "operation": "add", "amount": 2}
+          ],
+          "add_flags": ["hive_route_used", "yangguan_present"],
+          "add_key_items": [],
+          "next_scene_id": "chorus_matriarch"
+        }
+      ]
+    },
+    {
+      "scene_id": "chorus_matriarch",
+      "chapter_id": "chapter_2_city_sings",
+      "order": 8,
+      "title": "鸣钟母体",
+      "location": "D市广播塔核心",
+      "entry_requirements": [
+        {"type": "scene_completed", "scene_id": "the_city_starts_singing"}
+      ],
+      "body": "广播塔核心没有机器操作员。几十名感染者被电缆和旧式警报器连成一个巨大的生物中继站。他们仍在重复灾难发生当天的疏散指令：‘请不要奔跑。请照顾老人和儿童。救援马上就到。’\n\n十八年过去，救援从未抵达。母体发现你后，整座塔同时发出哭声。",
+      "objective": "结束控制全城尸群的广播，同时尽可能保留其中的人类记忆。",
+      "boss_id": "chorus_matriarch",
+      "next_scene_id": "three_dishes_and_soup",
+      "choices": [
+        {
+          "choice_id": "destroy_chorus",
+          "label": "摧毁母体与全部功放",
+          "result_text": "最后一台功放爆裂，哭声戛然而止。塔外尸群同时停住，随后失去方向般向四面八方奔跑。你结束了一场折磨，也解开了一道牢笼。",
+          "requirements": [
+            {
+              "type": "any_of",
+              "requirements": [
+                {"type": "computed_attribute", "target": "active_player.combat_power", "operator": "gte", "value": 40},
+                {"type": "attribute", "target": "player.parts", "operator": "gte", "value": 15}
+              ]
+            }
+          ],
+          "effects": [
+            {"target": "player.health", "operation": "subtract", "amount": [15, 25]},
+            {"target": "player.parts", "operation": "add", "amount": 25},
+            {"target": "story.evidence", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["boss_chorus_destroyed", "swarm_unbound", "lighthouse_command_found"],
+          "add_key_items": ["lighthouse_command_fragment"],
+          "next_scene_id": "three_dishes_and_soup",
+          "boss_id": "chorus_matriarch",
+          "boss_resolution": "destroyed"
+        },
+        {
+          "choice_id": "retune_frequency",
+          "label": "重新调谐疏散旋律",
+          "result_text": "小满补上母亲广播中缺失的四个音，豪菜把报废功放接回安全频段。母体不再尖叫，只轻声说：‘收到。等待救援。’",
+          "requirements": [
+            {
+              "type": "any_of",
+              "requirements": [
+                {
+                  "type": "all_of",
+                  "requirements": [
+                    {"type": "flag", "flag_id": "xiaoman_joined"},
+                    {"type": "attribute", "target": "player.parts", "operator": "gte", "value": 15}
+                  ]
+                },
+                {
+                  "type": "all_of",
+                  "requirements": [
+                    {"type": "attribute", "target": "player.intelligence", "operator": "gte", "value": 150},
+                    {"type": "attribute", "target": "companion.haocai.trust", "operator": "gte", "value": 1}
+                  ]
+                }
+              ]
+            }
+          ],
+          "effects": [
+            {"target": "player.parts", "operation": "subtract", "amount": 15, "limit_to_available": true},
+            {"target": "story.evidence", "operation": "add", "amount": 2},
+            {"target": "story.humanity", "operation": "add", "amount": 2},
+            {"target": "companion.xiaoman.trust", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["boss_chorus_neutralized", "lighthouse_command_found"],
+          "add_key_items": ["counter_frequency", "lighthouse_command_fragment"],
+          "next_scene_id": "three_dishes_and_soup",
+          "boss_id": "chorus_matriarch",
+          "boss_resolution": "neutralized"
+        },
+        {
+          "choice_id": "yangguan_sync",
+          "label": "让阳关进入群巢记忆",
+          "result_text": "阳关把手按在电缆上，数万段人生同时涌入他的眼睛。他哭着念出一个又一个名字，直到母体安静下来：‘他们不是在唱歌，所长。他们在点名。’",
+          "requirements": [
+            {"type": "flag_absent", "flag_id": "yangguan_exiled"},
+            {"type": "attribute", "target": "companion.yangguan.trust", "operator": "gte", "value": 1}
+          ],
+          "effects": [
+            {"target": "story.infection_pressure", "operation": "add", "amount": 3},
+            {"target": "companion.yangguan.trust", "operation": "add", "amount": 2},
+            {"target": "story.evidence", "operation": "add", "amount": 2},
+            {"target": "story.humanity", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["boss_chorus_linked", "lighthouse_command_found", "yangguan_present"],
+          "add_key_items": ["hive_memory", "lighthouse_command_fragment"],
+          "next_scene_id": "three_dishes_and_soup",
+          "boss_id": "chorus_matriarch",
+          "boss_resolution": "linked"
+        }
+      ]
+    },
+    {
+      "scene_id": "three_dishes_and_soup",
+      "chapter_id": "chapter_3_human_lies",
+      "order": 9,
+      "title": "三菜一汤",
+      "location": "灯塔避难所宴会厅",
+      "entry_requirements": [
+        {"type": "boss_resolved", "boss_id": "chorus_matriarch"}
+      ],
+      "body": "灯塔避难所灯火通明，长桌上甚至摆着热肉。豪菜盯着桌面说：‘末日里还能见到三菜一汤，通常第四道菜就是客人。’\n\n沈砺提出用三百份口粮交换阳关。他声称只有把尸群控制起来，才有资格谈文明。宴会进行到一半，所有杯中的药开始生效。",
+      "objective": "确认沈砺是否制造了B-17的饥荒，并带伙伴离开灯塔。",
+      "choices": [
+        {
+          "choice_id": "accept_alliance",
+          "label": "表面接受联盟与口粮",
+          "result_text": "灯塔把口粮送入B-17，但酒中的镇静剂也开始起效。倒下前，你看见沈砺的人取走阳关的血：‘欢迎加入文明。’",
+          "requirements": [],
+          "effects": [
+            {"target": "player.food", "operation": "add", "amount": 80},
+            {"target": "shelter.group_hunger", "operation": "subtract", "amount": 40},
+            {"target": "shelter.activity", "operation": "add", "amount": 20},
+            {"target": "player.health", "operation": "subtract", "amount": 10},
+            {"target": "companion.yangguan.trust", "operation": "subtract", "amount": 1}
+          ],
+          "add_flags": ["shenli_upper_hand", "yangguan_captured"],
+          "add_key_items": [],
+          "next_scene_id": "haocais_old_key"
+        },
+        {
+          "choice_id": "investigate_banquet",
+          "label": "拖住沈砺，暗查灯塔仓库",
+          "result_text": "仓库终端列着一份‘归顺预测表’：B-17的补给被人为截断，污染罐头则被送往拒绝并入灯塔的小避难所。你的编号旁写着：预计屈服，七天。",
+          "requirements": [
+            {
+              "type": "any_of",
+              "requirements": [
+                {"type": "flag", "flag_id": "xiaoman_joined"},
+                {"type": "attribute", "target": "story.evidence", "operator": "gte", "value": 3}
+              ]
+            }
+          ],
+          "effects": [
+            {"target": "player.food", "operation": "add", "amount": 20},
+            {"target": "story.evidence", "operation": "add", "amount": 2},
+            {"target": "companion.linlan.trust", "operation": "add", "amount": 1},
+            {"target": "companion.xiaoman.trust", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["lighthouse_starvation_exposed", "yangguan_captured"],
+          "add_key_items": ["starvation_manifest"],
+          "next_scene_id": "haocais_old_key"
+        },
+        {
+          "choice_id": "refuse_publicly",
+          "label": "当众拒绝并带伙伴突围",
+          "result_text": "你掀翻长桌，豪菜顺手抓走一盘肉：‘突围归突围，浪费食物是不对的。’众人冲出宴会厅，但灯塔的报复炮火已经飞向B-17。",
+          "requirements": [],
+          "effects": [
+            {"target": "player.health", "operation": "subtract", "amount": [10, 18]},
+            {"target": "player.food", "operation": "add", "amount": 12},
+            {"target": "shelter.health", "operation": "subtract", "amount": 40},
+            {"target": "story.humanity", "operation": "add", "amount": 1},
+            {"target": "companion.yangguan.trust", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["lighthouse_open_conflict", "yangguan_captured"],
+          "add_key_items": [],
+          "next_scene_id": "haocais_old_key"
+        }
+      ]
+    },
+    {
+      "scene_id": "haocais_old_key",
+      "chapter_id": "chapter_3_human_lies",
+      "order": 10,
+      "title": "豪菜不豪迈的过去",
+      "location": "灯塔维护管道",
+      "entry_requirements": [
+        {"type": "scene_completed", "scene_id": "three_dishes_and_soup"}
+      ],
+      "body": "逃亡途中，豪菜打开一条只有白塔维护员知道的管道。他承认十八年前正是自己按下封城按钮。城门外还有三万人，但如果不开门，病毒就会被困住。\n\n‘我这辈子做过最硬的一道菜，’他苦笑，‘就是硬着头皮活下来。’远处实验室里，阳关正在被抽取最后一管血。",
+      "objective": "回应豪菜的坦白，救出阳关并夺取通往白塔的权限。",
+      "choices": [
+        {
+          "choice_id": "forgive_haocai",
+          "label": "相信豪菜，让他带队走维护通道",
+          "result_text": "你把选择权交还给豪菜。他用保存十八年的密钥关闭警报，救出所有俘虏。离开时，他把密钥交给你：‘这次，门该由我们决定开不开。’",
+          "requirements": [],
+          "effects": [
+            {"target": "companion.haocai.trust", "operation": "add", "amount": 3},
+            {"target": "story.humanity", "operation": "add", "amount": 1},
+            {"target": "shelter.activity", "operation": "add", "amount": 5}
+          ],
+          "add_flags": ["haocai_forgiven", "yangguan_rescued", "all_captives_rescued", "yangguan_present"],
+          "add_key_items": ["maintenance_key"],
+          "next_scene_id": "seventeen_minutes"
+        },
+        {
+          "choice_id": "demand_atonement",
+          "label": "让豪菜亲自攻入实验室赎罪",
+          "result_text": "豪菜提着维修锤冲进实验室，挨了一枪也没退。阳关获救后扶住他：‘你这回确实挺豪。菜不菜另说。’",
+          "requirements": [],
+          "effects": [
+            {"target": "player.health", "operation": "subtract", "amount": [8, 15]},
+            {"target": "companion.haocai.trust", "operation": "add", "amount": 1},
+            {"target": "companion.yangguan.trust", "operation": "add", "amount": 1},
+            {"target": "story.evidence", "operation": "add", "amount": 1}
+          ],
+          "add_flags": ["haocai_atoned", "yangguan_rescued", "yangguan_present"],
+          "add_key_items": ["physical_tower_key"],
+          "next_scene_id": "seventeen_minutes"
+        },
+        {
+          "choice_id": "remove_haocai_command",
+          "label": "解除豪菜指挥权，伪造隔离事故",
+          "result_text": "林岚制造了菌株泄漏警报，趁混乱救出阳关。豪菜交出钥匙后沉默地走在队伍最后，再没有讲笑话。",
+          "requirements": [
+            {"type": "attribute", "target": "player.medical_supplies", "operator": "gte", "value": 8}
+          ],
+          "effects": [
+            {"target": "player.medical_supplies", "operation": "subtract", "amount": 8},
+            {"target": "companion.haocai.trust", "operation": "subtract", "amount": 3},
+            {"target": "companion.linlan.trust", "operation": "add", "amount": 1},
+            {"target": "shelter.activity", "operation": "subtract", "amount": 5}
+          ],
+          "add_flags": ["haocai_removed", "yangguan_rescued", "secret_ending_harder", "yangguan_present"],
+          "add_key_items": ["physical_tower_key"],
+          "next_scene_id": "seventeen_minutes"
+        }
+      ]
+    },
+    {
+      "scene_id": "seventeen_minutes",
+      "chapter_id": "chapter_3_human_lies",
+      "order": 11,
+      "title": "十七分钟",
+      "location": "H市外环与B-17避难所",
+      "entry_requirements": [
+        {"type": "scene_completed", "scene_id": "haocais_old_key"}
+      ],
+      "body": "沈砺启动了广播诱饵。城市所有尸群开始向B-17移动。白塔同时发出倒计时：核心过载还有十七分钟。\n\n通讯器里，留守者正在焊死最后一道门。远处，沈砺的车已经驶上白塔高架。你只能做一次决定。",
+      "objective": "在守住避难所与阻止沈砺之间作出取舍。",
+      "choices": [
+        {
+          "choice_id": "defend_shelter",
+          "label": "全队返回防守避难所",
+          "result_text": "你们在门前筑起火线，直到最后一只丧尸倒下。B-17无人死亡，但白塔方向升起一道蓝光——沈砺已经先到了。",
+          "requirements": [],
+          "effects": [
+            {"target": "shelter.health", "operation": "subtract", "amount": [10, 25]},
+            {"target": "shelter.activity", "operation": "add", "amount": 15},
+            {"target": "battle.uncrowned_king.starting_health_percent", "operation": "add", "amount": 20}
+          ],
+          "add_flags": ["shelter_defended", "shenli_arrived_first"],
+          "add_key_items": [],
+          "next_scene_id": "the_uncrowned_king"
+        },
+        {
+          "choice_id": "chase_shenli",
+          "label": "放弃回援，全速追击沈砺",
+          "result_text": "你撞停沈砺的车，却听见通讯里传来避难所外门断裂的声音。没有任何选择能让十七分钟变长。",
+          "requirements": [],
+          "effects": [
+            {"target": "player.health", "operation": "subtract", "amount": [8, 15]},
+            {"target": "shelter.health", "operation": "subtract", "amount": [60, 100]},
+            {"target": "shelter.population", "operation": "subtract", "amount": 1},
+            {"target": "story.humanity", "operation": "subtract", "amount": 1}
+          ],
+          "add_flags": ["shenli_delayed", "shelter_abandoned_during_attack"],
+          "add_key_items": [],
+          "next_scene_id": "the_uncrowned_king"
+        },
+        {
+          "choice_id": "split_team",
+          "label": "分队同时守家与追击",
+          "result_text": "豪菜带人回守B-17，小满在无线电中校准路线，你与阳关追向白塔。十七分钟后，两边同时传来一句：‘完成。’第一次，所有人都回来了。",
+          "requirements": [
+            {"type": "attribute", "target": "shelter.population", "operator": "gte", "value": 4},
+            {"type": "computed_attribute", "target": "story.total_companion_trust", "operator": "gte", "value": 5},
+            {"type": "attribute", "target": "player.parts", "operator": "gte", "value": 20}
+          ],
+          "effects": [
+            {"target": "player.parts", "operation": "subtract", "amount": 20},
+            {"target": "shelter.health", "operation": "subtract", "amount": [10, 20]},
+            {"target": "shelter.activity", "operation": "add", "amount": 20},
+            {"target": "story.humanity", "operation": "add", "amount": 2}
+          ],
+          "add_flags": ["everyone_home", "shenli_delayed", "evacuation_ready"],
+          "add_key_items": [],
+          "next_scene_id": "the_uncrowned_king"
+        }
+      ]
+    },
+    {
+      "scene_id": "the_uncrowned_king",
+      "chapter_id": "chapter_4_after_embers",
+      "order": 12,
+      "title": "无冕王·顾长昼",
+      "location": "白塔地下神经中枢",
+      "entry_requirements": [
+        {"type": "scene_completed", "scene_id": "seventeen_minutes"}
+      ],
+      "body": "沈砺将阳关的血注入控制台。白塔地底随即睁开数百只眼睛。顾长昼的身体早已与整座中枢长在一起，他轻易撕碎沈砺的控制装置，却没有攻击林岚。\n\n‘我不是让它们聚集的人，’他用尚且清晰的人声说，‘我是让它们留在这里的人。’十八年来，无冕王一直承受数百万感染者的意识，把尸群困在晦城边界。如今他的身体即将崩溃。",
+      "objective": "决定击杀、维持或理解无冕王，并阻止白塔防御协议失控。",
+      "boss_id": "uncrowned_king",
+      "next_scene_id": "the_last_broadcast",
+      "choices": [
+        {
+          "choice_id": "break_the_crown",
+          "label": "正面击杀无冕王",
+          "result_text": "顾长昼的身体终于停止再生。失去宿主的群巢发出震耳欲聋的哀号，控制核心从他胸腔中脱落。林岚没有哭，只问：‘接下来，谁来替他承受？’",
+          "requirements": [
+            {"type": "computed_attribute", "target": "active_player.combat_power", "operator": "gte", "value": 55}
+          ],
+          "effects": [
+            {"target": "player.health", "operation": "subtract", "amount": [25, 40]},
+            {"target": "story.infection_pressure", "operation": "add", "amount": 1},
+            {"target": "companion.linlan.trust", "operation": "subtract", "amount": 1}
+          ],
+          "add_flags": ["boss_uncrowned_killed", "tower_critical"],
+          "add_key_items": ["crown_core"],
+          "next_scene_id": "the_last_broadcast",
+          "boss_id": "uncrowned_king",
+          "boss_resolution": "killed"
+        },
+        {
+          "choice_id": "repair_life_support",
+          "label": "修复生命维持系统，对抗自动防御协议",
+          "result_text": "你和豪菜接回冷却管线，林岚守住顾长昼的意识。真正倒下的是把所有人都当作参数的自动防御协议。顾长昼睁开仅存的人类眼睛：‘我还能撑一年。’",
+          "requirements": [
+            {"type": "attribute", "target": "player.parts", "operator": "gte", "value": 30},
+            {"type": "attribute", "target": "player.intelligence", "operator": "gte", "value": 140},
+            {"type": "attribute", "target": "companion.linlan.trust", "operator": "gte", "value": 1}
+          ],
+          "effects": [
+            {"target": "player.parts", "operation": "subtract", "amount": 30},
+            {"target": "player.health", "operation": "subtract", "amount": [6, 12]},
+            {"target": "story.humanity", "operation": "add", "amount": 2},
+            {"target": "story.evidence", "operation": "add", "amount": 2},
+            {"target": "companion.linlan.trust", "operation": "add", "amount": 2}
+          ],
+          "add_flags": ["boss_uncrowned_preserved", "guardian_preserved"],
+          "add_key_items": ["guardian_truth"],
+          "next_scene_id": "the_last_broadcast",
+          "boss_id": "uncrowned_king",
+          "boss_resolution": "guardian_preserved"
+        },
+        {
+          "choice_id": "let_yangguan_listen",
+          "label": "让阳关接入顾长昼的记忆",
+          "result_text": "阳关握住顾长昼的手，数百万段人生穿过他。无冕王的攻击停下，城市里所有感染者也同时抬头。阳关满脸泪水：‘他们一直记得。只是没人听见。’",
+          "requirements": [
+            {"type": "flag_absent", "flag_id": "yangguan_exiled"},
+            {"type": "attribute", "target": "companion.yangguan.trust", "operator": "gte", "value": 2},
+            {
+              "type": "any_of",
+              "requirements": [
+                {"type": "attribute", "target": "story.infection_pressure", "operator": "lte", "value": 6},
+                {"type": "attribute", "target": "player.antidotes", "operator": "gte", "value": 1}
+              ]
+            }
+          ],
+          "effects": [
+            {"target": "story.infection_pressure", "operation": "add", "amount": 2},
+            {"target": "companion.yangguan.trust", "operation": "add", "amount": 2},
+            {"target": "story.evidence", "operation": "add", "amount": 2},
+            {"target": "story.humanity", "operation": "add", "amount": 2},
+            {"target": "player.antidotes", "operation": "subtract", "amount": 1, "limit_to_available": true}
+          ],
+          "add_flags": ["boss_uncrowned_linked", "hive_bridge", "yangguan_present"],
+          "add_key_items": ["hive_memory", "guardian_truth"],
+          "next_scene_id": "the_last_broadcast",
+          "boss_id": "uncrowned_king",
+          "boss_resolution": "hive_bridge"
+        }
+      ]
+    },
+    {
+      "scene_id": "the_last_broadcast",
+      "chapter_id": "chapter_4_after_embers",
+      "order": 13,
+      "title": "最后一条广播",
+      "location": "白塔最高层广播室",
+      "entry_requirements": [
+        {"type": "boss_resolved", "boss_id": "uncrowned_king"}
+      ],
+      "body": "倒计时只剩八分钟。城外的尸群已经抵达高速公路，避难所通讯中全是呼救声。小满把麦克风推到你面前：‘所长，整座城市都在听。你打算让它们听见什么？’\n\n豪菜握住总电闸，林岚打开雾化管线，阳关在数百万声音中努力保持清醒。所有走过的路，都汇聚成这一条广播。",
+      "objective": "决定晦城、尸群与幸存者最后的命运。",
+      "choices": [
+        {
+          "choice_id": "detonate_and_evacuate",
+          "label": "引爆白塔，带幸存者撤离",
+          "result_text": "你把撤离坐标广播给所有避难所，然后按下引爆程序。白塔开始像一根燃烧的火柴般倾斜。能否赶上车队，只取决于此前留下了多少人、修好了多少路。",
+          "requirements": [],
+          "effects": [
+            {"target": "shelter.activity", "operation": "add", "amount": 10}
+          ],
+          "add_flags": ["final_evacuate"],
+          "add_key_items": [],
+          "next_scene_id": null,
+          "ending_id": "ember_road"
+        },
+        {
+          "choice_id": "continue_shepherd_protocol",
+          "label": "接管或延续牧羊人协议",
+          "result_text": "你把手放上控制台。若顾长昼仍在，协议将继续守住晦城；若他已经死去，新的控制者必须戴上那顶看不见的王冠。",
+          "requirements": [
+            {
+              "type": "any_key_item",
+              "key_item_ids": ["crown_core", "guardian_truth", "hive_memory"]
+            }
+          ],
+          "effects": [
+            {"target": "story.infection_pressure", "operation": "add", "amount": 2}
+          ],
+          "add_flags": ["final_shepherd"],
+          "add_key_items": [],
+          "next_scene_id": null,
+          "ending_id": "silent_crown"
+        },
+        {
+          "choice_id": "broadcast_reversal",
+          "label": "广播逆向频率，释放雾化解毒剂",
+          "result_text": "小满补上疏散旋律，豪菜输入维护密钥，林岚把最后一支解毒剂送入雾化管线。阳关对着麦克风念出群巢记忆中的第一个名字。凌晨三点十七分，晦城第一次真正安静下来。",
+          "requirements": [
+            {"type": "flag_absent", "flag_id": "secret_ending_locked"},
+            {"type": "attribute", "target": "story.evidence", "operator": "gte", "value": 6},
+            {"type": "attribute", "target": "story.humanity", "operator": "gte", "value": 6},
+            {"type": "attribute", "target": "companion.yangguan.trust", "operator": "gte", "value": 2},
+            {"type": "attribute", "target": "companion.haocai.trust", "operator": "gte", "value": 2},
+            {"type": "attribute", "target": "companion.linlan.trust", "operator": "gte", "value": 2},
+            {"type": "key_item", "key_item_id": "maintenance_key"},
+            {
+              "type": "any_key_item",
+              "key_item_ids": ["hive_memory", "yg07_record"]
+            },
+            {
+              "type": "boss_outcome_any",
+              "boss_id": "rail_butcher",
+              "outcomes": ["spared", "awakened"]
+            },
+            {
+              "type": "any_of",
+              "requirements": [
+                {
+                  "type": "all_of",
+                  "requirements": [
+                    {"type": "key_item", "key_item_id": "counter_frequency"},
+                    {
+                      "type": "boss_outcome_any",
+                      "boss_id": "chorus_matriarch",
+                      "outcomes": ["neutralized"]
+                    }
+                  ]
+                },
+                {
+                  "type": "all_of",
+                  "requirements": [
+                    {"type": "key_item", "key_item_id": "hive_memory"},
+                    {
+                      "type": "boss_outcome_any",
+                      "boss_id": "chorus_matriarch",
+                      "outcomes": ["linked"]
+                    }
+                  ]
+                }
+              ]
+            },
+            {"type": "attribute", "target": "player.antidotes", "operator": "gte", "value": 1}
+          ],
+          "effects": [
+            {"target": "player.antidotes", "operation": "subtract", "amount": 1},
+            {"target": "story.infection_pressure", "operation": "set", "amount": 0},
+            {"target": "story.humanity", "operation": "add", "amount": 4}
+          ],
+          "add_flags": ["final_reversal", "city_awakening"],
+          "add_key_items": [],
+          "next_scene_id": null,
+          "ending_id": "rekindled_dawn"
+        }
+      ]
+    }
+  ],
+  "combat": {
+    "rules": {
+      "minimum_damage": 1,
+      "damage_variance_percent": [90, 110],
+      "player_attack_weight_percent": 100,
+      "player_defense_damage_weight_percent": 50,
+      "shelter_defense_damage_weight_percent": 100,
+      "boss_attack_weight_percent": 100,
+      "player_defense_mitigation_percent": 45,
+      "guard_damage_reduction_percent": 55,
+      "focus_damage_bonus_percent": 65,
+      "focus_critical_bonus_percent": 20,
+      "base_critical_chance_percent": 8,
+      "critical_damage_multiplier_percent": 150,
+      "medicine_cost": 3,
+      "medicine_heal_range": [12, 24],
+      "retreat_base_chance_percent": 35,
+      "retreat_agility_bonus_percent_per_point": 2,
+      "retreat_max_chance_percent": 85,
+      "retreat_failure_damage_multiplier_percent": 75,
+      "round_limit_failure_health": 1,
+      "victory_activity_reward": 10,
+      "retreat_activity_penalty": 4,
+      "defeat_activity_penalty": 12,
+      "player_max_health": 100,
+      "minimum_starting_health_percent": 10,
+      "maximum_starting_health_percent": 150,
+      "victory_outcome": "defeated"
+    },
+    "actions": [
+      {
+        "action_id": "attack",
+        "label": "攻击",
+        "description": "使用当前武器发动稳定攻击。",
+        "requirements": [],
+        "resource_costs": [],
+        "damage_multiplier_percent": 100,
+        "damage_random_percent": [90, 110],
+        "healing_multiplier_percent": 0,
+        "healing_random_range": [0, 0],
+        "defense_multiplier_percent": 100,
+        "focus_gain": 0,
+        "ends_round": true
+      },
+      {
+        "action_id": "guard",
+        "label": "防御",
+        "description": "降低本回合受到的伤害，并观察Boss下一次行动。",
+        "requirements": [],
+        "resource_costs": [],
+        "damage_multiplier_percent": 35,
+        "damage_random_percent": [95, 105],
+        "healing_multiplier_percent": 0,
+        "healing_random_range": [0, 0],
+        "defense_multiplier_percent": 155,
+        "focus_gain": 0,
+        "ends_round": true
+      },
+      {
+        "action_id": "focus",
+        "label": "专注",
+        "description": "放弃本回合主要伤害，令下一次攻击更强并提高暴击概率。",
+        "requirements": [],
+        "resource_costs": [],
+        "damage_multiplier_percent": 20,
+        "damage_random_percent": [100, 100],
+        "healing_multiplier_percent": 0,
+        "healing_random_range": [0, 0],
+        "defense_multiplier_percent": 110,
+        "focus_gain": 1,
+        "ends_round": true
+      },
+      {
+        "action_id": "medicine",
+        "label": "使用医疗用品",
+        "description": "消耗医疗用品在战斗中治疗伤势。",
+        "requirements": [
+          {"type": "attribute", "target": "player.medical_supplies", "operator": "gte", "value": 3}
+        ],
+        "resource_costs": [
+          {"target": "player.medical_supplies", "operation": "subtract", "amount": 3}
+        ],
+        "damage_multiplier_percent": 0,
+        "damage_random_percent": [0, 0],
+        "healing_multiplier_percent": 100,
+        "healing_random_range": [12, 24],
+        "defense_multiplier_percent": 100,
+        "focus_gain": 0,
+        "ends_round": true
+      },
+      {
+        "action_id": "retreat",
+        "label": "撤退",
+        "description": "尝试脱离战斗；失败时会遭受一次追击。",
+        "requirements": [],
+        "resource_costs": [],
+        "damage_multiplier_percent": 0,
+        "damage_random_percent": [0, 0],
+        "healing_multiplier_percent": 0,
+        "healing_random_range": [0, 0],
+        "defense_multiplier_percent": 75,
+        "focus_gain": 0,
+        "success_chance_percent": 35,
+        "success_random_roll": [1, 100],
+        "ends_round": true
+      }
+    ],
+    "texts": {
+      "battle_start": "{boss_name}挡住了去路。战斗开始。",
+      "round_start": "第{round_number}回合｜你的生命：{player_health}｜{boss_name}生命：{boss_health}/{boss_max_health}",
+      "attack": "你抓住空隙发动攻击，对{boss_name}造成{damage}点伤害。",
+      "critical_attack": "攻击命中要害，对{boss_name}造成{damage}点暴击伤害。",
+      "guard": "你稳住重心进入防御，本回合受到的伤害降低。",
+      "focus": "你屏住呼吸观察弱点，下一次攻击将获得专注加成。",
+      "medicine": "你消耗{cost}份医疗用品，恢复{healed}点生命。",
+      "medicine_failed": "医疗用品不足，需要至少{cost}份。",
+      "boss_attack": "{boss_name}发动攻击，你受到{damage}点伤害。",
+      "boss_special": "{special_text}你受到{damage}点伤害。",
+      "guard_reduced": "防御生效，本次伤害由{raw_damage}降低至{damage}。",
+      "retreat_success": "你成功脱离{boss_name}的攻击范围。Boss状态会保留，可以整备后再次挑战。",
+      "retreat_failed": "撤退路线被封死，{boss_name}趁机发动追击。",
+      "victory": "{boss_name}停止了攻击。你赢得了选择其命运的机会。",
+      "victory_rewards": "伙伴完成紧急救治，并从战场回收了可用装备与补给。",
+      "defeat": "你倒在{boss_name}面前。伙伴把最后的希望带回了避难所。",
+      "round_limit": "战斗拖得太久，环境开始崩塌。你必须以最后一点生命撤出战场。",
+      "invalid_action": "当前无法执行战斗行动：{action_id}。",
+      "battle_not_active": "当前没有正在进行的Boss战。"
+    }
+  },
+  "bosses": [
+    {
+      "boss_id": "rail_butcher",
+      "name": "铁轨屠夫·陆沉",
+      "scene_id": "rail_butcher",
+      "portrait_key": "boss_rail_butcher",
+      "max_health": 180,
+      "attack": 22,
+      "defense": 8,
+      "agility": 7,
+      "round_limit": 12,
+      "music_key": "boss_rail_alarm",
+      "intro_text": "穿着消防外骨骼的感染者拖着巨斧挡在粮车前。他攻击所有靠近车门的生物，包括其他丧尸。",
+      "phases": [
+        {
+          "phase_id": "platform_charge",
+          "health_threshold_percent": 100,
+          "name": "月台冲锋",
+          "special_every_rounds": 3,
+          "special_damage": 18,
+          "special_text": "陆沉沿铁轨冲锋，坠落碎石封住退路。"
+        },
+        {
+          "phase_id": "firefighter_memory",
+          "health_threshold_percent": 45,
+          "name": "最后离开",
+          "special_every_rounds": 2,
+          "special_damage": 24,
+          "special_text": "广播响起疏散口令，陆沉陷入狂暴，却仍用身体挡住粮车裂缝。"
+        }
+      ],
+      "possible_outcomes": ["killed", "spared", "awakened"],
+      "base_rewards": {
+        "player.attack": 15,
+        "player.health": 60,
+        "player.medical_supplies": 9,
+        "player.parts": 15,
+        "story.evidence": 1
+      }
+    },
+    {
+      "boss_id": "chorus_matriarch",
+      "name": "鸣钟母体",
+      "scene_id": "chorus_matriarch",
+      "portrait_key": "boss_chorus_matriarch",
+      "max_health": 260,
+      "attack": 18,
+      "defense": 12,
+      "agility": 4,
+      "round_limit": 15,
+      "music_key": "boss_broken_lullaby",
+      "intro_text": "几十名感染者与警报器融成生物中继站，仍在重复十八年前无人回应的疏散广播。",
+      "phases": [
+        {
+          "phase_id": "evacuation_order",
+          "health_threshold_percent": 100,
+          "name": "疏散指令",
+          "special_every_rounds": 3,
+          "special_damage": 8,
+          "special_text": "母体发出低频冲击，所有人同时看见灾变当天的幻象。"
+        },
+        {
+          "phase_id": "name_calling",
+          "health_threshold_percent": 60,
+          "name": "群巢点名",
+          "special_every_rounds": 2,
+          "special_damage": 10,
+          "special_text": "母体念出伙伴的名字，塔外尸群开始撞击承重墙。"
+        },
+        {
+          "phase_id": "no_rescue_came",
+          "health_threshold_percent": 25,
+          "name": "救援没有来",
+          "special_every_rounds": 1,
+          "special_damage": 12,
+          "special_text": "所有声音汇成哭喊，广播塔进入过载。"
+        }
+      ],
+      "possible_outcomes": ["destroyed", "neutralized", "linked"],
+      "base_rewards": {
+        "player.attack": 25,
+        "player.health": 70,
+        "player.medical_supplies": 12,
+        "story.evidence": 1,
+        "player.parts": 12
+      }
+    },
+    {
+      "boss_id": "uncrowned_king",
+      "name": "无冕王·顾长昼",
+      "scene_id": "the_uncrowned_king",
+      "portrait_key": "boss_uncrowned_king",
+      "max_health": 220,
+      "attack": 16,
+      "defense": 18,
+      "agility": 14,
+      "round_limit": 18,
+      "music_key": "boss_last_guardian",
+      "intro_text": "顾长昼与白塔神经中枢融为一体，以自己的意识囚禁着晦城数百万感染者。",
+      "phases": [
+        {
+          "phase_id": "shepherd_defense",
+          "health_threshold_percent": 100,
+          "name": "牧羊人防卫",
+          "special_every_rounds": 3,
+          "special_damage": 8,
+          "special_text": "自动防御协议接管顾长昼的身体，白塔炮台同时开火。"
+        },
+        {
+          "phase_id": "million_memories",
+          "health_threshold_percent": 65,
+          "name": "百万记忆",
+          "special_every_rounds": 2,
+          "special_damage": 10,
+          "special_text": "群巢记忆涌入战场，伙伴必须面对自己最恐惧的失去。"
+        },
+        {
+          "phase_id": "failing_firewall",
+          "health_threshold_percent": 30,
+          "name": "崩溃的防火墙",
+          "special_every_rounds": 1,
+          "special_damage": 12,
+          "special_text": "顾长昼的人类意识短暂醒来，要求你在他彻底失控前作出选择。"
+        }
+      ],
+      "possible_outcomes": ["killed", "guardian_preserved", "hive_bridge"],
+      "base_rewards": {
+        "player.health": 60,
+        "story.evidence": 2,
+        "story.humanity": 1
+      }
+    }
+  ],
+  "discoveries": [
+    {
+      "discovery_id": "dawn_ledger",
+      "name": "晨曦计划账本",
+      "source_scene_id": "money_and_secrets",
+      "source_choice_ids": ["decrypt_ledger"],
+      "is_hidden": true,
+      "hint": "银行终端的付款用途比金库里的硬币更重要。",
+      "description": "记载白塔向消防队支付丰收七号秘密转运费用，可用于唤醒陆沉的任务记忆。",
+      "evidence_value": 2
+    },
+    {
+      "discovery_id": "lu_badge",
+      "name": "陆沉的消防员铭牌",
+      "source_scene_id": "money_and_secrets",
+      "source_choice_ids": ["help_elder"],
+      "is_hidden": true,
+      "hint": "暖气管传来的敲击，与广播节奏完全一致。",
+      "description": "老消防员保存的铭牌，背面刻着‘消防员最后离开’。",
+      "evidence_value": 1
+    },
+    {
+      "discovery_id": "firefighter_lullaby",
+      "name": "消防疏散摇篮曲",
+      "source_scene_id": "rail_butcher",
+      "source_choice_ids": ["overload_rail", "call_his_name"],
+      "is_hidden": true,
+      "hint": "不杀死陆沉，才能听见他一直试图保护的声音。",
+      "description": "证明感染者仍保留人格，也是逆向频率的第一段旋律。",
+      "evidence_value": 2
+    },
+    {
+      "discovery_id": "grain_sample",
+      "name": "丰收七号污染样本",
+      "source_scene_id": "rail_butcher",
+      "source_choice_ids": ["kill_lu_chen", "overload_rail", "call_his_name"],
+      "is_hidden": false,
+      "hint": "主线自动获得。",
+      "description": "含有休眠回声菌株的罐头样本，证明粮仓本身就是感染源。",
+      "evidence_value": 1
+    },
+    {
+      "discovery_id": "yg07_record",
+      "name": "YG-07完整病历",
+      "source_scene_id": "patient_zero_archive",
+      "source_choice_ids": ["restore_power_grid"],
+      "is_hidden": true,
+      "hint": "医院电力并非只能供给一个区域，前提是有人能修好配电。",
+      "description": "记录林岚修改菌株的过程，解释阳关为何能在感染后保持自我。",
+      "evidence_value": 2
+    },
+    {
+      "discovery_id": "counter_frequency",
+      "name": "逆向疏散频率",
+      "source_scene_id": "chorus_matriarch",
+      "source_choice_ids": ["retune_frequency"],
+      "is_hidden": true,
+      "hint": "鸣钟母体不是只有摧毁这一种处理方式。",
+      "description": "由小满母亲的旋律与广播塔载波组合而成，可以暂时唤醒感染者的人类记忆。",
+      "evidence_value": 2
+    },
+    {
+      "discovery_id": "hive_memory",
+      "name": "群巢记忆索引",
+      "source_scene_id": "chorus_matriarch",
+      "source_choice_ids": ["yangguan_sync"],
+      "is_hidden": true,
+      "hint": "足够信任阳关，他会证明歌声其实是一份名单。",
+      "description": "数百万感染者残存姓名与记忆的索引，可让逆向广播找到每一个仍在等待回应的人。",
+      "evidence_value": 2
+    },
+    {
+      "discovery_id": "starvation_manifest",
+      "name": "饥荒归顺预测表",
+      "source_scene_id": "three_dishes_and_soup",
+      "source_choice_ids": ["investigate_banquet"],
+      "is_hidden": true,
+      "hint": "灯塔的宴席太丰盛了，仓库一定比餐桌更诚实。",
+      "description": "证明沈砺截断避难所补给并投放污染食品的完整记录。",
+      "evidence_value": 2
+    },
+    {
+      "discovery_id": "maintenance_key",
+      "name": "白塔维护密钥",
+      "source_scene_id": "haocais_old_key",
+      "source_choice_ids": ["forgive_haocai"],
+      "is_hidden": true,
+      "hint": "豪菜只有在被信任时，才会说出密钥里还藏着第二层授权。",
+      "description": "可绕过牧羊人协议的硬件锁，是秘密结局不可替代的工程权限。",
+      "evidence_value": 1
+    },
+    {
+      "discovery_id": "guardian_truth",
+      "name": "守望者真相",
+      "source_scene_id": "the_uncrowned_king",
+      "source_choice_ids": ["repair_life_support", "let_yangguan_listen"],
+      "is_hidden": true,
+      "hint": "无冕王或许不是需要被消灭的灾难源头。",
+      "description": "顾长昼主动成为活体防火墙，将尸群困在晦城十八年的完整记录。",
+      "evidence_value": 2
+    }
+  ],
+  "facilities": [
+    {
+      "facility_id": "field_kitchen",
+      "name": "战地厨房",
+      "description": "提高食物利用率，并允许豪菜研究‘至少看起来像饭’的配方。",
+      "max_level": 3,
+      "unlock_requirements": [],
+      "levels": [
+        {
+          "level": 1,
+          "parts_cost": 12,
+          "coins_cost": 0,
+          "build_hours": 4,
+          "effects": [
+            {"target": "rules.player_food_hunger_reduction", "operation": "add", "amount": 5}
+          ]
+        },
+        {
+          "level": 2,
+          "parts_cost": 25,
+          "coins_cost": 30,
+          "build_hours": 8,
+          "effects": [
+            {"target": "rules.shelter_food_hunger_reduction", "operation": "add", "amount": 8}
+          ]
+        },
+        {
+          "level": 3,
+          "parts_cost": 45,
+          "coins_cost": 60,
+          "build_hours": 12,
+          "effects": [
+            {"target": "rules.food_cost_percent", "operation": "subtract", "amount": 20}
+          ]
+        }
+      ]
+    },
+    {
+      "facility_id": "machine_workshop",
+      "name": "机修工坊",
+      "description": "制造零件、强化防御，并解锁复杂工程选择。",
+      "max_level": 3,
+      "unlock_requirements": [],
+      "levels": [
+        {
+          "level": 1,
+          "parts_cost": 15,
+          "coins_cost": 10,
+          "build_hours": 5,
+          "effects": [
+            {"target": "shelter.defense_damage", "operation": "add", "amount": 5}
+          ]
+        },
+        {
+          "level": 2,
+          "parts_cost": 30,
+          "coins_cost": 35,
+          "build_hours": 9,
+          "effects": [
+            {"target": "rules.repair_health_restore", "operation": "add", "amount": 15}
+          ]
+        },
+        {
+          "level": 3,
+          "parts_cost": 55,
+          "coins_cost": 70,
+          "build_hours": 14,
+          "effects": [
+            {"target": "rules.boss_tool_damage_percent", "operation": "add", "amount": 25}
+          ]
+        }
+      ]
+    },
+    {
+      "facility_id": "infirmary",
+      "name": "避难所医务室",
+      "description": "治疗伤势、压制负面状态并研究回声菌株。",
+      "max_level": 3,
+      "unlock_requirements": [
+        {"type": "flag", "flag_id": "linlan_joined"}
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "parts_cost": 18,
+          "coins_cost": 20,
+          "build_hours": 6,
+          "effects": [
+            {"target": "rules.medicine_heal_percent", "operation": "add", "amount": 15}
+          ]
+        },
+        {
+          "level": 2,
+          "parts_cost": 35,
+          "coins_cost": 45,
+          "build_hours": 10,
+          "effects": [
+            {"target": "rules.negative_status_health_loss_percent", "operation": "subtract", "amount": 40}
+          ]
+        },
+        {
+          "level": 3,
+          "parts_cost": 60,
+          "coins_cost": 80,
+          "build_hours": 16,
+          "effects": [
+            {"target": "rules.negative_status_health_loss_percent", "operation": "subtract", "amount": 40}
+          ]
+        }
+      ]
+    },
+    {
+      "facility_id": "radio_room",
+      "name": "无线电室",
+      "description": "监听求救、发现隐藏地点并改善远程交易。",
+      "max_level": 3,
+      "unlock_requirements": [],
+      "levels": [
+        {
+          "level": 1,
+          "parts_cost": 10,
+          "coins_cost": 15,
+          "build_hours": 4,
+          "effects": [
+            {"target": "rules.discovery_weight_percent", "operation": "add", "amount": 10}
+          ]
+        },
+        {
+          "level": 2,
+          "parts_cost": 24,
+          "coins_cost": 40,
+          "build_hours": 8,
+          "effects": [
+            {"target": "rules.trade_buy_price_percent", "operation": "subtract", "amount": 5}
+          ]
+        },
+        {
+          "level": 3,
+          "parts_cost": 40,
+          "coins_cost": 70,
+          "build_hours": 12,
+          "effects": [
+            {"target": "rules.story_evidence_job_bonus", "operation": "add", "amount": 1}
+          ]
+        }
+      ]
+    },
+    {
+      "facility_id": "hydroponic_greenhouse",
+      "name": "水培温室",
+      "description": "稳定生产食物，降低群体饥饿增长。",
+      "max_level": 3,
+      "unlock_requirements": [
+        {"type": "facility_level", "facility_id": "machine_workshop", "operator": "gte", "value": 1}
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "parts_cost": 25,
+          "coins_cost": 25,
+          "build_hours": 8,
+          "effects": [
+            {"target": "rules.daily_food_production", "operation": "add", "amount": 4}
+          ]
+        },
+        {
+          "level": 2,
+          "parts_cost": 45,
+          "coins_cost": 55,
+          "build_hours": 12,
+          "effects": [
+            {"target": "rules.daily_food_production", "operation": "add", "amount": 7}
+          ]
+        },
+        {
+          "level": 3,
+          "parts_cost": 70,
+          "coins_cost": 90,
+          "build_hours": 18,
+          "effects": [
+            {"target": "rules.group_hunger_gain_percent", "operation": "subtract", "amount": 25}
+          ]
+        }
+      ]
+    },
+    {
+      "facility_id": "outer_wall",
+      "name": "复合防御墙",
+      "description": "提高避难所耐久上限和防御设施伤害。",
+      "max_level": 3,
+      "unlock_requirements": [],
+      "levels": [
+        {
+          "level": 1,
+          "parts_cost": 20,
+          "coins_cost": 15,
+          "build_hours": 7,
+          "effects": [
+            {"target": "shelter.health", "operation": "add", "amount": 80},
+            {"target": "shelter.defense_damage", "operation": "add", "amount": 5}
+          ]
+        },
+        {
+          "level": 2,
+          "parts_cost": 40,
+          "coins_cost": 45,
+          "build_hours": 11,
+          "effects": [
+            {"target": "shelter.health", "operation": "add", "amount": 120},
+            {"target": "shelter.defense_damage", "operation": "add", "amount": 8}
+          ]
+        },
+        {
+          "level": 3,
+          "parts_cost": 65,
+          "coins_cost": 80,
+          "build_hours": 16,
+          "effects": [
+            {"target": "rules.shelter_turn_damage_percent", "operation": "subtract", "amount": 35}
+          ]
+        }
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "job_id": "sort_salvage",
+      "name": "整理废料",
+      "description": "把探索带回的废品拆成可用零件。豪菜坚持把这叫作垃圾分类复兴计划。",
+      "duration_hours": 2,
+      "requirements": [],
+      "costs": [
+        {"target": "shelter.activity", "operation": "subtract", "amount": 2}
+      ],
+      "rewards": [
+        {"target": "player.parts", "operation": "add", "amount": [7, 10]}
+      ],
+      "risk": {
+        "chance_percent": 10,
+        "effects": [
+          {"target": "player.health", "operation": "subtract", "amount": [2, 5]}
+        ],
+        "message": "一块自认为仍属于机器的弹簧咬了你的手。"
+      }
+    },
+    {
+      "job_id": "greenhouse_shift",
+      "name": "温室轮班",
+      "description": "照料水培作物，为避难所稳定产出食物。",
+      "duration_hours": 3,
+      "requirements": [
+        {"type": "facility_level", "facility_id": "hydroponic_greenhouse", "operator": "gte", "value": 1}
+      ],
+      "costs": [
+        {"target": "shelter.activity", "operation": "subtract", "amount": 1}
+      ],
+      "rewards": [
+        {"target": "player.food", "operation": "add", "amount": [6, 12]},
+        {"target": "shelter.activity", "operation": "add", "amount": 3}
+      ],
+      "risk": {
+        "chance_percent": 5,
+        "effects": [
+          {"target": "player.food", "operation": "subtract", "amount": 3, "limit_to_available": true}
+        ],
+        "message": "营养液泵堵塞，一部分幼苗没能活下来。"
+      }
+    },
+    {
+      "job_id": "radio_watch",
+      "name": "监听城市频段",
+      "description": "搜索求救、商人和隐藏地点的信号。",
+      "duration_hours": 2,
+      "requirements": [
+        {"type": "facility_level", "facility_id": "radio_room", "operator": "gte", "value": 1}
+      ],
+      "costs": [
+        {"target": "player.parts", "operation": "subtract", "amount": 1}
+      ],
+      "rewards": [
+        {"target": "player.coins", "operation": "add", "amount": [3, 10]}
+      ],
+      "risk": {
+        "chance_percent": 15,
+        "effects": [
+          {"target": "story.infection_pressure", "operation": "add", "amount": 1}
+        ],
+        "message": "频段深处有人用阳关的声音呼叫你，但阳关一直坐在你旁边。"
+      }
+    },
+    {
+      "job_id": "medical_research",
+      "name": "回声样本研究",
+      "description": "协助林岚分析菌株，积累主线证据并尝试制作解毒剂。",
+      "duration_hours": 4,
+      "requirements": [
+        {"type": "facility_level", "facility_id": "infirmary", "operator": "gte", "value": 1},
+        {"type": "flag", "flag_id": "linlan_joined"}
+      ],
+      "costs": [
+        {"target": "player.medical_supplies", "operation": "subtract", "amount": 4}
+      ],
+      "rewards": [
+        {"target": "story.evidence", "operation": "add", "amount": 1},
+        {"target": "player.antidotes", "operation": "add", "amount": [0, 1]}
+      ],
+      "risk": {
+        "chance_percent": 12,
+        "effects": [
+          {"target": "story.infection_pressure", "operation": "add", "amount": 1}
+        ],
+        "message": "样本培养皿出现异常共鸣，所有收音机同时响了一秒。"
+      }
+    },
+    {
+      "job_id": "wall_patrol",
+      "name": "外墙巡逻",
+      "description": "清理靠近避难所的游荡感染者并修补薄弱点。",
+      "duration_hours": 3,
+      "requirements": [],
+      "costs": [
+        {"target": "player.health", "operation": "subtract", "amount": [0, 5]}
+      ],
+      "rewards": [
+        {"target": "shelter.health", "operation": "add", "amount": [8, 18]},
+        {"target": "shelter.activity", "operation": "add", "amount": 4}
+      ],
+      "risk": {
+        "chance_percent": 18,
+        "effects": [
+          {"target": "player.health", "operation": "subtract", "amount": [6, 12]}
+        ],
+        "message": "巡逻队遭遇一只躲在广告牌后的感染者。它显然生前从事伏击工作。"
+      }
+    }
+  ],
+  "trade": {
+    "refresh_hours": 12,
+    "buy_price_percent": 100,
+    "sell_price_percent": 55,
+    "price_variance_percent": [90, 115],
+    "vendors": [
+      {
+        "vendor_id": "wandering_caravan",
+        "name": "北行车队",
+        "unlock_requirements": [],
+        "attitude": "neutral",
+        "stock_item_ids": ["trade_food", "trade_medicine", "trade_parts", "trade_books"]
+      },
+      {
+        "vendor_id": "lighthouse_market",
+        "name": "灯塔黑市",
+        "unlock_requirements": [
+          {"type": "scene_completed", "scene_id": "chorus_matriarch"},
+          {"type": "flag_absent", "flag_id": "lighthouse_open_conflict"}
+        ],
+        "attitude": "suspicious",
+        "stock_item_ids": ["trade_food_bulk", "trade_medicine", "trade_weapon_parts", "trade_antidote"]
+      },
+      {
+        "vendor_id": "old_station_collective",
+        "name": "旧车站互助会",
+        "unlock_requirements": [
+          {"type": "boss_outcome_any", "boss_id": "rail_butcher", "outcomes": ["spared", "awakened"]}
+        ],
+        "attitude": "friendly",
+        "stock_item_ids": ["trade_food", "trade_parts", "trade_toys", "trade_magazines"]
+      }
+    ],
+    "items": [
+      {"item_id": "trade_food", "name": "密封食物", "resource_target": "player.food", "quantity": 10, "buy_price": 18, "sell_price": 9},
+      {"item_id": "trade_food_bulk", "name": "整箱压缩粮", "resource_target": "player.food", "quantity": 35, "buy_price": 58, "sell_price": 28},
+      {"item_id": "trade_medicine", "name": "医疗用品", "resource_target": "player.medical_supplies", "quantity": 8, "buy_price": 24, "sell_price": 12},
+      {"item_id": "trade_parts", "name": "通用零件", "resource_target": "player.parts", "quantity": 10, "buy_price": 20, "sell_price": 10},
+      {"item_id": "trade_weapon_parts", "name": "武器零件", "resource_target": "player.attack", "quantity": 2, "buy_price": 42, "sell_price": 20},
+      {"item_id": "trade_antidote", "name": "来历不明的解毒剂", "resource_target": "player.antidotes", "quantity": 1, "buy_price": 80, "sell_price": 35},
+      {"item_id": "trade_books", "name": "旧书", "resource_target": "shelter.books", "quantity": 3, "buy_price": 12, "sell_price": 5},
+      {"item_id": "trade_magazines", "name": "杂志", "resource_target": "shelter.magazines", "quantity": 3, "buy_price": 10, "sell_price": 4},
+      {"item_id": "trade_toys", "name": "儿童玩具", "resource_target": "shelter.toys", "quantity": 2, "buy_price": 16, "sell_price": 7}
+    ]
+  },
+  "recruitment": {
+    "base_population_limit": 8,
+    "population_per_greenhouse_level": 2,
+    "reputation_attribute": "shelter.activity",
+    "candidates": [
+      {
+        "candidate_id": "qiao_mu",
+        "name": "乔木",
+        "role": "前消防员",
+        "description": "陆沉曾经的队员，擅长外墙防守和重型工具。",
+        "requirements": [
+          {"type": "boss_outcome_any", "boss_id": "rail_butcher", "outcomes": ["spared", "awakened"]},
+          {"type": "attribute", "target": "shelter.activity", "operator": "gte", "value": 35}
+        ],
+        "costs": [
+          {"target": "player.food", "operation": "subtract", "amount": 12}
+        ],
+        "effects": [
+          {"target": "shelter.population", "operation": "add", "amount": 1},
+          {"target": "shelter.defense_damage", "operation": "add", "amount": 6}
+        ]
+      },
+      {
+        "candidate_id": "su_yao",
+        "name": "苏遥",
+        "role": "水培技师",
+        "description": "能让营养液里长出真正的菜，而不是豪菜定义中的菜。",
+        "requirements": [
+          {"type": "facility_level", "facility_id": "hydroponic_greenhouse", "operator": "gte", "value": 1},
+          {"type": "attribute", "target": "story.humanity", "operator": "gte", "value": 1}
+        ],
+        "costs": [
+          {"target": "player.coins", "operation": "subtract", "amount": 25}
+        ],
+        "effects": [
+          {"target": "shelter.population", "operation": "add", "amount": 1},
+          {"target": "rules.daily_food_production", "operation": "add", "amount": 3}
+        ]
+      },
+      {
+        "candidate_id": "luo_sheng",
+        "name": "罗声",
+        "role": "旧电台主持人",
+        "description": "声音温和，擅长从混乱频段中辨认谎言和求救。",
+        "requirements": [
+          {"type": "facility_level", "facility_id": "radio_room", "operator": "gte", "value": 2},
+          {"type": "attribute", "target": "story.evidence", "operator": "gte", "value": 2}
+        ],
+        "costs": [
+          {"target": "player.food", "operation": "subtract", "amount": 8},
+          {"target": "player.parts", "operation": "subtract", "amount": 5}
+        ],
+        "effects": [
+          {"target": "shelter.population", "operation": "add", "amount": 1},
+          {"target": "rules.discovery_weight_percent", "operation": "add", "amount": 10}
+        ]
+      },
+      {
+        "candidate_id": "chen_zhi",
+        "name": "陈枝",
+        "role": "轻度感染者",
+        "description": "仍保持完整意识，却会在信号增强时听见群巢。接纳她将考验避难所的底线。",
+        "requirements": [
+          {"type": "scene_completed", "scene_id": "yangguans_day_forty_seven"},
+          {"type": "attribute", "target": "story.humanity", "operator": "gte", "value": 3},
+          {"type": "facility_level", "facility_id": "infirmary", "operator": "gte", "value": 1}
+        ],
+        "costs": [
+          {"target": "player.medical_supplies", "operation": "subtract", "amount": 6}
+        ],
+        "effects": [
+          {"target": "shelter.population", "operation": "add", "amount": 1},
+          {"target": "story.humanity", "operation": "add", "amount": 1},
+          {"target": "story.infection_pressure", "operation": "add", "amount": 1}
+        ]
+      }
+    ]
+  },
+  "trades": [
+    {
+      "trade_id": "caravan_food",
+      "vendor_id": "wandering_caravan",
+      "vendor_name": "北行车队",
+      "item_id": "trade_food",
+      "item_name": "密封食物",
+      "unlock_requirements": [],
+      "resource_target": "player.food",
+      "quantity": 10,
+      "buy_price": 18,
+      "sell_price": 9
+    },
+    {
+      "trade_id": "caravan_medicine",
+      "vendor_id": "wandering_caravan",
+      "vendor_name": "北行车队",
+      "item_id": "trade_medicine",
+      "item_name": "医疗用品",
+      "unlock_requirements": [],
+      "resource_target": "player.medical_supplies",
+      "quantity": 8,
+      "buy_price": 24,
+      "sell_price": 12
+    },
+    {
+      "trade_id": "caravan_parts",
+      "vendor_id": "wandering_caravan",
+      "vendor_name": "北行车队",
+      "item_id": "trade_parts",
+      "item_name": "通用零件",
+      "unlock_requirements": [],
+      "resource_target": "player.parts",
+      "quantity": 10,
+      "buy_price": 20,
+      "sell_price": 10
+    },
+    {
+      "trade_id": "caravan_books",
+      "vendor_id": "wandering_caravan",
+      "vendor_name": "北行车队",
+      "item_id": "trade_books",
+      "item_name": "旧书",
+      "unlock_requirements": [],
+      "resource_target": "shelter.books",
+      "quantity": 3,
+      "buy_price": 12,
+      "sell_price": 5
+    },
+    {
+      "trade_id": "lighthouse_bulk_food",
+      "vendor_id": "lighthouse_market",
+      "vendor_name": "灯塔黑市",
+      "item_id": "trade_food_bulk",
+      "item_name": "整箱压缩粮",
+      "unlock_requirements": [
+        {"type": "scene_completed", "scene_id": "chorus_matriarch"},
+        {"type": "flag_absent", "flag_id": "lighthouse_open_conflict"}
+      ],
+      "resource_target": "player.food",
+      "quantity": 35,
+      "buy_price": 58,
+      "sell_price": 28
+    },
+    {
+      "trade_id": "lighthouse_weapon_parts",
+      "vendor_id": "lighthouse_market",
+      "vendor_name": "灯塔黑市",
+      "item_id": "trade_weapon_parts",
+      "item_name": "武器零件",
+      "unlock_requirements": [
+        {"type": "scene_completed", "scene_id": "chorus_matriarch"},
+        {"type": "flag_absent", "flag_id": "lighthouse_open_conflict"}
+      ],
+      "resource_target": "player.attack",
+      "quantity": 2,
+      "buy_price": 42,
+      "sell_price": 20
+    },
+    {
+      "trade_id": "lighthouse_antidote",
+      "vendor_id": "lighthouse_market",
+      "vendor_name": "灯塔黑市",
+      "item_id": "trade_antidote",
+      "item_name": "来历不明的解毒剂",
+      "unlock_requirements": [
+        {"type": "scene_completed", "scene_id": "chorus_matriarch"},
+        {"type": "flag_absent", "flag_id": "lighthouse_open_conflict"}
+      ],
+      "resource_target": "player.antidotes",
+      "quantity": 1,
+      "buy_price": 80,
+      "sell_price": 35
+    },
+    {
+      "trade_id": "station_food",
+      "vendor_id": "old_station_collective",
+      "vendor_name": "旧车站互助会",
+      "item_id": "trade_food",
+      "item_name": "互助会口粮",
+      "unlock_requirements": [
+        {"type": "boss_outcome_any", "boss_id": "rail_butcher", "outcomes": ["spared", "awakened"]}
+      ],
+      "resource_target": "player.food",
+      "quantity": 10,
+      "buy_price": 15,
+      "sell_price": 8
+    },
+    {
+      "trade_id": "station_parts",
+      "vendor_id": "old_station_collective",
+      "vendor_name": "旧车站互助会",
+      "item_id": "trade_parts",
+      "item_name": "消防站备件",
+      "unlock_requirements": [
+        {"type": "boss_outcome_any", "boss_id": "rail_butcher", "outcomes": ["spared", "awakened"]}
+      ],
+      "resource_target": "player.parts",
+      "quantity": 10,
+      "buy_price": 17,
+      "sell_price": 9
+    },
+    {
+      "trade_id": "station_toys",
+      "vendor_id": "old_station_collective",
+      "vendor_name": "旧车站互助会",
+      "item_id": "trade_toys",
+      "item_name": "儿童玩具",
+      "unlock_requirements": [
+        {"type": "boss_outcome_any", "boss_id": "rail_butcher", "outcomes": ["spared", "awakened"]}
+      ],
+      "resource_target": "shelter.toys",
+      "quantity": 2,
+      "buy_price": 16,
+      "sell_price": 7
+    }
+  ],
+  "recruits": [
+    {
+      "recruit_id": "qiao_mu",
+      "name": "乔木",
+      "role": "前消防员",
+      "description": "陆沉曾经的队员，擅长外墙防守和重型工具。",
+      "requirements": [
+        {"type": "boss_outcome_any", "boss_id": "rail_butcher", "outcomes": ["spared", "awakened"]},
+        {"type": "attribute", "target": "shelter.activity", "operator": "gte", "value": 35}
+      ],
+      "costs": [
+        {"target": "player.food", "operation": "subtract", "amount": 12}
+      ],
+      "effects": [
+        {"target": "shelter.population", "operation": "add", "amount": 1},
+        {"target": "shelter.defense_damage", "operation": "add", "amount": 6}
+      ],
+      "add_flags": ["qiao_mu_recruited"]
+    },
+    {
+      "recruit_id": "su_yao",
+      "name": "苏遥",
+      "role": "水培技师",
+      "description": "能让营养液里长出真正的菜，而不是豪菜定义中的菜。",
+      "requirements": [
+        {"type": "facility_level", "facility_id": "hydroponic_greenhouse", "operator": "gte", "value": 1},
+        {"type": "attribute", "target": "story.humanity", "operator": "gte", "value": 1}
+      ],
+      "costs": [
+        {"target": "player.coins", "operation": "subtract", "amount": 25}
+      ],
+      "effects": [
+        {"target": "shelter.population", "operation": "add", "amount": 1},
+        {"target": "rules.daily_food_production", "operation": "add", "amount": 3}
+      ],
+      "add_flags": ["su_yao_recruited"]
+    },
+    {
+      "recruit_id": "luo_sheng",
+      "name": "罗声",
+      "role": "旧电台主持人",
+      "description": "声音温和，擅长从混乱频段中辨认谎言和求救。",
+      "requirements": [
+        {"type": "facility_level", "facility_id": "radio_room", "operator": "gte", "value": 2},
+        {"type": "attribute", "target": "story.evidence", "operator": "gte", "value": 2}
+      ],
+      "costs": [
+        {"target": "player.food", "operation": "subtract", "amount": 8},
+        {"target": "player.parts", "operation": "subtract", "amount": 5}
+      ],
+      "effects": [
+        {"target": "shelter.population", "operation": "add", "amount": 1},
+        {"target": "rules.discovery_weight_percent", "operation": "add", "amount": 10}
+      ],
+      "add_flags": ["luo_sheng_recruited"]
+    },
+    {
+      "recruit_id": "chen_zhi",
+      "name": "陈枝",
+      "role": "轻度感染者",
+      "description": "仍保持完整意识，却会在信号增强时听见群巢。接纳她将考验避难所的底线。",
+      "requirements": [
+        {"type": "scene_completed", "scene_id": "yangguans_day_forty_seven"},
+        {"type": "attribute", "target": "story.humanity", "operator": "gte", "value": 3},
+        {"type": "facility_level", "facility_id": "infirmary", "operator": "gte", "value": 1}
+      ],
+      "costs": [
+        {"target": "player.medical_supplies", "operation": "subtract", "amount": 6}
+      ],
+      "effects": [
+        {"target": "shelter.population", "operation": "add", "amount": 1},
+        {"target": "story.humanity", "operation": "add", "amount": 1},
+        {"target": "story.infection_pressure", "operation": "add", "amount": 1}
+      ],
+      "add_flags": ["chen_zhi_recruited"]
+    }
+  ],
+  "endings": [
+    {
+      "ending_id": "rekindled_dawn",
+      "priority": 500,
+      "title": "再燃黎明",
+      "tone": "秘密希望结局",
+      "requirements": [
+        {"type": "flag", "flag_id": "final_reversal"},
+        {"type": "flag", "flag_id": "city_awakening"}
+      ],
+      "body": "逆向频率在凌晨三点十七分传遍晦城，林岚将解毒剂雾化送入通风系统。感染者没有立刻变回人，他们只是一个接一个停下，像从漫长噩梦中醒来。\n\n陆沉在废弃地铁中重新念出自己的名字。鸣钟母体第一次停止重复疏散指令。顾长昼在生命最后一刻与群巢断开，安静地说：‘原来世界这么安静。’\n\n黎明时，阳关睁开眼睛，问出的第一句话是：‘今天谁做饭？’豪菜举起锅铲，所有人同时后退一步。城里仍有感染者，仍有废墟，但人类第一次证明，感染不是终点。",
+      "epilogue_title": "黎明之后",
+      "achievement_id": "ending_rekindled_dawn"
+    },
+    {
+      "ending_id": "white_tower_ashes",
+      "priority": 400,
+      "title": "白塔成灰",
+      "tone": "牺牲结局",
+      "requirements": [
+        {"type": "flag", "flag_id": "final_evacuate"},
+        {
+          "type": "any_of",
+          "requirements": [
+            {"type": "attribute", "target": "shelter.population", "operator": "lt", "value": 4},
+            {"type": "attribute", "target": "shelter.health", "operator": "lt", "value": 80},
+            {"type": "flag_absent", "flag_id": "everyone_home"}
+          ]
+        }
+      ],
+      "body": "车辆不够，防线也撑不到爆炸之后。你留下来手动维持引爆程序，把最后一个座位让给伤员。\n\n最后一段广播只有一句：‘这里是B-17。我们没能看到明天，但明天会看到我们留下的火。’白塔化为灰烬，远处车队得以离开。",
+      "epilogue_title": "有人必须留下",
+      "achievement_id": "ending_white_tower_ashes"
+    },
+    {
+      "ending_id": "ember_road",
+      "priority": 300,
+      "title": "北行余烬",
+      "tone": "苦涩希望结局",
+      "requirements": [
+        {"type": "flag", "flag_id": "final_evacuate"}
+      ],
+      "body": "白塔倒下时像一根燃烧的火柴。幸存者车队向北驶去，后视镜中的晦城被火光吞没。没有人知道失去控制的感染者是否会追上来，但至少所有坐上车的人还拥有明天。\n\n豪菜终于煮出一锅真正的粥。阳关尝了一口：‘盐放多了。’豪菜笑骂：‘能嫌咸，说明还活着。’",
+      "epilogue_title": "向北",
+      "achievement_id": "ending_ember_road"
+    },
+    {
+      "ending_id": "long_night_watch",
+      "priority": 250,
+      "title": "长夜守望",
+      "tone": "克制希望结局",
+      "requirements": [
+        {"type": "flag", "flag_id": "final_shepherd"},
+        {"type": "flag", "flag_id": "guardian_preserved"},
+        {
+          "type": "any_key_item",
+          "key_item_ids": ["maintenance_key", "guardian_truth"]
+        }
+      ],
+      "body": "白塔没有倒下，尸群也没有离开。B-17成为封锁区内第一个公开接纳轻度感染者的社区。林岚继续研究治疗方式，阳关负责在两种人之间传话。\n\n顾长昼在广播中说：‘我还能撑一年。’你回答：‘那这一年，我们一起想办法。’",
+      "epilogue_title": "守住这一年",
+      "achievement_id": "ending_long_night_watch"
+    },
+    {
+      "ending_id": "silent_crown",
+      "priority": 100,
+      "title": "静默王冠",
+      "tone": "黑暗秩序结局",
+      "requirements": [
+        {"type": "flag", "flag_id": "final_shepherd"}
+      ],
+      "body": "尸群在你的一句话下停止移动。从那天起，没有任何感染者敢靠近B-17，也没有任何幸存者敢违抗新的所长。\n\n每晚三点十七分，你都能听到数百万声音在脑海里询问：‘我们什么时候可以回家？’你获得了绝对安全，也再没有真正安静地睡过。",
+      "epilogue_title": "王没有冠",
+      "achievement_id": "ending_silent_crown"
+    }
+  ],
+  "ending_resolution": {
+    "fallback_ending_id": "silent_crown"
+  }
+}
