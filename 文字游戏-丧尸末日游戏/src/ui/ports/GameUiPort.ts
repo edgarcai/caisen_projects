@@ -26,6 +26,10 @@ export type GameScreenId =
   | "warehouse"
   | "research"
   | "crafting"
+  | "expedition_city_list"
+  | "expedition_city_detail"
+  | "expedition_district_list"
+  | "expedition_district_detail"
   | "expedition_prepare"
   | "expedition_status"
   | "history"
@@ -70,6 +74,8 @@ export interface UiOptionView {
   readonly label: string;
   readonly description: string;
   readonly disabled: boolean;
+  /** 保留锁定灰态但不禁止点击，用于先查看需求再解锁的入口。 */
+  readonly lockedAppearance?: boolean;
   readonly disabledReason?: string;
   readonly tone?: UiTone;
 }
@@ -194,6 +200,35 @@ export interface UiPromptView {
   readonly options: readonly UiOptionView[];
 }
 
+/** 配置驱动详情页中的一行只读信息。 */
+export interface UiDetailFieldView {
+  readonly id: string;
+  readonly label: string;
+  readonly value: string;
+}
+
+/** 配置驱动详情页中的一项条件或风险提示。 */
+export interface UiRequirementView {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly status: "met" | "unmet" | "informational";
+}
+
+/** 城市内一个可配置、可独立选择的探索区划。 */
+export interface UiCityDistrictView {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly label: string;
+  readonly description: string;
+  readonly dangerLevel: number;
+  readonly eventStepCost: number;
+  readonly eventLabels: readonly string[];
+  readonly fields: readonly UiDetailFieldView[];
+  readonly requirements: readonly UiRequirementView[];
+}
+
 /**
  * 一座可探索城市。
  */
@@ -203,6 +238,10 @@ export interface UiCityView extends UiOptionView {
   readonly terrainLabel: string;
   readonly relationLabel: string;
   readonly travelStepCost: number;
+  readonly defaultDistrictId: string;
+  readonly districts: readonly UiCityDistrictView[];
+  readonly fields: readonly UiDetailFieldView[];
+  readonly requirements: readonly UiRequirementView[];
 }
 
 /**
@@ -307,6 +346,8 @@ export interface UiExpeditionCarryItemView {
 export interface UiExpeditionStatusView {
   readonly cityId: string;
   readonly cityName: string;
+  readonly districtId: string;
+  readonly districtName: string;
   readonly travelStepCost: number;
   readonly remainingSteps: number;
   readonly maximumSteps: number;
@@ -419,6 +460,7 @@ export type GameUiCommand =
   | {
       readonly type: "expedition_begin";
       readonly cityId: string;
+      readonly districtId: string;
       readonly companionIds: readonly string[];
       readonly carriedItems: Readonly<Record<string, number>>;
     }

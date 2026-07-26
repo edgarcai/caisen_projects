@@ -13,7 +13,6 @@ import type { UiBrandView } from "../ports/GameUiPort";
 import {
   buildCoverMenuItems,
   resolveCoverChangelogGeometry,
-  resolveCoverExitGeometry,
   resolveCoverHorizontalPosition,
   resolveCoverMenuItemGeometry,
   resolveCoverMenuLayout,
@@ -29,7 +28,7 @@ import type {
 } from "../models/CoverMenuModel";
 import type { PageView } from "./PageView";
 
-/** 展示双行标题、五个主入口和独立系统键的封面页面。 */
+/** 展示双行标题、五个主入口和独立设置键的封面页面。 */
 export class CoverPage implements PageView {
   public readonly root: LayaSpriteLike;
   private readonly tooltip: PointerTooltip | null;
@@ -71,7 +70,7 @@ export class CoverPage implements PageView {
     );
   }
 
-  /** 在安全区绘制设置、右上退出与右下灰色更新日志入口。 */
+  /** 在安全区绘制设置与右下灰色更新日志入口。 */
   private renderUtilities(
     factory: UiFactory,
     config: GameUiConfig,
@@ -84,14 +83,6 @@ export class CoverPage implements PageView {
       ...resolveCoverSettingsGeometry(config, layout),
       tone: "default",
       onClick: actions.openSettings,
-    });
-    factory.button(this.root, {
-      testId: "menu-exit",
-      label: config.texts.exit,
-      ...resolveCoverExitGeometry(config, layout),
-      tone: "danger",
-      shape: layout.kind === "mobile" ? "rectangle" : "parallelogram",
-      onClick: actions.exitGame,
     });
     factory.button(this.root, {
       testId: "menu-update-log",

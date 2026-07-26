@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import type { GameApplication } from "../../src/application";
 import { validateSurvivalSystemsConfig } from "../../src/config/survivalSystemsValidator";
-import type { CityConfig } from "../../src/domain/content";
+import type { CityConfig, CityDistrictConfig } from "../../src/domain/content";
 import type { GameMode } from "../../src/domain/game-state";
 import {
   CityAccessService,
@@ -67,6 +67,15 @@ function configuredTravelCost(
   if (relation === "home") return travel.home_step_cost;
   if (relation === "neighbor") return travel.neighbor_step_cost;
   return travel.remote_step_cost;
+}
+
+/** 返回城市在内容配置中指定的默认区划。 */
+function configuredDefaultDistrict(
+  application: GameApplication,
+  cityId: string,
+): CityDistrictConfig {
+  const city = application.content.city(cityId);
+  return application.content.district(city.id, city.default_district_id);
 }
 
 describe("游戏模式能力隔离", () => {
@@ -146,7 +155,7 @@ describe("城市拓扑与通行矩阵", () => {
     }
   });
 
-  it("远城同时要求足量情报和路线，满足后 D 至 H 市统一开放", () => {
+  it("环形拓扑中远城同时要求足量情报和路线", () => {
     const application = startConfiguredGame({ homeCityId: "city_a" });
     const state = requireState(application);
     const initial = new Map(
@@ -155,21 +164,21 @@ describe("城市拓扑与通行矩阵", () => {
 
     expect(initial.get("city_a")?.accessible).toBe(true);
     expect(initial.get("city_b")?.accessible).toBe(true);
-    expect(initial.get("city_c")?.accessible).toBe(true);
-    for (const cityId of ["city_d", "city_e", "city_f", "city_g", "city_h"]) {
+    expect(initial.get("city_h")?.accessible).toBe(true);
+    for (const cityId of ["city_c", "city_d", "city_e", "city_f", "city_g"]) {
       expect(initial.get(cityId)?.accessible, cityId).toBe(false);
     }
 
     state.shelter.newspapers = 10;
     expect(application.expeditionCities().find(
-      (decision) => decision.city.id === "city_h",
+      (decision) => decision.city.id === "city_g",
     )?.accessible).toBe(false);
 
     state.inventory.crafted_items.route_map = 1;
     const unlocked = new Map(
       application.expeditionCities().map((decision) => [decision.city.id, decision]),
     );
-    for (const cityId of ["city_d", "city_e", "city_f", "city_g", "city_h"]) {
+    for (const cityId of ["city_c", "city_d", "city_e", "city_f", "city_g"]) {
       expect(unlocked.get(cityId)?.accessible, cityId).toBe(true);
     }
   });
@@ -211,7 +220,7 @@ describe("城市拓扑与通行矩阵", () => {
   });
 
   it("陆路载具不能替代岛城海路，但摩托艇可以开放 H 市", () => {
-    const application = startConfiguredGame({ homeCityId: "city_a" });
+    const application = startConfiguredGame({ homeCityId: "city_d" });
     const state = requireState(application);
     state.shelter.newspapers = 10;
     state.inventory.crafted_items.armored_car = 1;
@@ -230,7 +239,7 @@ describe("城市拓扑与通行矩阵", () => {
   });
 
   it("远城锁定原因使用内容配置中的通行道具分隔符", () => {
-    const application = startConfiguredGame({ homeCityId: "city_a" });
+    const application = startConfiguredGame({ homeCityId: "city_d" });
     const state = requireState(application);
     state.shelter.newspapers = 10;
     const game = structuredClone(application.content.game);
@@ -293,23 +302,27 @@ describe("开局难度生存倍率", () => {
 });
 
 describe("远征路费与首事件步数", () => {
-  it("所在、邻近和远处城市分别扣除配置路费，并额外扣除首事件成本", () => {
+  it("所在、邻近和远处城市扣除路费与所选区划首事件总成本", () => {
     const scenarios = [
       { cityId: "city_a", relation: "home" },
       { cityId: "city_b", relation: "neighbor" },
       { cityId: "city_d", relation: "remote" },
     ] as const;
-    const cityStepCosts: Readonly<Record<string, number>> =
-      survivalSystemsDocument.expedition.city_step_costs;
 
     for (const scenario of scenarios) {
       const application = startConfiguredGame({ homeCityId: "city_a" });
       const state = requireState(application);
+      const district = configuredDefaultDistrict(application, scenario.cityId);
       if (scenario.relation === "remote") {
         state.shelter.newspapers = 10;
         state.inventory.crafted_items.route_map = 1;
       }
-      const report = application.prepareExpedition(scenario.cityId, [], {});
+      const report = application.prepareExpedition(
+        scenario.cityId,
+        district.id,
+        [],
+        {},
+      );
       const status = application.expeditionStatus();
       if (status === null) {
         throw new Error(`远征 ${scenario.cityId} 未创建状态。`);
@@ -321,27 +334,50 @@ describe("远征路费与首事件步数", () => {
         throw new Error("当前开局特性未在配置中声明。");
       }
       const travelCost = configuredTravelCost(application, scenario.relation);
-      const cityStepCost = cityStepCosts[scenario.cityId];
-      if (cityStepCost === undefined) {
-        throw new Error(`城市 ${scenario.cityId} 缺少事件步数配置。`);
-      }
+      const eventStepCost = survivalSystemsDocument.expedition.event_step_cost
+        + district.event_step_cost;
       const expectedMaximum =
         survivalSystemsDocument.expedition.base_steps + trait.expedition_step_bonus;
       const expectedRemaining =
         expectedMaximum -
         travelCost -
-        survivalSystemsDocument.expedition.event_step_cost -
-        cityStepCost;
+        eventStepCost;
 
       expect(report.stateChanged, scenario.cityId).toBe(true);
+      expect(
+        application.expeditionEventStepCost(scenario.cityId, district.id),
+        scenario.cityId,
+      ).toBe(eventStepCost);
       expect(status, scenario.cityId).toMatchObject({
         cityId: scenario.cityId,
+        districtId: district.id,
         travelStepCost: travelCost,
         maximumSteps: expectedMaximum,
         remainingSteps: expectedRemaining,
         eventsResolved: 0,
       });
-      expect(state.pending_exploration, scenario.cityId).not.toBeNull();
+      expect(state.pending_exploration, scenario.cityId).toMatchObject({
+        city_id: scenario.cityId,
+        district_id: district.id,
+      });
+      const pendingEventId = state.pending_exploration?.event_id;
+      expect(pendingEventId, scenario.cityId).toBeDefined();
+      expect(district.event_ids, scenario.cityId).toContain(pendingEventId);
     }
+  });
+
+  it("跨城市伪造区划被拒绝且不修改远征状态", () => {
+    const application = startConfiguredGame({ homeCityId: "city_a" });
+    const state = requireState(application);
+    const foreignDistrict = configuredDefaultDistrict(application, "city_b");
+    const before = structuredClone(state);
+
+    expect(() => application.prepareExpedition(
+      "city_a",
+      foreignDistrict.id,
+      [],
+      {},
+    )).toThrow();
+    expect(state).toEqual(before);
   });
 });

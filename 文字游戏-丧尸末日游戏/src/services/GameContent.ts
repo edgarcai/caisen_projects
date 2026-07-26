@@ -1,6 +1,7 @@
 import type {
   BossConfig,
   CityConfig,
+  CityDistrictConfig,
   EventConfig,
   EventsConfigDocument,
   GameConfigDocument,
@@ -75,12 +76,22 @@ export class GameContent {
     return event;
   }
 
-  /** 按稳定 ID 返回城市与它的事件池。 */
+  /** 按稳定 ID 返回城市及其全部区划。 */
   public city(cityId: string): CityConfig {
     const city = this.cityById.get(cityId);
     if (city === undefined) {
       throw new DomainError(this.text("unknown_city", { city_id: cityId }));
     }
     return city;
+  }
+
+  /** 返回确实属于指定城市的区划，拒绝跨城市伪造区划 ID。 */
+  public district(cityId: string, districtId: string): CityDistrictConfig {
+    const city = this.city(cityId);
+    const district = city.districts.find((candidate) => candidate.id === districtId);
+    if (district === undefined) {
+      throw new DomainError(`城市 ${cityId} 不包含区划 ${districtId}。`);
+    }
+    return district;
   }
 }

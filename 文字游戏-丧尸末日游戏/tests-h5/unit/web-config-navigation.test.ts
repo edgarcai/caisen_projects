@@ -3,6 +3,7 @@ import webConfigDocument from "../../config/web_config.json";
 import {
   parseWebGameConfig,
   validateCoverThemeAchievementReferences,
+  validateNamePresetCoverage,
 } from "../../src/config/configLoader";
 
 interface MutableNavigationEntry {
@@ -12,6 +13,14 @@ interface MutableNavigationEntry {
 }
 
 interface MutableWebConfigDocument {
+  controls: { max_player_name_characters: number };
+  new_game_setup: {
+    name_input: {
+      html_type: string;
+      input_mode: string;
+    };
+    preset_names: string[];
+  };
   navigation: MutableNavigationEntry[];
   action_groups: Array<{ id: string; action_ids: string[] }>;
   assets: {
@@ -101,6 +110,64 @@ describe("局内导航配置完整性", () => {
     expect(() => parseWebGameConfig(invalidHeaderAnchor)).toThrow(
       "layout.mobile.header_navigation_anchor",
     );
+  });
+});
+
+describe("新游戏姓名配置完整性", () => {
+  it("解析文本键盘属性和六个不重复中文预设名", () => {
+    const parsed = parseWebGameConfig(webConfigDocument);
+
+    expect(parsed.new_game_setup.name_input).toMatchObject({
+      html_type: "text",
+      input_mode: "text",
+      language: "zh-CN",
+      enter_key_hint: "done",
+      autocomplete: "off",
+      autocapitalize: "none",
+      spellcheck: false,
+    });
+    expect(parsed.new_game_setup.preset_names).toHaveLength(6);
+    expect(new Set(parsed.new_game_setup.preset_names).size).toBe(6);
+  });
+
+  it("拒绝空、重复与超过姓名上限的预设名", () => {
+    const empty = cloneWebConfig();
+    const duplicate = cloneWebConfig();
+    const overlong = cloneWebConfig();
+    empty.new_game_setup.preset_names = [];
+    duplicate.new_game_setup.preset_names[1] =
+      duplicate.new_game_setup.preset_names[0] ?? "";
+    overlong.new_game_setup.preset_names[0] = "长".repeat(
+      overlong.controls.max_player_name_characters + 1,
+    );
+
+    expect(() => parseWebGameConfig(empty)).toThrow("至少需要一个");
+    expect(() => parseWebGameConfig(duplicate)).toThrow("不能包含重复姓名");
+    expect(() => parseWebGameConfig(overlong)).toThrow("不能超过");
+  });
+
+  it("拒绝数字键盘配置与不足以覆盖最大玩家数的预设集", () => {
+    const numericKeyboard = cloneWebConfig();
+    numericKeyboard.new_game_setup.name_input.html_type = "number";
+    numericKeyboard.new_game_setup.name_input.input_mode = "numeric";
+
+    expect(() => parseWebGameConfig(numericKeyboard)).toThrow("html_type");
+
+    const parsed = parseWebGameConfig(webConfigDocument);
+    expect(() => {
+      validateNamePresetCoverage(parsed, {
+        single: { maximum: 1 },
+        multiplayer: {
+          maximum: parsed.new_game_setup.preset_names.length + 1,
+        },
+      });
+    }).toThrow("覆盖最大玩家数");
+    expect(() => {
+      validateNamePresetCoverage(parsed, {
+        single: { maximum: 1 },
+        multiplayer: { maximum: 2 },
+      });
+    }).not.toThrow();
   });
 });
 

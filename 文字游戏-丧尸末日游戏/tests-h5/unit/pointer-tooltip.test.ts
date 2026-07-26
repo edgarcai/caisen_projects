@@ -449,4 +449,38 @@ describe("按钮禁用悬停契约", () => {
     button.emit("click");
     expect(onClick).toHaveBeenCalledOnce();
   });
+
+  it("可点击锁定按钮在悬停和按下时保持灰态并继续导航", () => {
+    const { runtime, stage } = createFakeRuntime();
+    const onClick = vi.fn();
+    const button = createFactory(runtime).button(
+      stage as unknown as LayaNodeLike,
+      {
+        testId: "inspectable-locked-route",
+        label: "查看锁定路线需求",
+        x: 0,
+        y: 0,
+        width: 180,
+        height: 64,
+        tone: "primary",
+        lockedAppearance: true,
+        onClick,
+      },
+    ) as unknown as FakeSprite;
+    const label = button.getChildByName(
+      "inspectable-locked-route-label",
+    ) as FakeText;
+
+    for (const event of ["mouseover", "mousedown", "mouseup"] as const) {
+      button.emit(event);
+      expect(button.graphics.fills.at(-1)).toEqual({
+        fillColor: webConfig.theme.background_soft,
+        lineColor: webConfig.theme.border,
+      });
+      expect(label.color).toBe(webConfig.theme.muted_text);
+    }
+
+    button.emit("click");
+    expect(onClick).toHaveBeenCalledOnce();
+  });
 });

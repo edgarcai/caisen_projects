@@ -2,6 +2,7 @@ import gameDocument from "../../config/game_config.json";
 import v1ToV2MigrationDocument from "../../config/save_migrations/v1_to_v2.json";
 import v2ToV3MigrationDocument from "../../config/save_migrations/v2_to_v3.json";
 import v3ToV4MigrationDocument from "../../config/save_migrations/v3_to_v4.json";
+import v4ToV5MigrationDocument from "../../config/save_migrations/v4_to_v5.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import { createGameApplication } from "../../src/application";
@@ -12,6 +13,7 @@ import type {
   StoryConfigDocument,
   V2ToV3SaveMigrationConfig,
   V3ToV4SaveMigrationConfig,
+  V4ToV5SaveMigrationConfig,
 } from "../../src/domain/content";
 import type {
   GameState,
@@ -28,6 +30,7 @@ import {
 } from "../../src/infrastructure";
 import type { SaveDocument } from "../../src/infrastructure/SaveMigration";
 import { V3ToV4SaveMigrator } from "../../src/infrastructure/V3ToV4SaveMigrator";
+import { V4ToV5SaveMigrator } from "../../src/infrastructure/V4ToV5SaveMigrator";
 import { describe, expect, it } from "vitest";
 
 const game = gameDocument as unknown as GameConfigDocument;
@@ -35,6 +38,7 @@ const story = storyDocument as unknown as StoryConfigDocument;
 const v1ToV2Config = v1ToV2MigrationDocument as unknown as SaveMigrationConfig;
 const v2ToV3Config = v2ToV3MigrationDocument as unknown as V2ToV3SaveMigrationConfig;
 const v3ToV4Config: V3ToV4SaveMigrationConfig = v3ToV4MigrationDocument;
+const v4ToV5Config: V4ToV5SaveMigrationConfig = v4ToV5MigrationDocument;
 
 /** 为状态夹具提供不产生外部副作用的存档端口。 */
 class FixtureSaveRepository implements SaveRepository {
@@ -79,6 +83,7 @@ function createValidator(): SaveStateValidator {
     story.defaults.companions.map((companion) => companion.companion_id),
     validateSurvivalSystemsConfig(survivalSystemsDocument),
     game.campaign_profiles,
+    game.cities,
   );
 }
 
@@ -100,6 +105,7 @@ function downgradeRestorableState(
   if (typeof state.expedition === "object" && state.expedition !== null) {
     const expedition = state.expedition as Record<string, unknown>;
     delete expedition.travel_step_cost;
+    delete expedition.district_id;
   }
   return state;
 }
@@ -111,6 +117,7 @@ function createV3StateWithCheckpoint(): Record<string, unknown> {
   state.turn_number = 8;
   state.expedition = {
     city_id: "city_a",
+    district_id: "city_a_district_a",
     travel_step_cost: 1,
     leader_player_index: 0,
     companion_ids: [],
@@ -187,12 +194,16 @@ describe("v3 到 v4 存档迁移", () => {
     expect(state.turn_number).toBe(8);
     expect(sourceState).toEqual(original);
     expect(() => validator.validateRawV3(state)).toThrow("v3 game_state 字段集合不匹配");
-    expect(validator.parse(state).checkpoint?.snapshot.campaign).toEqual(
+    validator.validateRawV4(state);
+    const v5Document = new V4ToV5SaveMigrator(v4ToV5Config, game.cities).migrate(
+      migrated,
+    );
+    expect(validator.parse(v5Document.game_state).checkpoint?.snapshot.campaign).toEqual(
       v3ToV4Config.state_defaults.campaign,
     );
   });
 
-  it("按 1→2→3→4 连续迁移老存档并通过当前语义校验", () => {
+  it("按 1→2→3→4→5 连续迁移老存档并通过当前语义校验", () => {
     const validator = createValidator();
     let document: SaveDocument = {
       schema_version: 1,
@@ -205,10 +216,12 @@ describe("v3 到 v4 存档迁移", () => {
     document = new V2ToV3SaveMigrator(v2ToV3Config).migrate(document);
     validator.validateRawV3(document.game_state);
     document = new V3ToV4SaveMigrator(v3ToV4Config).migrate(document);
+    validator.validateRawV4(document.game_state);
+    document = new V4ToV5SaveMigrator(v4ToV5Config, game.cities).migrate(document);
 
     const restored = validator.parse(document.game_state);
 
-    expect(document.schema_version).toBe(4);
+    expect(document.schema_version).toBe(5);
     expect(restored.turn_number).toBe(9);
     expect(restored.story.flags).toContain("legacy_save");
     expect(restored.campaign).toEqual(v3ToV4Config.state_defaults.campaign);
@@ -270,7 +283,11 @@ describe("v4 存档严格校验", () => {
     const state = asObject(migrated.game_state);
     asObject(state.campaign)[field] = value;
 
-    expect(() => validator.parse(state)).toThrow();
+    const v5 = new V4ToV5SaveMigrator(v4ToV5Config, game.cities).migrate({
+      schema_version: 4,
+      game_state: state,
+    });
+    expect(() => validator.parse(v5.game_state)).toThrow();
   });
 
   it("拒绝未在城市旅行配置中声明的远征路费", () => {
@@ -282,7 +299,13 @@ describe("v4 存档严格校验", () => {
     const state = asObject(migrated.game_state);
     asObject(state.expedition).travel_step_cost = 99;
 
-    expect(() => validator.parse(state)).toThrow("远征城市路费不在配置允许的范围内");
+    const v5 = new V4ToV5SaveMigrator(v4ToV5Config, game.cities).migrate({
+      schema_version: 4,
+      game_state: state,
+    });
+    expect(() => validator.parse(v5.game_state)).toThrow(
+      "远征城市路费不在配置允许的范围内",
+    );
   });
 
   it("对 JSON 往返后的完整 v4 状态返回隔离副本", () => {
@@ -291,7 +314,8 @@ describe("v4 存档严格校验", () => {
       schema_version: 3,
       game_state: createV3StateWithCheckpoint(),
     });
-    const rawState = JSON.parse(JSON.stringify(migrated.game_state)) as unknown;
+    const v5 = new V4ToV5SaveMigrator(v4ToV5Config, game.cities).migrate(migrated);
+    const rawState = JSON.parse(JSON.stringify(v5.game_state)) as unknown;
 
     const parsed = validator.parse(rawState);
 

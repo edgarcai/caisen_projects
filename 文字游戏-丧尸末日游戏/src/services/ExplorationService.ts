@@ -15,7 +15,7 @@ import type { StateOperations } from "./StateOperations";
 
 type EventPayload = EventConfig | EventChoiceConfig | EventOutcomeConfig;
 
-/** 负责按城市权重抽取并原子结算配置化探索事件。 */
+/** 负责按区划权重抽取并原子结算配置化探索事件。 */
 export class ExplorationService {
   private readonly content: GameContent;
   private readonly operations: StateOperations;
@@ -32,15 +32,16 @@ export class ExplorationService {
     this.random = random;
   }
 
-  /** 按伙伴和设施的分类权重修正抽取城市事件。 */
+  /** 按伙伴和设施的分类权重修正抽取所选区划事件。 */
   public prepare(
     cityId: string,
+    districtId: string,
     weightModifiers: Readonly<Record<string, number>> = {},
   ): EventPrompt {
-    const city = this.content.city(cityId);
-    const events = city.event_ids.map((eventId) => this.content.event(eventId));
+    const district = this.content.district(cityId, districtId);
+    const events = district.event_ids.map((eventId) => this.content.event(eventId));
     if (events.length === 0) {
-      throw new ExplorationError(`城市 ${cityId} 没有配置探索事件。`);
+      throw new ExplorationError(`区划 ${districtId} 没有配置探索事件。`);
     }
     const weights = events.map((event) => {
       const modifier = weightModifiers[event.category ?? "common"] ?? 0;

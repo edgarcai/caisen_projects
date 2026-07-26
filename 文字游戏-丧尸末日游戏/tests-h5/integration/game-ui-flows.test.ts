@@ -119,12 +119,20 @@ describe("H5 剧情、战斗与探索命令流", () => {
     const firstSnapshot = requireSnapshot(first.snapshot);
     const originalCity = firstSnapshot.cities.find((city) => city.id === "city_a");
     const otherCity = firstSnapshot.cities.find((city) => city.id === "city_h");
+    const pending = requireState(writer.application).pending_exploration;
+    if (pending === null) throw new Error("探索事件没有持久化。");
+    const defaultDistrict = writer.application.content.district(
+      pending.city_id,
+      pending.district_id,
+    );
 
     expect(first.accepted).toBe(true);
-    expect(firstSnapshot.explorationPrompt?.id).toBe("bank");
-    expect(firstSnapshot.explorationPrompt?.options).toEqual([
-      expect.objectContaining({ id: "__continue__", disabled: false }),
-    ]);
+    expect(defaultDistrict.event_ids).toContain(pending.event_id);
+    expect(firstSnapshot.explorationPrompt?.id).toBe(pending.event_id);
+    const firstOption = firstSnapshot.explorationPrompt?.options.find(
+      (option) => !option.disabled,
+    );
+    if (firstOption === undefined) throw new Error("探索事件没有可执行选项。");
     expect(originalCity).toMatchObject({ disabled: false });
     expect(originalCity?.disabledReason).toBeUndefined();
     expect(otherCity).toMatchObject({ disabled: true });
@@ -134,19 +142,21 @@ describe("H5 剧情、战斗与探索命令流", () => {
       type: "exploration_prepare",
       cityId: "city_h",
     });
-    expect(requireSnapshot(forgedRepeat.snapshot).explorationPrompt?.id).toBe("bank");
+    expect(requireSnapshot(forgedRepeat.snapshot).explorationPrompt?.id).toBe(
+      pending.event_id,
+    );
     expect(random.weightedChoiceCalls).toBe(1);
     writer.adapter.execute({ type: "save_game" });
 
     const readerRandom = new ScriptedRandomSource([], [7]);
     const reader = buildH5Harness({ storage: writer.storage, random: readerRandom });
     const loaded = reader.adapter.execute({ type: "load_game" });
-    expect(requireSnapshot(loaded.snapshot).explorationPrompt?.id).toBe("bank");
+    expect(requireSnapshot(loaded.snapshot).explorationPrompt?.id).toBe(pending.event_id);
     expect(readerRandom.weightedChoiceCalls).toBe(0);
 
     const resolved = reader.adapter.execute({
       type: "exploration_resolve",
-      choiceId: "__continue__",
+      choiceId: firstOption.id,
     });
     expect(resolved.accepted).toBe(true);
     expect(requireSnapshot(resolved.snapshot).explorationPrompt).toBeNull();

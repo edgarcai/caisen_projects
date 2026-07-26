@@ -8,7 +8,7 @@
     "title": "避难所：余烬纪元",
     "story": "2166年，行动敏捷、成群出没的感染者令世界各地接连沦陷。人类重新启用废弃防空洞，才保住最后的火种。你是B-17避难所的所长：粮食即将耗尽，一段来自凌晨三点十七分的广播却警告你‘粮食会咬人’。从最后一锅粥到白塔顶端，你将与伙伴穿越四章、十三个连续场景，面对三名首领，并决定幸存者、感染者与整座晦城的未来。",
     "tutorial_survival": "欢迎来到B-17避难所，所长。普通求生模式专注于资源、人员与远征经营，不包含主线剧情任务。\n\n【生存与时间】探索、设施建设、工作和修复等高消耗行动会增加饥饿；交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【城市与远征】所长出生城市出发消耗1步，邻近城市消耗2步。远处城市必须先从旧报纸中收集足够情报，再持有路线图或符合地貌的车辆、船只、直升机。伙伴词条、特性、研发成果和携带物会提高最大步数；步数不足会被尸群强制逼退，只保住20%物资，所长生命降至7至45。\n\n【避难所与人物档案】人物档案和避难所信息在所有模式保留。供餐、修复、设施、工作、交易、招募、仓库、研发、制作与历史记录都可从指挥台进入。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录。系统每十个生存日建立检查点并自动保存；ESC功能菜单可以选择六个栏位存档、设置、回档、返回主菜单或退出。",
-    "tutorial": "欢迎来到B-17避难所，所长。活下去只是基础；你选择怎样活下去，才会决定所有人的结局。\n\n【生存与时间】只有探索、战斗、设施建设、工作和修复等高消耗行动会增加饥饿；剧情阅读、交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【远征步数】探索前先选择城市、同行伙伴与携带物。伙伴词条、信任、研发成果和特定物资会提高最大步数；危险城市每次事件消耗更多步数。尚有步数时可继续深入或安全返程；步数不足会被尸群强制逼退，只保住20%本次战利品，所长生命会降到7至45。\n\n【仓库、研发与制作】仓库统一显示资源和制作物，已装备的武器、防具不计入可用库存。研究台消耗资料与材料解锁技术，制作工坊据此生产远征物资、武器和防具。失败的研发或制作不会扣除任何材料。\n\n【四章主线】点击‘剧情任务’推进十三个连续场景。选择可能要求属性、资源、设施、伙伴状态或关键物品；锁定选择不会扣资源或消耗回合。主线包含《饥饿会说话》《尸群在唱谁的名字》《人比末日更会撒谎》《余烬之后是什么》四章。\n\n【三场Boss】铁轨屠夫、鸣钟母体与无冕王都有多条处理路线。战斗可执行攻击、防御、专注、使用医疗用品和撤退。单个战斗回合不会推进世界时间；整场胜利结算或成功撤退才消耗一次世界行动。\n\n【避难所管理】供餐、修复、设施、工作、交易和招募统一收在避难所管理中。设施提供即时效果或长期增益；工作产生收益与风险；交易不推进时间；资源不足时不会偷偷消耗回合。\n\n【伙伴、线索与结局】豪菜、阳关、林岚和小满拥有独立信任与状态。隐藏账本、病历、频率、名单和维护密钥会开启非暴力路线。最终结果会综合人性、证据、信任、线索、避难所状态及三场Boss的处理方式。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录，随后清空开始新一周。系统每十个生存日建立检查点并自动保存一次；ESC功能菜单仍可随时手动存档、设置、回档或退出。已经抽取的探索事件不能通过保存或读取免费重抽，旧v1、v2、v3存档会安全迁移为v4状态。"
+    "tutorial": "欢迎来到B-17避难所，所长。活下去只是基础；你选择怎样活下去，才会决定所有人的结局。\n\n【生存与时间】只有探索、战斗、设施建设、工作和修复等高消耗行动会增加饥饿；剧情阅读、交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【远征步数】探索前依次查看城市需求、选择区划，再确认同行伙伴与携带物。伙伴词条、信任、研发成果和特定物资会提高最大步数；每次事件消耗全局基础步数与区划附加步数。尚有步数时可继续深入或安全返程；步数不足会被尸群强制逼退，只保住20%本次战利品，所长生命会降到7至45。\n\n【仓库、研发与制作】仓库统一显示资源和制作物，已装备的武器、防具不计入可用库存。研究台消耗资料与材料解锁技术，制作工坊据此生产远征物资、武器和防具。失败的研发或制作不会扣除任何材料。\n\n【四章主线】点击‘剧情任务’推进十三个连续场景。选择可能要求属性、资源、设施、伙伴状态或关键物品；锁定选择不会扣资源或消耗回合。主线包含《饥饿会说话》《尸群在唱谁的名字》《人比末日更会撒谎》《余烬之后是什么》四章。\n\n【三场Boss】铁轨屠夫、鸣钟母体与无冕王都有多条处理路线。战斗可执行攻击、防御、专注、使用医疗用品和撤退。单个战斗回合不会推进世界时间；整场胜利结算或成功撤退才消耗一次世界行动。\n\n【避难所管理】供餐、修复、设施、工作、交易和招募统一收在避难所管理中。设施提供即时效果或长期增益；工作产生收益与风险；交易不推进时间；资源不足时不会偷偷消耗回合。\n\n【伙伴、线索与结局】豪菜、阳关、林岚和小满拥有独立信任与状态。隐藏账本、病历、频率、名单和维护密钥会开启非暴力路线。最终结果会综合人性、证据、信任、线索、避难所状态及三场Boss的处理方式。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录，随后清空开始新一周。系统每十个生存日建立检查点并自动保存一次；ESC功能菜单仍可随时手动存档、设置、回档或退出。已经抽取的探索事件不能通过保存或读取免费重抽，旧 v1 至 v4 存档会安全迁移为 v5 区划状态。"
   },
   "paths": {
     "events": "config/events.json",
@@ -16,6 +16,7 @@
     "save_migration_v1_to_v2": "config/save_migrations/v1_to_v2.json",
     "save_migration_v2_to_v3": "config/save_migrations/v2_to_v3.json",
     "save_migration_v3_to_v4": "config/save_migrations/v3_to_v4.json",
+    "save_migration_v4_to_v5": "config/save_migrations/v4_to_v5.json",
     "save": "saves/savegame.json",
     "concept_art": "assets/menu_concept_2k.png",
     "cover_art": "assets/cover_art_2k.png"
@@ -447,6 +448,10 @@
   },
   "rules": {
     "companion_secret_unlock_trust": 2,
+    "world_map": {
+      "minimum_districts_per_city": 6,
+      "required_neighbor_degree": 2
+    },
     "player_counts": {
       "single": {"minimum": 1, "maximum": 1},
       "multiplayer": {"minimum": 2, "maximum": 2},
@@ -591,14 +596,110 @@
     }
   },
   "cities": [
-    {"id": "city_a", "name": "A市", "district": "旧城中区", "description": "密集旧楼环绕B-17防空洞，街巷熟悉但尸群会沿广播声聚集。", "terrain": "land", "neighbor_ids": ["city_b", "city_c"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"], "event_ids": ["bank", "elder", "medical_pod", "thief", "hospital", "commercial_street", "skyscraper", "quiet_street"]},
-    {"id": "city_b", "name": "B市", "district": "临江仓储区", "description": "河堤、货栈和废弃冷库连成狭长走廊，桥面经常被尸群截断。", "terrain": "river", "neighbor_ids": ["city_a", "city_d", "city_e"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"], "event_ids": ["bank", "thief", "hospital", "commercial_street", "quiet_street"]},
-    {"id": "city_c", "name": "C市", "district": "高新北区", "description": "研究园和住宅塔楼仍有备用电力，自动门后的动静真假难辨。", "terrain": "land", "neighbor_ids": ["city_a", "city_d", "city_f"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"], "event_ids": ["elder", "medical_pod", "thief", "skyscraper", "quiet_street"]},
-    {"id": "city_d", "name": "D市", "district": "南湾港区", "description": "集装箱迷宫伸向海湾，潮汐会打开短暂通路，也会带来漂流感染者。", "terrain": "coastal", "neighbor_ids": ["city_b", "city_c", "city_g"], "intelligence_newspapers_required": 5, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"], "event_ids": ["hospital", "commercial_street", "skyscraper", "quiet_street"]},
-    {"id": "city_e", "name": "E市", "district": "西部矿城", "description": "采石场与隧道遍布山腹，地面开阔，地下却可能保存完整补给。", "terrain": "land", "neighbor_ids": ["city_b", "city_g", "city_h"], "intelligence_newspapers_required": 6, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"], "event_ids": ["bank", "elder", "thief", "quiet_street"]},
-    {"id": "city_f", "name": "F市", "district": "双河老街", "description": "两条河把城区切成数座孤岛，老桥和排水隧道构成危险捷径。", "terrain": "river", "neighbor_ids": ["city_c", "city_g", "city_h"], "intelligence_newspapers_required": 6, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"], "event_ids": ["medical_pod", "hospital", "commercial_street", "quiet_street"]},
-    {"id": "city_g", "name": "G市", "district": "东海工业带", "description": "炼化塔、船坞和高架管线遮蔽视野，旧厂房里仍有重型设备。", "terrain": "coastal", "neighbor_ids": ["city_d", "city_e", "city_f", "city_h"], "intelligence_newspapers_required": 8, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"], "event_ids": ["thief", "commercial_street", "skyscraper", "quiet_street"]},
-    {"id": "city_h", "name": "H市", "district": "白礁岛城", "description": "离岸岛屿曾是检疫中心，码头被毁后，只剩海路和低空航线可达。", "terrain": "island", "neighbor_ids": ["city_e", "city_f", "city_g"], "intelligence_newspapers_required": 10, "path_item_ids": ["route_map"], "transport_item_ids": ["motorboat", "helicopter"], "event_ids": ["bank", "hospital", "skyscraper", "quiet_street"]}
+    {
+      "id": "city_a", "name": "A市", "district": "旧城中区", "description": "密集旧楼环绕B-17防空洞，街巷熟悉但尸群会沿广播声聚集。", "terrain": "land", "neighbor_ids": ["city_h", "city_b"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"],
+      "default_district_id": "city_a_district_a",
+      "districts": [
+        {"id": "city_a_district_a", "code": "A区", "name": "防空洞外环", "description": "B-17外围的熟悉街巷保留着撤离标记，但旧广播会把尸群引向出口。", "danger_level": 1, "event_step_cost": 0, "event_ids": ["elder", "quiet_street", "commercial_street"]},
+        {"id": "city_a_district_b", "code": "B区", "name": "旧银行街", "description": "金库和临街商铺还有零散资源，幸存者团伙也在暗处盯着这里。", "danger_level": 2, "event_step_cost": 0, "event_ids": ["bank", "thief", "quiet_street"]},
+        {"id": "city_a_district_c", "code": "C区", "name": "市立医院", "description": "急诊楼备用电源时亮时灭，药库与地下医疗仓仍有搜索价值。", "danger_level": 2, "event_step_cost": 1, "event_ids": ["hospital", "medical_pod", "quiet_street"]},
+        {"id": "city_a_district_d", "code": "D区", "name": "商业步行街", "description": "店铺库房中可能留有食物和衣物，老化招牌与玻璃幕墙随时会坠落。", "danger_level": 2, "event_step_cost": 1, "event_ids": ["commercial_street", "thief", "elder"]},
+        {"id": "city_a_district_e", "code": "E区", "name": "摩天楼群", "description": "高层办公楼能俯瞰旧城路线，损坏的电梯和松动结构让每一层都充满变数。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["skyscraper", "thief", "medical_pod"]},
+        {"id": "city_a_district_f", "code": "F区", "name": "城北换乘站", "description": "废弃公交与地铁通道保存着城北路线图，狭窄站台却很难避开徘徊者。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["quiet_street", "thief", "hospital"]}
+      ],
+      "event_ids": ["bank", "elder", "medical_pod", "thief", "hospital", "commercial_street", "skyscraper", "quiet_street"]
+    },
+    {
+      "id": "city_b", "name": "B市", "district": "临江仓储区", "description": "河堤、货栈和废弃冷库连成狭长走廊，桥面经常被尸群截断。", "terrain": "river", "neighbor_ids": ["city_a", "city_c"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
+      "default_district_id": "city_b_district_a",
+      "districts": [
+        {"id": "city_b_district_a", "code": "A区", "name": "沿江码头", "description": "装卸平台连接多座货栈，水位变化会不时露出新的登岸点。", "danger_level": 2, "event_step_cost": 0, "event_ids": ["commercial_street", "thief", "quiet_street", "bank"]},
+        {"id": "city_b_district_b", "code": "B区", "name": "冷链仓库", "description": "断电冷库的铁门后可能有密封食物，也可能只剩被困住的感染者。", "danger_level": 2, "event_step_cost": 0, "event_ids": ["commercial_street", "quiet_street", "elder"]},
+        {"id": "city_b_district_c", "code": "C区", "name": "第七号线", "description": "浸水站台中留有密封货车的线索，每次涨潮都会改变可通行路径。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["quiet_street", "thief", "hospital"]},
+        {"id": "city_b_district_d", "code": "D区", "name": "老船厂", "description": "船坞里堆着可拆解的机械零件，空旷钢架会把脚步声传得很远。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["skyscraper", "commercial_street", "thief"]},
+        {"id": "city_b_district_e", "code": "E区", "name": "河堤社区", "description": "低层住宅曾是临时安置点，屋顶信号旗暗示这里仍可能有幸存者。", "danger_level": 2, "event_step_cost": 1, "event_ids": ["elder", "quiet_street", "hospital"]},
+        {"id": "city_b_district_f", "code": "F区", "name": "净水厂", "description": "沉淀池和加药间保留着医疗与水处理物资，厂区内弥漫着刺鼻气味。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["medical_pod", "quiet_street", "thief"]}
+      ],
+      "event_ids": ["bank", "thief", "hospital", "commercial_street", "quiet_street"]
+    },
+    {
+      "id": "city_c", "name": "C市", "district": "高新北区", "description": "研究园和住宅塔楼仍有备用电力，自动门后的动静真假难辨。", "terrain": "land", "neighbor_ids": ["city_b", "city_d"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"],
+      "default_district_id": "city_c_district_a",
+      "districts": [
+        {"id": "city_c_district_a", "code": "A区", "name": "研究园", "description": "实验楼的备用电源仍在闪烁，隔离门后的记录与样本价值难以估量。", "danger_level": 2, "event_step_cost": 0, "event_ids": ["medical_pod", "quiet_street", "thief"]},
+        {"id": "city_c_district_b", "code": "B区", "name": "中央医院", "description": "医技楼和药库之间有封闭连廊，广播系统偶尔仍会播放疏散指令。", "danger_level": 2, "event_step_cost": 1, "event_ids": ["hospital", "medical_pod", "quiet_street"]},
+        {"id": "city_c_district_c", "code": "C区", "name": "高新住宅塔", "description": "空中连廊把数栋住宅连在一起，楼内住户留下了医药和求救标记。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["skyscraper", "elder", "thief"]},
+        {"id": "city_c_district_d", "code": "D区", "name": "数据中心", "description": "机房门禁时好时坏，残存服务器中保存着城市路线和灾变日志。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["bank", "skyscraper", "quiet_street"]},
+        {"id": "city_c_district_e", "code": "E区", "name": "大学城", "description": "图书馆与实验楼的资料仍很完整，开阔校园也让队伍无处藏身。", "danger_level": 2, "event_step_cost": 1, "event_ids": ["commercial_street", "elder", "hospital"]},
+        {"id": "city_c_district_f", "code": "F区", "name": "北部变电站", "description": "城北备用电力的源头尚未完全停摆，高压设备与徘徊者同样致命。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["quiet_street", "thief", "medical_pod"]}
+      ],
+      "event_ids": ["elder", "medical_pod", "thief", "skyscraper", "quiet_street"]
+    },
+    {
+      "id": "city_d", "name": "D市", "district": "南湾港区", "description": "集装箱迷宫伸向海湾，潮汐会打开短暂通路，也会带来漂流感染者。", "terrain": "coastal", "neighbor_ids": ["city_c", "city_e"], "intelligence_newspapers_required": 5, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
+      "default_district_id": "city_d_district_a",
+      "districts": [
+        {"id": "city_d_district_a", "code": "A区", "name": "港口堆场", "description": "集装箱通道会随吊机残骸而改变，未开封的货箱仍吸引着搜寻者。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["commercial_street", "thief", "quiet_street"]},
+        {"id": "city_d_district_b", "code": "B区", "name": "广播塔", "description": "断断续续的疏散旋律从塔身传出，城内尸群会随着频段改变方向。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["skyscraper", "quiet_street", "medical_pod"]},
+        {"id": "city_d_district_c", "code": "C区", "name": "海湾市场", "description": "市场棚顶下留着食物和交易痕迹，劫掠者会借潮声掩盖脚步。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["commercial_street", "thief", "elder"]},
+        {"id": "city_d_district_d", "code": "D区", "name": "海关仓", "description": "封条后的查验仓有药品与进口物资，沉重卷闸也可能封死退路。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["bank", "thief", "hospital"]},
+        {"id": "city_d_district_e", "code": "E区", "name": "潮汐隧道", "description": "退潮时短暂露出的服务隧道能绕过港口，海水回涌前必须离开。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["quiet_street", "medical_pod", "thief"]},
+        {"id": "city_d_district_f", "code": "F区", "name": "南岬灯塔", "description": "灯塔可以标定海路和尸群位置，但孤立高地让队伍很难隐蔽撤离。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["skyscraper", "quiet_street", "elder"]}
+      ],
+      "event_ids": ["hospital", "commercial_street", "skyscraper", "quiet_street"]
+    },
+    {
+      "id": "city_e", "name": "E市", "district": "西部矿城", "description": "采石场与隧道遍布山腹，地面开阔，地下却可能保存完整补给。", "terrain": "land", "neighbor_ids": ["city_d", "city_f"], "intelligence_newspapers_required": 6, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"],
+      "default_district_id": "city_e_district_a",
+      "districts": [
+        {"id": "city_e_district_a", "code": "A区", "name": "露天矿场", "description": "巨大矿坑中散落着工程车和零件，爆破后的松动岩壁随时可能坍落。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["quiet_street", "thief", "commercial_street"]},
+        {"id": "city_e_district_b", "code": "B区", "name": "矿工镇", "description": "低矮住宅与医务室围绕老广场，屋内留着仓促撤离的生活物资。", "danger_level": 2, "event_step_cost": 1, "event_ids": ["elder", "commercial_street", "hospital"]},
+        {"id": "city_e_district_c", "code": "C区", "name": "山腹隧道", "description": "运矿轨道深入山腹，避难人员留下的密封补给可能仍在支线中。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["quiet_street", "medical_pod", "thief"]},
+        {"id": "city_e_district_d", "code": "D区", "name": "爆破仓", "description": "加固库房中留有工具与机械材料，任何火花都可能引发连锁爆炸。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["bank", "thief", "quiet_street"]},
+        {"id": "city_e_district_e", "code": "E区", "name": "货运索道", "description": "悬空货箱连接矿区与山外，恢复部分动力后可成为危险的捷径。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["skyscraper", "quiet_street", "commercial_street"]},
+        {"id": "city_e_district_f", "code": "F区", "name": "蓄水坝", "description": "坝顶能观察城西动向，控制室内还有水质药剂与应急资料。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["medical_pod", "quiet_street", "elder"]}
+      ],
+      "event_ids": ["bank", "elder", "thief", "quiet_street"]
+    },
+    {
+      "id": "city_f", "name": "F市", "district": "双河老街", "description": "两条河把城区切成数座孤岛，老桥和排水隧道构成危险捷径。", "terrain": "river", "neighbor_ids": ["city_e", "city_g"], "intelligence_newspapers_required": 6, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
+      "default_district_id": "city_f_district_a",
+      "districts": [
+        {"id": "city_f_district_a", "code": "A区", "name": "双河老街", "description": "沿河商铺和住宅挤在狭窄石路两侧，熟悉地形的幸存者偶尔在此交易。", "danger_level": 2, "event_step_cost": 1, "event_ids": ["commercial_street", "elder", "quiet_street"]},
+        {"id": "city_f_district_b", "code": "B区", "name": "东桥", "description": "东桥车辆残骸构成屏障，桥底水道可以绕行，但涨水时会完全消失。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["thief", "quiet_street", "hospital"]},
+        {"id": "city_f_district_c", "code": "C区", "name": "西桥", "description": "西桥上的废弃检查站留着路线记录，路障后面却经常传来敲击声。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["bank", "quiet_street", "thief"]},
+        {"id": "city_f_district_d", "code": "D区", "name": "排水迷宫", "description": "市政排水管网能通往多个城区，黑暗、污水和回声让方向感变得不可靠。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["medical_pod", "quiet_street", "thief"]},
+        {"id": "city_f_district_e", "code": "E区", "name": "河心住宅岛", "description": "孤立小区曾靠船只获得补给，阳台上的床单信号显示这里曾有人坚守。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["hospital", "elder", "skyscraper"]},
+        {"id": "city_f_district_f", "code": "F区", "name": "河岸客运站", "description": "长途车站内堆满遗落行李，候车厅的广播会在无人操作时突然响起。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["commercial_street", "thief", "quiet_street"]}
+      ],
+      "event_ids": ["medical_pod", "hospital", "commercial_street", "quiet_street"]
+    },
+    {
+      "id": "city_g", "name": "G市", "district": "东海工业带", "description": "炼化塔、船坞和高架管线遮蔽视野，旧厂房里仍有重型设备。", "terrain": "coastal", "neighbor_ids": ["city_f", "city_h"], "intelligence_newspapers_required": 8, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
+      "default_district_id": "city_g_district_a",
+      "districts": [
+        {"id": "city_g_district_a", "code": "A区", "name": "炼化厂", "description": "管道间残留的化学气体会遮蔽视线，控制室里则可能有工业资料。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["medical_pod", "thief", "quiet_street"]},
+        {"id": "city_g_district_b", "code": "B区", "name": "造船坞", "description": "未完工船体和龙门吊塑造出复杂高低差，船舱中封存着大量金属材料。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["commercial_street", "skyscraper", "thief"]},
+        {"id": "city_g_district_c", "code": "C区", "name": "高架管线", "description": "检修栈道能从工业带上方穿行，锈蚀的连接件无法承受太多人同时通过。", "danger_level": 5, "event_step_cost": 2, "event_ids": ["quiet_street", "thief", "skyscraper"]},
+        {"id": "city_g_district_d", "code": "D区", "name": "工人新村", "description": "家属楼、诊所和食堂紧密相连，人们离开前曾用家具封死主路。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["elder", "hospital", "commercial_street"]},
+        {"id": "city_g_district_e", "code": "E区", "name": "海港物流园", "description": "物流信息牌还记录着末日前的货物去向，仓库之间也成了劫掠者的狩猎场。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["bank", "commercial_street", "thief"]},
+        {"id": "city_g_district_f", "code": "F区", "name": "滨海电站", "description": "涡轮机房的备用系统尚能启动，恢复电力会照亮设备，也会照亮队伍。", "danger_level": 5, "event_step_cost": 2, "event_ids": ["skyscraper", "medical_pod", "quiet_street"]}
+      ],
+      "event_ids": ["thief", "commercial_street", "skyscraper", "quiet_street"]
+    },
+    {
+      "id": "city_h", "name": "H市", "district": "白礁岛城", "description": "离岸岛屿曾是检疫中心，码头被毁后，只剩海路和低空航线可达。", "terrain": "island", "neighbor_ids": ["city_g", "city_a"], "intelligence_newspapers_required": 10, "path_item_ids": ["route_map"], "transport_item_ids": ["motorboat", "helicopter"],
+      "default_district_id": "city_h_district_a",
+      "districts": [
+        {"id": "city_h_district_a", "code": "A区", "name": "检疫码头", "description": "损毁的浮桥后是岛城唯一常规入口，检疫帐篷中留有药品与登记册。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["hospital", "thief", "quiet_street"]},
+        {"id": "city_h_district_b", "code": "B区", "name": "隔离病院", "description": "多重隔离门后保存着灾变早期病历，负压病房里仍有不明设备运转。", "danger_level": 5, "event_step_cost": 2, "event_ids": ["hospital", "medical_pod", "quiet_street"]},
+        {"id": "city_h_district_c", "code": "C区", "name": "旧机场", "description": "短跑道上停着损坏的救援直升机，机库可能找到航空零件与航线图。", "danger_level": 5, "event_step_cost": 2, "event_ids": ["skyscraper", "thief", "commercial_street"]},
+        {"id": "city_h_district_d", "code": "D区", "name": "海崖居民区", "description": "依山住宅通过狭窄台阶相连，居民曾用雨水管和屋顶菜园维持生活。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["elder", "quiet_street", "hospital"]},
+        {"id": "city_h_district_e", "code": "E区", "name": "检疫研究堡", "description": "深藏岩层的研究设施保存着感染样本，安全门的权限系统仍在识别闯入者。", "danger_level": 5, "event_step_cost": 2, "event_ids": ["medical_pod", "bank", "quiet_street"]},
+        {"id": "city_h_district_f", "code": "F区", "name": "白礁灯塔", "description": "岛城最高处能观察整片海域，灯室日志记下了最后一艘撤离船的方向。", "danger_level": 5, "event_step_cost": 2, "event_ids": ["skyscraper", "quiet_street", "elder"]}
+      ],
+      "event_ids": ["bank", "hospital", "skyscraper", "quiet_street"]
+    }
   ],
   "actions": [
     {"id": "story", "label": "剧情任务", "style": "primary", "icon": "◈"},

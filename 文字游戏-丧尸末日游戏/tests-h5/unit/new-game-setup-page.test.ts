@@ -389,6 +389,7 @@ function createTestView(
   onBack: () => void,
   onSubmit: Parameters<typeof createNewGameSetupPage>[9],
   onTextEntryFocusOut: () => void,
+  prepareNameInput: () => void = vi.fn(),
 ): NewGameSetupPageView {
   const runtime = createFakeRuntime();
   return createNewGameSetupPage(
@@ -402,6 +403,7 @@ function createTestView(
     saveSlots,
     onBack,
     onSubmit,
+    prepareNameInput,
     onTextEntryFocusOut,
   );
 }
@@ -428,6 +430,8 @@ describe("新游戏配置页", () => {
 
     expect(view.readProfile()).toEqual(createProfileOptions().defaultSelection);
     expect(view.readSlotId()).toBe(2);
+    expect(nameInput.type).toBe("text");
+    expect(nameInput.text).toBe(webConfig.new_game_setup.preset_names[0]);
     expect(requireText(root, "profile-mode-label").text).toBe(
       webConfig.texts.start_single,
     );
@@ -515,6 +519,48 @@ describe("新游戏配置页", () => {
     desktopView.page.destroy();
   });
 
+  it("多人预设姓名错位起步，并保留中英数自由输入与循环切换", () => {
+    const onSubmit = vi.fn();
+    const prepareNameInput = vi.fn();
+    const view = createTestView(
+      createLayout(true),
+      createSaveSlots(),
+      "multiplayer",
+      2,
+      vi.fn(),
+      onSubmit,
+      vi.fn(),
+      prepareNameInput,
+    );
+    const root = view.page.root as unknown as FakeNode;
+    const firstName = requireInput(root, "player-name-1");
+    const secondName = requireInput(root, "player-name-2");
+    const firstPreset = requireNode(root, "player-name-1-preset");
+
+    expect(firstName.text).toBe(webConfig.new_game_setup.preset_names[0]);
+    expect(secondName.text).toBe(webConfig.new_game_setup.preset_names[1]);
+    expect(firstName.text).not.toBe(secondName.text);
+
+    firstName.emit("focus");
+    expect(prepareNameInput).toHaveBeenCalledOnce();
+
+    firstPreset.emit("click");
+    expect(firstName.text).toBe(webConfig.new_game_setup.preset_names[1]);
+    expect(requireText(root, "player-name-1-preset-label").text).toContain(
+      webConfig.new_game_setup.preset_names[1],
+    );
+
+    firstName.text = "林Alpha7";
+    secondName.text = "周Beta8";
+    requireNode(root, "player-name-submit").emit("click");
+    expect(onSubmit).toHaveBeenCalledWith(
+      ["林Alpha7", "周Beta8"],
+      createProfileOptions().defaultSelection,
+      2,
+    );
+    view.page.destroy();
+  });
+
   it("没有可写存档时显示配置文案、返回空栏位并禁用确定", () => {
     const onSubmit = vi.fn();
     const view = createTestView(
@@ -561,6 +607,7 @@ describe("新游戏配置页", () => {
         vi.fn(),
         vi.fn(),
         vi.fn(),
+        vi.fn(),
       );
     }).toThrow("正整数");
 
@@ -577,6 +624,7 @@ describe("新游戏配置页", () => {
         1,
         invalidProfileOptions,
         createSaveSlots(),
+        vi.fn(),
         vi.fn(),
         vi.fn(),
         vi.fn(),

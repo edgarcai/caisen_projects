@@ -15,6 +15,7 @@ export interface ChoicePageSpec {
   readonly title: string;
   readonly prompt: UiPromptView;
   readonly onBack: () => void;
+  readonly includeOptionIntelligence?: boolean;
   readonly footerActions?: readonly PageActionSpec[];
   readonly onSelect: (option: UiOptionView) => void;
 }
@@ -52,7 +53,11 @@ export function createChoicePage(
   const bodyY = heading.height + layout.sectionGap;
   const body = factory.autoText(page.content, {
     testId: `${spec.testId}-prompt-body`,
-    text: buildChoiceBody(config, spec.prompt, layout.usesCompactUi),
+    text: buildChoiceBody(
+      config,
+      spec.prompt,
+      spec.includeOptionIntelligence ?? layout.usesCompactUi,
+    ),
     x: 0,
     y: bodyY,
     width: page.contentWidth,
@@ -127,6 +132,7 @@ function renderOptions(
       height: buttonHeight,
       tone: option.tone,
       disabled: option.disabled,
+      lockedAppearance: option.lockedAppearance,
       onClick: (): void => { spec.onSelect(option); },
     });
     const details = option.disabledReason ?? option.description;

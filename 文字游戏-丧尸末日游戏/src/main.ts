@@ -1,10 +1,14 @@
 import { createGameApplication } from "./application";
-import { validateCoverThemeAchievementReferences } from "./config/configLoader";
+import {
+  validateCoverThemeAchievementReferences,
+  validateNamePresetCoverage,
+} from "./config/configLoader";
 import type { WebGameConfig } from "./config/types";
 import type { LayaRuntimeGlobal } from "./engine/runtimeLoader";
 import { createBrowserUiSettingsRepository } from "./infrastructure";
 import { GameUiAdapter } from "./presentation";
 import { GameShell } from "./ui";
+import { createBrowserNativeTextInputPolicy } from "./ui/interactions/NativeTextInputPolicy";
 
 /** 浏览器测试与问题诊断可读取的最小只读接口。 */
 export interface ShelterGameDebugHandle {
@@ -51,6 +55,10 @@ export async function mountGame(
     config,
     application.content.story.endings.map((ending) => ending.achievement_id),
   );
+  validateNamePresetCoverage(
+    config,
+    application.content.game.rules.player_counts,
+  );
   const adapter = new GameUiAdapter(application, config);
   const settingsRepository = createBrowserUiSettingsRepository(
     config.storage.settings_key,
@@ -62,6 +70,10 @@ export async function mountGame(
     config,
     adapter,
     settingsRepository,
+    createBrowserNativeTextInputPolicy(
+      config.new_game_setup.name_input,
+      document,
+    ),
   );
   await shell.mount();
 

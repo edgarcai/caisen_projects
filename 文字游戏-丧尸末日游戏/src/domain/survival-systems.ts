@@ -133,7 +133,6 @@ export interface SurvivalSystemsConfigDocument {
     readonly maximum_carried_item_types: number;
     readonly maximum_carried_units: number;
     readonly event_step_cost: number;
-    readonly city_step_costs: Readonly<Record<string, number>>;
     readonly companion_step_bonuses: readonly CompanionStepBonusConfig[];
     readonly carried_item_step_bonuses: Readonly<Record<string, number>>;
     readonly loot_targets: readonly ExpeditionLootTargetConfig[];
@@ -160,6 +159,16 @@ export interface WarehouseItemView {
   readonly category: WarehouseItemCategory;
   readonly categoryLabel: string;
   readonly quantity: number;
+  readonly carryable: boolean;
+  readonly description: string;
+}
+
+/** 不依赖当前库存数量的完整仓库物品目录项。 */
+export interface WarehouseItemCatalogEntry {
+  readonly itemId: string;
+  readonly name: string;
+  readonly category: WarehouseItemCategory;
+  readonly categoryLabel: string;
   readonly carryable: boolean;
   readonly description: string;
 }
@@ -207,6 +216,7 @@ export interface ExpeditionCarryItemView {
 /** 远征状态页需要的稳定摘要。 */
 export interface ExpeditionStatusView {
   readonly cityId: string;
+  readonly districtId: string;
   readonly travelStepCost: number;
   readonly leaderPlayerIndex: number;
   readonly remainingSteps: number;

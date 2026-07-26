@@ -120,6 +120,41 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     expect(adapter.canLoadGame()).toBe(false);
   });
 
+  it("未持有的城市通行道具与载具仍显示配置名称而非内部 ID", () => {
+    const { adapter, application } = buildH5Harness();
+    const started = adapter.execute({
+      type: "start_game",
+      mode: "single",
+      playerNames: ["路线测试员"],
+    });
+    const snapshot = requireSnapshot(started.snapshot);
+    const cityAccess = application.expeditionCities().find(
+      (access) => access.city.id === "city_b",
+    );
+    const cityView = snapshot.cities.find((city) => city.id === "city_b");
+    const catalogNames = new Map(
+      application.warehouseItemCatalog().map((item) => [item.itemId, item.name]),
+    );
+    const pathItems = cityView?.fields.find((field) => field.id === "path-items")?.value;
+    const transportItems = cityView?.fields.find(
+      (field) => field.id === "transport-items",
+    )?.value;
+
+    expect(application.warehouseItems().map((item) => item.itemId)).not.toContain(
+      "route_map",
+    );
+    expect(cityAccess).toBeDefined();
+    expect(cityView).toBeDefined();
+    for (const itemId of cityAccess?.city.path_item_ids ?? []) {
+      expect(pathItems).toContain(catalogNames.get(itemId));
+      expect(pathItems).not.toContain(itemId);
+    }
+    for (const itemId of cityAccess?.city.transport_item_ids ?? []) {
+      expect(transportItems).toContain(catalogNames.get(itemId));
+      expect(transportItems).not.toContain(itemId);
+    }
+  });
+
   it("普通模式拒绝伪造剧情命令且不会修改领域状态", () => {
     const { adapter, application } = buildH5Harness();
     adapter.execute({
@@ -178,10 +213,16 @@ describe("GameUiAdapter 快照与订阅契约", () => {
       playerNames: ["远征所长"],
     });
     const writerState = requireState(writer.application);
+    const city = writer.application.content.city("city_a");
+    const district = writer.application.content.district(
+      city.id,
+      city.default_district_id,
+    );
     writerState.inventory.crafted_items.field_ration = 1;
     writer.adapter.execute({
       type: "expedition_begin",
-      cityId: "city_a",
+      cityId: city.id,
+      districtId: district.id,
       companionIds: [],
       carriedItems: { field_ration: 1 },
     });
@@ -193,8 +234,13 @@ describe("GameUiAdapter 快照与订阅契约", () => {
 
     const reader = buildH5Harness({ storage: writer.storage });
     const loaded = reader.adapter.execute({ type: "load_game" });
+    const snapshot = requireSnapshot(loaded.snapshot);
 
-    expect(requireSnapshot(loaded.snapshot).expeditionStatus?.itemNames).toEqual({
+    expect(snapshot.expeditionStatus).toMatchObject({
+      cityId: city.id,
+      districtId: district.id,
+    });
+    expect(snapshot.expeditionStatus?.itemNames).toEqual({
       field_ration: "行军口粮",
       game_consoles: "游戏机",
     });

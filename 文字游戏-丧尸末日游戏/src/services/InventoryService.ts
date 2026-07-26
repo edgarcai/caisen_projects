@@ -7,6 +7,7 @@ import type {
   ResourceWarehouseItemConfig,
   SurvivalSystemResolution,
   SurvivalSystemsConfigDocument,
+  WarehouseItemCatalogEntry,
   WarehouseItemView,
 } from "../domain/survival-systems";
 import type { StateOperations } from "./StateOperations";
@@ -16,6 +17,8 @@ export class InventoryService {
   private readonly config: SurvivalSystemsConfigDocument;
   private readonly operations: StateOperations;
   private readonly keyItems: readonly KeyItemWarehouseConfig[];
+  private readonly itemCatalog: readonly WarehouseItemCatalogEntry[];
+  private readonly itemCatalogById: ReadonlyMap<string, WarehouseItemCatalogEntry>;
 
   /** 注入生存系统配置、状态读写器与剧情关键物品档案。 */
   public constructor(
@@ -26,6 +29,15 @@ export class InventoryService {
     this.config = config;
     this.operations = operations;
     this.keyItems = keyItems;
+    this.itemCatalog = this.buildItemCatalog();
+    this.itemCatalogById = new Map(
+      this.itemCatalog.map((item) => [item.itemId, item]),
+    );
+  }
+
+  /** 返回不受当前库存和剧情解锁状态影响的完整只读物品目录。 */
+  public catalog(): readonly WarehouseItemCatalogEntry[] {
+    return this.itemCatalog;
   }
 
   /** 返回所有实际拥有且尚未装备的仓库物品。 */
@@ -93,9 +105,56 @@ export class InventoryService {
   /** 按稳定物品 ID 返回配置中的持久名称映射，供跨读档读模型使用。 */
   public itemNames(itemIds: readonly string[]): Readonly<Record<string, string>> {
     return Object.fromEntries([...new Set(itemIds)].map((itemId) => {
-      const item = this.resourceItem(itemId) ?? this.requireCraftedItem(itemId);
+      const item = this.requireCatalogItem(itemId);
       return [itemId, item.name];
     }));
+  }
+
+  /** 从资源、制作物和剧情关键物配置构建一次性目录快照。 */
+  private buildItemCatalog(): readonly WarehouseItemCatalogEntry[] {
+    const resources = this.config.warehouse.resource_items.map(
+      (item): WarehouseItemCatalogEntry => ({
+        itemId: item.item_id,
+        name: item.name,
+        category: item.category,
+        categoryLabel: this.config.warehouse.category_labels[item.category],
+        carryable: item.carryable,
+        description: item.description,
+      }),
+    );
+    const crafted = this.config.warehouse.crafted_items.map(
+      (item): WarehouseItemCatalogEntry => ({
+        itemId: item.item_id,
+        name: item.name,
+        category: item.category,
+        categoryLabel: this.config.warehouse.category_labels[item.category],
+        carryable: item.carryable,
+        description: item.description,
+      }),
+    );
+    const keyItems = this.keyItems.map(
+      (item): WarehouseItemCatalogEntry => ({
+        itemId: item.item_id,
+        name: item.name,
+        category: "key_item",
+        categoryLabel: this.config.warehouse.category_labels.key_item,
+        carryable: false,
+        description: item.description,
+      }),
+    );
+    return [...resources, ...crafted, ...keyItems];
+  }
+
+  /** 按稳定 ID 返回目录项，未知 ID 沿用配置化仓库错误文案。 */
+  private requireCatalogItem(itemId: string): WarehouseItemCatalogEntry {
+    const item = this.itemCatalogById.get(itemId);
+    if (item === undefined) {
+      throw new GameApplicationError(formatTemplate(
+        this.config.warehouse.unknown_item_text,
+        { item_id: itemId },
+      ));
+    }
+    return item;
   }
 
   /** 原子把一组物资从指定所长的可用仓库转入远征托管区。 */

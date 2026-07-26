@@ -18,6 +18,7 @@ import {
   type DashboardNavigationIntent,
 } from "./navigation/DashboardNavigationStrategy";
 import { DeferredResizeCoordinator } from "./interactions/DeferredResizeCoordinator";
+import type { NativeTextInputPolicyPort } from "./interactions/NativeTextInputPolicy";
 import {
   buildCoverThemeSelectionStates,
   isCoverThemeUnlocked,
@@ -36,8 +37,13 @@ import { CoverPage } from "./pages/CoverPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { createDocumentPage } from "./pages/DocumentPage";
 import {
+  createExpeditionCityDetailPage,
+  createExpeditionCityListPage,
+  createExpeditionDistrictDetailPage,
+  createExpeditionDistrictListPage,
   createExpeditionPreparePage,
   createExpeditionStatusPage,
+  resolveExpeditionDistrict,
   type ExpeditionDraft,
 } from "./pages/ExpeditionPages";
 import { createNewGameSetupPage } from "./pages/NewGameSetupPage";
@@ -95,6 +101,7 @@ export class GameShell {
   private readonly host: LayaSpriteLike;
   private readonly navigation: PageStack;
   private readonly settingsPort: UiSettingsPort;
+  private readonly nativeTextInputPolicy: NativeTextInputPolicyPort;
   private snapshot: GameUiSnapshot | null;
   private renderedPages: RenderedPage[];
   private preferences: UiPreferences;
@@ -118,12 +125,14 @@ export class GameShell {
     config: GameUiConfig,
     port: GameUiPort,
     settingsPort: UiSettingsPort,
+    nativeTextInputPolicy: NativeTextInputPolicyPort,
   ) {
     this.runtime = expectLayaRuntime(runtime);
     this.stage = expectLayaStage(stage);
     this.config = config;
     this.port = port;
     this.settingsPort = settingsPort;
+    this.nativeTextInputPolicy = nativeTextInputPolicy;
     this.factory = new UiFactory(
       this.runtime,
       config.theme,
@@ -393,6 +402,14 @@ export class GameShell {
         return this.createResearch(layout, snapshot);
       case "crafting":
         return this.createCrafting(layout, snapshot);
+      case "expedition_city_list":
+        return this.createExpeditionCityList(layout, snapshot);
+      case "expedition_city_detail":
+        return this.createExpeditionCityDetail(route, layout, snapshot);
+      case "expedition_district_list":
+        return this.createExpeditionDistrictList(route, layout, snapshot);
+      case "expedition_district_detail":
+        return this.createExpeditionDistrictDetail(route, layout, snapshot);
       case "expedition_prepare":
         return this.createExpeditionPrepare(layout, snapshot);
       case "expedition_status":
@@ -480,10 +497,6 @@ export class GameShell {
         openSettings: (): void => {
           this.openSettings();
         },
-        exitGame: (): void => {
-          this.navigation.push({ screen: "exit_confirm" });
-          this.render();
-        },
       },
     );
   }
@@ -507,6 +520,9 @@ export class GameShell {
       this.goBack,
       (names, profile, slotId): void => {
         void this.startGame(mode, names, profile, slotId);
+      },
+      (): void => {
+        this.nativeTextInputPolicy.prepare();
       },
       this.handleTextEntryFocusOut,
     );
@@ -844,18 +860,164 @@ export class GameShell {
       this.factory,
       this.config,
       layout,
-      snapshot.cities,
       snapshot.expeditionCompanions,
       snapshot.expeditionCarryItems,
       this.expeditionDraft,
       {
         back: this.goBack,
-        selectCity: this.selectExpeditionCity,
         toggleCompanion: this.toggleExpeditionCompanion,
         cycleItem: this.cycleExpeditionItem,
         begin: (): void => { void this.beginExpedition(); },
       },
     );
+  }
+
+  /** 创建远征城市列表，锁定城市仍可进入下一层详情。 */
+  private createExpeditionCityList(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createExpeditionCityListPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.cities,
+      {
+        back: this.goBack,
+        openCity: this.openExpeditionCity,
+      },
+    );
+  }
+
+  /** 创建路由所选城市的情报和通行需求详情页。 */
+  private createExpeditionCityDetail(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const city = this.expeditionCity(snapshot, route.context?.cityId);
+    if (city === null) {
+      return this.createMissingExpeditionSelection(layout);
+    }
+    return createExpeditionCityDetailPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      city,
+      {
+        back: this.goBack,
+        continueToDistricts: (): void => {
+          const district = resolveExpeditionDistrict(city, this.expeditionDraft.districtId);
+          this.expeditionDraft = {
+            ...this.expeditionDraft,
+            cityId: city.id,
+            districtId: district?.id ?? null,
+          };
+          this.navigation.push({
+            screen: "expedition_district_list",
+            context: { cityId: city.id },
+          });
+          this.render();
+        },
+      },
+    );
+  }
+
+  /** 创建所选城市内由配置生成的区划列表页。 */
+  private createExpeditionDistrictList(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const city = this.expeditionCity(snapshot, route.context?.cityId);
+    if (city === null) {
+      return this.createMissingExpeditionSelection(layout);
+    }
+    return createExpeditionDistrictListPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      city,
+      {
+        back: this.goBack,
+        openDistrict: (districtId): void => {
+          this.expeditionDraft = {
+            ...this.expeditionDraft,
+            cityId: city.id,
+            districtId,
+          };
+          this.navigation.push({
+            screen: "expedition_district_detail",
+            context: { cityId: city.id, districtId },
+          });
+          this.render();
+        },
+      },
+    );
+  }
+
+  /** 创建所选区划的危险等级、行动消耗和事件倾向详情页。 */
+  private createExpeditionDistrictDetail(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const city = this.expeditionCity(snapshot, route.context?.cityId);
+    if (city === null) {
+      return this.createMissingExpeditionSelection(layout);
+    }
+    const district = resolveExpeditionDistrict(
+      city,
+      route.context?.districtId ?? this.expeditionDraft.districtId,
+    );
+    if (district === null) {
+      return this.createMissingExpeditionSelection(layout);
+    }
+    return createExpeditionDistrictDetailPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      district,
+      {
+        back: this.goBack,
+        continueToPrepare: (): void => {
+          this.expeditionDraft = {
+            ...this.expeditionDraft,
+            cityId: city.id,
+            districtId: district.id,
+          };
+          this.navigation.push({ screen: "expedition_prepare" });
+          this.render();
+        },
+      },
+    );
+  }
+
+  /** 为失效路由提供可返回的安全页面，避免旧草稿导致渲染崩溃。 */
+  private createMissingExpeditionSelection(layout: ResponsiveLayout): PageView {
+    return this.createDocumentRoute(
+      layout,
+      "page-expedition-selection-missing",
+      {
+        title: this.config.texts.expedition_prepare_title,
+        body: this.config.texts.expedition_unselected,
+      },
+      this.config.texts.back,
+      this.goBack,
+    );
+  }
+
+  /** 从路由或草稿中解析当前城市，失效 ID 不隐式跳到其他城市。 */
+  private expeditionCity(
+    snapshot: GameUiSnapshot,
+    routeCityId?: string,
+  ) {
+    const cityId = routeCityId ?? this.expeditionDraft.cityId;
+    return snapshot.cities.find((city) => city.id === cityId) ?? null;
   }
 
   /** 创建继续深入与安全返程的远征状态页。 */
@@ -1116,9 +1278,11 @@ export class GameShell {
 
   /** 根据待决事件和远征上下文打开正确的探索页。 */
   private openExpedition(): void {
-    this.navigation.push({
-      screen: resolveExpeditionEntryScreen(this.requireSnapshot()),
-    });
+    const screen = resolveExpeditionEntryScreen(this.requireSnapshot());
+    if (screen === "expedition_city_list") {
+      this.expeditionDraft = emptyExpeditionDraft();
+    }
+    this.navigation.push({ screen });
     this.render();
   }
 
@@ -1451,13 +1615,18 @@ export class GameShell {
     );
   }
 
-  /** 保存远征目标城市并刷新整备页选中态。 */
-  private readonly selectExpeditionCity = (cityId: string): void => {
+  /** 保存远征目标城市并进入详情页，区划选择随城市切换而重置。 */
+  private readonly openExpeditionCity = (cityId: string): void => {
     this.expeditionDraft = {
       ...this.expeditionDraft,
       cityId,
+      districtId: null,
     };
-    this.render(true);
+    this.navigation.push({
+      screen: "expedition_city_detail",
+      context: { cityId },
+    });
+    this.render();
   };
 
   /** 切换一名同行伙伴的 UI 草稿选中态。 */
@@ -1494,13 +1663,14 @@ export class GameShell {
   /** 提交整备草稿并进入已锁定的首个远征事件。 */
   private async beginExpedition(): Promise<void> {
     const cityId = this.expeditionDraft.cityId;
-    if (cityId === null) {
+    if (cityId === null || this.expeditionDraft.districtId === null) {
       return;
     }
     await this.execute(
       {
         type: "expedition_begin",
         cityId,
+        districtId: this.expeditionDraft.districtId,
         companionIds: [...this.expeditionDraft.companionIds],
         carriedItems: { ...this.expeditionDraft.carriedItems },
       },
@@ -1908,6 +2078,7 @@ function isTextEntryElement(element: Element | null): boolean {
 function emptyExpeditionDraft(): ExpeditionDraft {
   return {
     cityId: null,
+    districtId: null,
     companionIds: new Set<string>(),
     carriedItems: {},
   };

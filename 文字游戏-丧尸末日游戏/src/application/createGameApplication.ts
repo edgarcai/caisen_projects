@@ -3,11 +3,13 @@ import gameDocument from "../../config/game_config.json";
 import v1ToV2MigrationDocument from "../../config/save_migrations/v1_to_v2.json";
 import v2ToV3MigrationDocument from "../../config/save_migrations/v2_to_v3.json";
 import v3ToV4MigrationDocument from "../../config/save_migrations/v3_to_v4.json";
+import v4ToV5MigrationDocument from "../../config/save_migrations/v4_to_v5.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import webDocument from "../../config/web_config.json";
 import { createKeyItemWarehouseCatalog } from "../config/keyItemCatalog";
 import { validateSurvivalSystemsConfig } from "../config/survivalSystemsValidator";
+import { validateWorldMapConfig } from "../config/worldMapValidator";
 import type {
   EventsConfigDocument,
   GameConfigDocument,
@@ -15,6 +17,7 @@ import type {
   StoryConfigDocument,
   V2ToV3SaveMigrationConfig,
   V3ToV4SaveMigrationConfig,
+  V4ToV5SaveMigrationConfig,
 } from "../domain/content";
 import type { SurvivalSystemsConfigDocument } from "../domain/survival-systems";
 import type {
@@ -33,6 +36,7 @@ import {
   V2ToV3SaveMigrator,
 } from "../infrastructure";
 import { V3ToV4SaveMigrator } from "../infrastructure/V3ToV4SaveMigrator";
+import { V4ToV5SaveMigrator } from "../infrastructure/V4ToV5SaveMigrator";
 import {
   AchievementService,
   CampaignProfileService,
@@ -83,8 +87,10 @@ export function createGameApplication(
   const v1ToV2Migration = v1ToV2MigrationDocument as unknown as SaveMigrationConfig;
   const v2ToV3Migration = v2ToV3MigrationDocument as unknown as V2ToV3SaveMigrationConfig;
   const v3ToV4Migration: V3ToV4SaveMigrationConfig = v3ToV4MigrationDocument;
+  const v4ToV5Migration: V4ToV5SaveMigrationConfig = v4ToV5MigrationDocument;
   const storageConfig = webDocument.storage as unknown as StorageDocument;
   const survivalSystems = validateSurvivalSystemsConfig(survivalSystemsDocument);
+  validateWorldMapConfig(game, events);
   const content = new GameContent(game, story, events);
   const random = options.randomSource ?? new BrowserRandomSource();
   const storage = options.storage ?? browserStorageOrMemory();
@@ -131,6 +137,7 @@ export function createGameApplication(
     v1ToV2Migration,
     v2ToV3Migration,
     v3ToV4Migration,
+    v4ToV5Migration,
   );
   return new GameApplication(
     content,
@@ -162,6 +169,7 @@ function createRepository(
   v1ToV2Migration: SaveMigrationConfig,
   v2ToV3Migration: V2ToV3SaveMigrationConfig,
   v3ToV4Migration: V3ToV4SaveMigrationConfig,
+  v4ToV5Migration: V4ToV5SaveMigrationConfig,
 ): SaveRepository {
   const validator = new SaveStateValidator(
     game.rules,
@@ -169,6 +177,7 @@ function createRepository(
     story.defaults.companions.map((companion) => companion.companion_id),
     survivalSystems,
     game.campaign_profiles,
+    game.cities,
   );
   return new LocalStorageSaveRepository({
     storage: options.storage ?? browserStorageOrMemory(),
@@ -181,6 +190,7 @@ function createRepository(
       new V1ToV2SaveMigrator(v1ToV2Migration),
       new V2ToV3SaveMigrator(v2ToV3Migration),
       new V3ToV4SaveMigrator(v3ToV4Migration),
+      new V4ToV5SaveMigrator(v4ToV5Migration, game.cities),
     ],
     now: options.now,
   });

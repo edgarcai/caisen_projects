@@ -157,6 +157,10 @@
       "target": "public/config/save_migrations/v3_to_v4.json"
     },
     {
+      "source": "config/save_migrations/v4_to_v5.json",
+      "target": "public/config/save_migrations/v4_to_v5.json"
+    },
+    {
       "source": "config/web_config.json",
       "target": "public/config/web_config.json"
     },

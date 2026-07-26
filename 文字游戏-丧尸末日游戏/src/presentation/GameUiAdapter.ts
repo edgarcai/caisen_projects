@@ -317,6 +317,7 @@ export class GameUiAdapter implements GameUiPort {
       case "expedition_begin": {
         const report = this.application.prepareExpedition(
           command.cityId,
+          command.districtId,
           command.companionIds,
           command.carriedItems,
         );
@@ -697,18 +698,66 @@ export class GameUiAdapter implements GameUiPort {
   /** 返回八座配置化城市；待事件存在时禁止免费重抽。 */
   private cityViews(state: GameState): UiCityView[] {
     const hasPending = state.pending_exploration !== null;
+    const itemNames = new Map(
+      this.application.warehouseItemCatalog().map((item) => [item.itemId, item.name]),
+    );
     return this.application.expeditionCities().map((access) => {
       const pendingLocked = hasPending
         && state.pending_exploration?.city_id !== access.city.id;
       const disabled = pendingLocked || !access.accessible;
+      const disabledReason = pendingLocked
+        ? this.application.content.text("pending_event_locked")
+        : access.accessible ? undefined : access.reason;
+      const listSeparator = this.webConfig.texts.save_slot_name_separator;
+      const districts = access.city.districts.map((district) => {
+        const eventStepCost = this.application.expeditionEventStepCost(
+          access.city.id,
+          district.id,
+        );
+        return {
+        id: district.id,
+        code: district.code,
+        name: district.name,
+        label: [district.code, district.name].join(
+          this.webConfig.texts.profile_field_separator,
+        ),
+        description: district.description,
+        dangerLevel: district.danger_level,
+        eventStepCost,
+        eventLabels: district.event_ids.map((eventId) =>
+          this.application.content.event(eventId).title),
+        fields: [
+          {
+            id: "danger",
+            label: this.webConfig.texts.expedition_field_danger,
+            value: String(district.danger_level),
+          },
+          {
+            id: "event-steps",
+            label: this.webConfig.texts.expedition_field_event_steps,
+            value: String(eventStepCost),
+          },
+          {
+            id: "events",
+            label: this.webConfig.texts.expedition_field_events,
+            value: district.event_ids.map((eventId) =>
+              this.application.content.event(eventId).title).join(listSeparator),
+          },
+        ],
+        requirements: [{
+          id: "district-step-cost",
+          label: this.webConfig.texts.expedition_district_requirement,
+          description: String(eventStepCost),
+          status: "informational" as const,
+        }],
+        };
+      });
       return {
         id: access.city.id,
         label: access.city.name,
-        description: `${access.accessSummary}\n${access.reason}`,
+        description: access.city.description,
         disabled,
-        disabledReason: pendingLocked
-          ? this.application.content.text("pending_event_locked")
-          : access.accessible ? undefined : access.reason,
+        disabledReason,
         tone: access.accessible ? "primary" : "default",
         districtLabel: access.city.district,
         terrainLabel: this.application.content.text(
@@ -718,8 +767,78 @@ export class GameUiAdapter implements GameUiPort {
           `city_relation_${access.relation}`,
         ),
         travelStepCost: access.travelStepCost,
+        defaultDistrictId: access.city.default_district_id
+          || districts[0]?.id
+          || "",
+        districts,
+        fields: [
+          {
+            id: "neighbors",
+            label: this.webConfig.texts.expedition_field_neighbors,
+            value: access.city.neighbor_ids.length > 0
+              ? access.city.neighbor_ids.map((cityId) =>
+                  this.application.content.city(cityId).name).join(listSeparator)
+              : this.webConfig.texts.expedition_empty_value,
+          },
+          {
+            id: "relation",
+            label: this.webConfig.texts.expedition_field_relation,
+            value: this.application.content.text(`city_relation_${access.relation}`),
+          },
+          {
+            id: "terrain",
+            label: this.webConfig.texts.expedition_field_terrain,
+            value: this.application.content.text(`city_terrain_${access.city.terrain}`),
+          },
+          {
+            id: "travel-steps",
+            label: this.webConfig.texts.expedition_field_travel_steps,
+            value: String(access.travelStepCost),
+          },
+          {
+            id: "intelligence",
+            label: this.webConfig.texts.expedition_field_intelligence,
+            value: String(access.city.intelligence_newspapers_required),
+          },
+          {
+            id: "path-items",
+            label: this.webConfig.texts.expedition_field_path_items,
+            value: this.cityAccessItemNames(
+              access.city.path_item_ids,
+              itemNames,
+              listSeparator,
+            ),
+          },
+          {
+            id: "transport-items",
+            label: this.webConfig.texts.expedition_field_transport_items,
+            value: this.cityAccessItemNames(
+              access.city.transport_item_ids,
+              itemNames,
+              listSeparator,
+            ),
+          },
+        ],
+        requirements: [{
+          id: "city-access",
+          label: this.webConfig.texts.expedition_access_requirement,
+          description: [access.accessSummary, disabledReason ?? access.reason].join("\n"),
+          status: disabled ? "unmet" : "met",
+        }],
       };
     });
+  }
+
+  /** 把通行物品 ID 转为配置名称，空集合使用统一占位文案。 */
+  private cityAccessItemNames(
+    itemIds: readonly string[],
+    itemNames: ReadonlyMap<string, string>,
+    separator: string,
+  ): string {
+    if (itemIds.length === 0) {
+      return this.webConfig.texts.expedition_empty_value;
+    }
+    return itemIds.map((itemId) => itemNames.get(itemId) ?? itemId).join(separator);
   }
 
   /** 从已持久化事件 ID 构建探索事件页，不触发新的随机抽取。 */
@@ -729,11 +848,22 @@ export class GameUiAdapter implements GameUiPort {
       return null;
     }
     const event = this.application.content.event(pending.event_id);
+    const city = this.application.content.city(pending.city_id);
+    const district = this.application.content.district(
+      pending.city_id,
+      pending.district_id,
+    );
     const choices = event.choices ?? [];
     return {
       id: event.id,
       title: event.title,
-      body: event.intro,
+      body: formatTemplate(this.webConfig.texts.exploration_location_format, {
+        city: city.name,
+        district: [district.code, district.name].join(
+          this.webConfig.texts.profile_field_separator,
+        ),
+        intro: event.intro,
+      }),
       options: choices.length === 0
         ? [{
             id: CONTINUE_OPTION_ID,
@@ -920,9 +1050,17 @@ export class GameUiAdapter implements GameUiPort {
   private expeditionStatusView(): UiExpeditionStatusView | null {
     const status = this.application.expeditionStatus();
     if (status === null) return null;
+    const district = this.application.content.district(
+      status.cityId,
+      status.districtId,
+    );
     return {
       cityId: status.cityId,
       cityName: this.application.content.city(status.cityId).name,
+      districtId: status.districtId,
+      districtName: [district.code, district.name].join(
+        this.webConfig.texts.profile_field_separator,
+      ),
       travelStepCost: status.travelStepCost,
       remainingSteps: status.remainingSteps,
       maximumSteps: status.maximumSteps,

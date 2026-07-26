@@ -44,7 +44,7 @@ function requireState(application: GameApplication): GameState {
   return state;
 }
 
-describe("浏览器 v4 存档", () => {
+describe("浏览器 v5 存档", () => {
   it("以 snake_case 信封往返完整待探索状态", () => {
     const storage = new MemoryStorage();
     const writer = buildApplication(storage);
@@ -59,7 +59,7 @@ describe("浏览器 v4 存档", () => {
       saved_at: string;
       game_state: Record<string, unknown>;
     };
-    expect(envelope.schema_version).toBe(4);
+    expect(envelope.schema_version).toBe(5);
     expect(envelope.saved_at).toBe("2166-02-03T04:05:06.000Z");
     expect(envelope.game_state).toHaveProperty("active_player_index");
     expect(envelope.game_state).toHaveProperty("pending_exploration");
@@ -90,7 +90,7 @@ describe("浏览器 v4 存档", () => {
     expect(requireState(reader).players[0]?.hunger).toBe(0);
   });
 
-  it("读取 v1 后连续迁移并可再次保存为 v4", () => {
+  it("读取 v1 后连续迁移并可再次保存为 v5", () => {
     const storage = new MemoryStorage();
     const source = buildApplication(new MemoryStorage());
     source.startNewGame(["旧所长甲", "旧所长乙"], "multiplayer");
@@ -129,7 +129,7 @@ describe("浏览器 v4 存档", () => {
       schema_version: number;
       game_state: Record<string, unknown>;
     };
-    expect(envelope.schema_version).toBe(4);
+    expect(envelope.schema_version).toBe(5);
     expect(envelope.game_state).toHaveProperty("campaign");
     expect(envelope.game_state).not.toHaveProperty("ended");
     expect(envelope.game_state).not.toHaveProperty("ending_message");

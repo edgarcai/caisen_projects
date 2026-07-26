@@ -23,6 +23,7 @@ import type {
   ExpeditionCompanionView,
   ExpeditionStatusView,
   ResearchProjectView,
+  WarehouseItemCatalogEntry,
   WarehouseItemView,
 } from "../domain/survival-systems";
 import {
@@ -241,7 +242,13 @@ export class GameApplication {
       this.removeLegacyNarrativeState(candidate);
     }
     if (candidate.pending_exploration !== null) {
-      this.content.city(candidate.pending_exploration.city_id);
+      const district = this.content.district(
+        candidate.pending_exploration.city_id,
+        candidate.pending_exploration.district_id,
+      );
+      if (!district.event_ids.includes(candidate.pending_exploration.event_id)) {
+        throw new GameApplicationError(this.content.text("no_pending_event"));
+      }
       this.exploration.prompt(candidate.pending_exploration.event_id);
     }
     if (candidate.battle !== null) {
@@ -371,6 +378,11 @@ export class GameApplication {
     return this.inventory.items(this.requireState());
   }
 
+  /** 返回不依赖当前持有数量的完整仓库物品目录。 */
+  public warehouseItemCatalog(): readonly WarehouseItemCatalogEntry[] {
+    return this.inventory.catalog();
+  }
+
   /** 返回指定所长计入当前武器与防具后的有效战斗属性。 */
   public effectivePlayerAttributes(
     playerIndex: number = this.requireState().active_player_index,
@@ -396,6 +408,11 @@ export class GameApplication {
   /** 返回出发前可选择携带的仓库物资。 */
   public expeditionCarryItems(): readonly ExpeditionCarryItemView[] {
     return this.expedition.carryItemOptions(this.requireState());
+  }
+
+  /** 返回指定城市区划一次探索事件的真实总步数。 */
+  public expeditionEventStepCost(cityId: string, districtId: string): number {
+    return this.expedition.eventStepCost(cityId, districtId);
   }
 
   /** 返回当前远征步数、队伍、携带物和战利品摘要。 */
@@ -459,6 +476,7 @@ export class GameApplication {
   /** 保存出发队伍与携带物，并立即锁定本次远征的首个事件。 */
   public prepareExpedition(
     cityId: string,
+    districtId: string,
     companionIds: readonly string[],
     carriedItems: Readonly<Record<string, number>>,
   ): ActionReport {
@@ -466,6 +484,7 @@ export class GameApplication {
     const preparation = this.expedition.prepare(
       working,
       cityId,
+      districtId,
       companionIds,
       carriedItems,
     );
@@ -500,7 +519,7 @@ export class GameApplication {
     });
   }
 
-  /** 抽取并持久化城市事件；已有待处理事件时绝不重新抽取。 */
+  /** 兼容旧调用方，使用城市默认区划抽取并持久化事件。 */
   public prepareExploration(cityId: string): EventPrompt {
     const state = this.requirePlayableState();
     if (this.hasActiveBattle(state)) {
@@ -511,7 +530,11 @@ export class GameApplication {
       return this.exploration.prompt(existingPending.event_id);
     }
     if (state.expedition === null) {
-      const preparation = this.expedition.prepare(state, cityId, [], {});
+      const districtId = this.content.city(cityId).default_district_id;
+      const preparation = this.expedition.prepare(state, cityId, districtId, [], {});
+      if (!preparation.applied) {
+        throw new GameApplicationError(preparation.messages.join("\n"));
+      }
       this.chronicle.record(state, preparation.messages);
     }
     const event = this.prepareNextExpeditionEvent(state);
@@ -763,7 +786,7 @@ export class GameApplication {
     if (status === null) {
       return { messages: stepResolution.messages };
     }
-    const prompt = this.exploration.prepare(status.cityId, {
+    const prompt = this.exploration.prepare(status.cityId, status.districtId, {
       discovery: this.shelter.passiveModifier(
         state,
         "rules.discovery_weight_percent",
@@ -772,6 +795,7 @@ export class GameApplication {
     });
     state.pending_exploration = {
       city_id: status.cityId,
+      district_id: status.districtId,
       event_id: prompt.eventId,
     };
     return {

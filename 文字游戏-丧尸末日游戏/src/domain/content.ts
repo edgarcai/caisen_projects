@@ -47,6 +47,10 @@ export interface RequirementConfig {
 
 export interface GameRuleConfig {
   companion_secret_unlock_trust: number;
+  world_map: {
+    minimum_districts_per_city: number;
+    required_neighbor_degree: number;
+  };
   player_counts: Record<string, { minimum: number; maximum: number }>;
   mode_survival_cost_percent: Record<GameMode, number>;
   city_travel: {
@@ -137,9 +141,22 @@ export interface CampaignProfilesConfig {
 /** 城市所处地貌，决定可用于远行的交通工具。 */
 export type CityTerrain = "land" | "river" | "coastal" | "island";
 
+/** 一座城市内可被独立选择、介绍和抽取事件的区划。 */
+export interface CityDistrictConfig {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  danger_level: number;
+  event_step_cost: number;
+  event_ids: readonly string[];
+}
+
+/** 一座包含拓扑、通行条件和多个可探索区划的城市。 */
 export interface CityConfig {
   id: string;
   name: string;
+  /** 供旧界面与 Python 版兼容使用；H5 新功能读取 districts。 */
   district: string;
   description: string;
   terrain: CityTerrain;
@@ -147,6 +164,9 @@ export interface CityConfig {
   intelligence_newspapers_required: number;
   path_item_ids: readonly string[];
   transport_item_ids: readonly string[];
+  default_district_id: string;
+  districts: readonly CityDistrictConfig[];
+  /** 供旧探索流程与 Python 版兼容使用；H5 新事件池逐步按区划读取。 */
   event_ids: readonly string[];
 }
 
@@ -455,6 +475,13 @@ export interface V3ToV4SaveMigrationConfig {
     campaign: CampaignProfileState;
     expedition_travel_step_cost: number;
   };
+}
+
+/** v4 存档升级为区划化远征状态时使用的版本链配置。 */
+export interface V4ToV5SaveMigrationConfig {
+  schema_version: number;
+  from_version: number;
+  to_version: number;
 }
 
 /** 格式化 JSON 中与 Python ``str.format`` 兼容的简单占位符。 */

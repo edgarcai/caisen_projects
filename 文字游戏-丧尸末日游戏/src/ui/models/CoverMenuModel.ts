@@ -24,7 +24,6 @@ export interface CoverPageActions {
   readonly showCredits: () => void;
   readonly showUpdateLog?: () => void;
   readonly openSettings: () => void;
-  readonly exitGame: () => void;
   readonly onDescriptionChange?: (
     description: CoverMenuDescription | null,
   ) => void;
@@ -53,7 +52,7 @@ export interface CoverSettingsGeometry {
   readonly height: number;
 }
 
-/** 封面右上退出键与右下更新日志键的纯布局结果。 */
+/** 封面右下更新日志键的纯布局结果。 */
 export type CoverUtilityGeometry = CoverSettingsGeometry;
 
 /** 桌面封面悬停简介面板的纯几何结果。 */
@@ -172,44 +171,18 @@ export function resolveCoverSettingsGeometry(
   );
   const width = Math.min(menuLayout.settings_button_width, availableWidth);
   const height = Math.min(menuLayout.settings_button_height, availableHeight);
-  const exitGeometry = resolveCoverExitGeometry(config, layout);
   const requestedX = menuLayout.settings_button_anchor === "left"
     ? layout.safeArea.left + menuLayout.settings_button_offset
-    : exitGeometry.x - menuLayout.settings_button_offset - width;
+    : layout.stageWidth -
+      layout.safeArea.right -
+      menuLayout.settings_button_offset -
+      width;
   const maximumX = layout.stageWidth - layout.safeArea.right - width;
   return {
     x: Math.min(maximumX, Math.max(layout.safeArea.left, requestedX)),
     y: Math.min(
       layout.stageHeight - layout.safeArea.bottom - height,
       layout.safeArea.top + menuLayout.settings_button_top,
-    ),
-    width,
-    height,
-  };
-}
-
-/** 根据当前断点计算右上角退出键并钳制在安全区内。 */
-export function resolveCoverExitGeometry(
-  config: GameUiConfig,
-  layout: ResponsiveLayout,
-): CoverUtilityGeometry {
-  const menuLayout = resolveCoverMenuLayout(config, layout);
-  const width = Math.min(
-    menuLayout.exit_button_width,
-    layout.stageWidth - layout.safeArea.left - layout.safeArea.right,
-  );
-  const height = Math.min(
-    menuLayout.exit_button_height,
-    layout.stageHeight - layout.safeArea.top - layout.safeArea.bottom,
-  );
-  return {
-    x: Math.max(
-      layout.safeArea.left,
-      layout.stageWidth - layout.safeArea.right - menuLayout.exit_button_right - width,
-    ),
-    y: Math.min(
-      layout.stageHeight - layout.safeArea.bottom - height,
-      layout.safeArea.top + menuLayout.exit_button_top,
     ),
     width,
     height,

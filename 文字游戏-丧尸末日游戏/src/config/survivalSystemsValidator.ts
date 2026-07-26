@@ -147,7 +147,7 @@ function validateResearchAndCrafting(config: SurvivalSystemsConfigDocument): voi
   }
 }
 
-/** 校验远征限制、城市成本、伙伴加成和惩罚范围。 */
+/** 校验远征限制、伙伴加成和惩罚范围。 */
 function validateExpedition(config: SurvivalSystemsConfigDocument): void {
   const expeditionRecord = requireRecord(config.expedition, "expedition");
   const expedition = config.expedition;
@@ -178,10 +178,6 @@ function validateExpedition(config: SurvivalSystemsConfigDocument): void {
   const maximumHealth = requireInteger(healthRange[1], "forced_return_health_range[1]", 1);
   if (minimumHealth > maximumHealth) {
     throw new Error("强制返程生命下限不能大于上限。");
-  }
-  for (const [cityId, cost] of Object.entries(expedition.city_step_costs)) {
-    requireNonEmptyString(cityId, "expedition.city_step_costs 的键");
-    requireInteger(cost, `expedition.city_step_costs.${cityId}`, 0);
   }
   requireUniqueStrings(
     expedition.companion_step_bonuses.map((bonus) => bonus.companion_id),

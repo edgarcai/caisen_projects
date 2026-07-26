@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import gameConfigDocument from "../../config/game_config.json";
 import type { GameMode, GameState } from "../../src/domain/game-state";
 import { SaveDataError } from "../../src/domain/errors";
 import {
@@ -50,6 +51,15 @@ interface StateOptions {
   readonly originId?: string;
   readonly traitId?: string;
   readonly homeCityId?: string;
+}
+
+/** 根据权威内容配置解析测试城市的默认区划。 */
+function configuredDefaultDistrictId(cityId: string): string {
+  const city = gameConfigDocument.cities.find((candidate) => candidate.id === cityId);
+  if (city === undefined) {
+    throw new Error(`测试城市 ${cityId} 未在内容配置中声明。`);
+  }
+  return city.default_district_id;
 }
 
 /** 创建包含最新 campaign 与远征步数成本字段的完整测试状态。 */
@@ -128,6 +138,7 @@ function createState(options: StateOptions = {}): GameState {
     },
     expedition: {
       city_id: "city_a",
+      district_id: configuredDefaultDistrictId("city_a"),
       travel_step_cost: 2,
       leader_player_index: 0,
       companion_ids: [],

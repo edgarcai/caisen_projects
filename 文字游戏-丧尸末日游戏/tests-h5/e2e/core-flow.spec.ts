@@ -10,6 +10,17 @@ interface E2eWebConfig {
   readonly motion: {
     readonly cover_menu_description_delay_ms: number;
   };
+  readonly new_game_setup: {
+    readonly name_input: {
+      readonly html_type: string;
+      readonly input_mode: string;
+      readonly language: string;
+      readonly enter_key_hint: string;
+      readonly autocomplete: string;
+      readonly autocapitalize: string;
+      readonly spellcheck: boolean;
+    };
+  };
   readonly storage: {
     readonly save_slot_count: number;
     readonly settings_key: string;
@@ -91,15 +102,26 @@ interface BrowserGameDebugHandle {
       readonly id: string;
       readonly disabled: boolean;
       readonly description: string;
+      readonly districts: readonly {
+        readonly id: string;
+        readonly name: string;
+        readonly description: string;
+        readonly eventStepCost: number;
+        readonly eventLabels: readonly string[];
+      }[];
     }[];
     readonly storyPrompt: { readonly id: string } | null;
     readonly explorationPrompt: {
       readonly id: string;
+      readonly title: string;
       readonly options: readonly { readonly id: string; readonly disabled: boolean }[];
     } | null;
     readonly expeditionStatus: {
       readonly cityId: string;
+      readonly districtId: string;
+      readonly travelStepCost: number;
       readonly remainingSteps: number;
+      readonly maximumSteps: number;
     } | null;
   };
 }
@@ -154,8 +176,6 @@ async function clickLayaNode(page: Page, nodeName: string): Promise<void> {
     }
     const rectangle = canvas.getBoundingClientRect();
     return {
-      x: ((bounds.x + bounds.width / 2) / bounds.stageWidth) * rectangle.width,
-      y: ((bounds.y + bounds.height / 2) / bounds.stageHeight) * rectangle.height,
       clientX: rectangle.left +
         ((bounds.x + bounds.width / 2) / bounds.stageWidth) * rectangle.width,
       clientY: rectangle.top +
@@ -168,11 +188,9 @@ async function clickLayaNode(page: Page, nodeName: string): Promise<void> {
   }
   if (position.hasTouch) {
     await page.touchscreen.tap(position.clientX, position.clientY);
-  } else {
-    await page.locator("#layaCanvas").click({
-      position: { x: position.x, y: position.y },
-    });
+    return;
   }
+  await page.mouse.click(position.clientX, position.clientY);
 }
 
 /** 读取指定 Laya 节点的舞台边界。 */
@@ -666,7 +684,7 @@ test("ESC 六栏存档可写入指定栏位并刷新后按槽读档", async ({ p
   expect((await readDebugSnapshot(page)).activePlayer?.name).toBe("守夜人");
 });
 
-test("启动更新日志关闭后展示五个主入口和独立退出键", async ({
+test("启动更新日志关闭后展示五个主入口且不再提供封面退出", async ({
   page,
 }) => {
   await closeAutomaticUpdateLog(page);
@@ -680,9 +698,10 @@ test("启动更新日志关闭后展示五个主入口和独立退出键", async
   for (const nodeName of menuNodes) {
     expect(await readLayaNodeBounds(page, nodeName)).not.toBeNull();
   }
-  for (const utilityNode of ["menu-settings", "menu-exit", "menu-update-log"]) {
+  for (const utilityNode of ["menu-settings", "menu-update-log"]) {
     expect(await readLayaNodeBounds(page, utilityNode)).not.toBeNull();
   }
+  expect(await readLayaNodeBounds(page, "menu-exit")).toBeNull();
 
   if (await readGameLayout(page) === "desktop") {
     expect(await readLayaNodeBounds(page, "menu-description")).toBeNull();
@@ -711,11 +730,6 @@ test("启动更新日志关闭后展示五个主入口和独立退出键", async
   expect(await readLayaNodeBounds(page, "player-name-1")).not.toBeNull();
   expect(await readLayaNodeBounds(page, "player-name-2")).not.toBeNull();
   await clickLayaNode(page, "page-new-game-setup-back");
-  await waitForScreen(page, "menu");
-  await clickLayaNode(page, "menu-exit");
-  await waitForScreen(page, "exit_confirm");
-  expect(await readLayaNodeBounds(page, "page-exit-confirm")).not.toBeNull();
-  await clickLayaNode(page, "page-exit-confirm-cancel");
   await waitForScreen(page, "menu");
 });
 
@@ -820,21 +834,81 @@ test("Escape 功能菜单叠加在二级页上并逐层返回", async ({ page })
 });
 
 test("远征从整备、事件到安全返程完成闭环", async ({ page }) => {
+  test.slow();
   await closeAutomaticUpdateLog(page);
   await startSingleGame(page, "远征所长");
   const exploreNode = explorationEntryNode(await readGameLayout(page));
   await clickLayaNode(page, exploreNode);
-  await waitForScreen(page, "expedition_prepare");
+  await waitForScreen(page, "expedition_city_list");
 
-  await clickLayaNode(page, "page-expedition-city-city_a");
+  await clickScrollableLayaNode(
+    page,
+    "page-expedition-city-list-option-city_a",
+    "page-expedition-city-list-scroll",
+  );
+  await waitForScreen(page, "expedition_city_detail");
+  expect(
+    await readLayaNodeBounds(page, "page-expedition-city-detail-description"),
+  ).not.toBeNull();
+  await clickLayaNode(page, "page-expedition-city-detail-confirm");
+  await waitForScreen(page, "expedition_district_list");
+
+  const city = (await readDebugSnapshot(page)).cities.find(
+    (candidate) => candidate.id === "city_a",
+  );
+  expect(city?.districts.length).toBeGreaterThanOrEqual(6);
+  const district = city?.districts[0];
+  if (district === undefined) {
+    throw new Error("A 市缺少可用的默认区划。");
+  }
+  const districtNode = `page-expedition-district-list-option-${district.id}`;
+  await clickScrollableLayaNode(
+    page,
+    districtNode,
+    "page-expedition-district-list-scroll",
+  );
+  await waitForScreen(page, "expedition_district_detail");
+  expect(
+    await readLayaNodeBounds(page, "page-expedition-district-detail-description"),
+  ).not.toBeNull();
+  await clickLayaNode(page, "page-expedition-district-detail-back");
+  await waitForScreen(page, "expedition_district_list");
+  await clickScrollableLayaNode(
+    page,
+    districtNode,
+    "page-expedition-district-list-scroll",
+  );
+  await waitForScreen(page, "expedition_district_detail");
+  await clickLayaNode(page, "page-expedition-district-detail-confirm");
+  await waitForScreen(page, "expedition_prepare");
   await clickLayaNode(page, "page-expedition-prepare-begin");
   await waitForScreen(page, "exploration_event");
-  const event = (await readDebugSnapshot(page)).explorationPrompt;
-  const option = event?.options.find((candidate) => !candidate.disabled);
+  const expeditionSnapshot = await readDebugSnapshot(page);
+  const event = expeditionSnapshot.explorationPrompt;
+  if (event === null) {
+    throw new Error("远征首个事件未进入调试快照。");
+  }
+  expect(district.eventLabels).toContain(event.title);
+  expect(expeditionSnapshot.expeditionStatus).toMatchObject({
+    cityId: "city_a",
+    districtId: district.id,
+  });
+  const status = expeditionSnapshot.expeditionStatus;
+  if (status === null) {
+    throw new Error("远征状态未进入调试快照。");
+  }
+  expect(
+    status.maximumSteps - status.travelStepCost - status.remainingSteps,
+  ).toBe(district.eventStepCost);
+  const option = event.options.find((candidate) => !candidate.disabled);
   if (option === undefined) {
     throw new Error("远征首个事件没有可执行选项。");
   }
-  await clickLayaNode(page, `page-exploration-event-option-${option.id}`);
+  await clickScrollableLayaNode(
+    page,
+    `page-exploration-event-option-${option.id}`,
+    "page-exploration-event-scroll",
+  );
   await waitForScreen(page, "expedition_status");
   expect((await readDebugSnapshot(page)).expeditionStatus?.cityId).toBe("city_a");
 
@@ -843,39 +917,40 @@ test("远征从整备、事件到安全返程完成闭环", async ({ page }) => 
   expect((await readDebugSnapshot(page)).expeditionStatus).toBeNull();
 });
 
-test("桌面禁用城市仍可悬停查看简介且点击不会出发", async ({ page }) => {
+test("锁定城市可进入详情查看需求但不能继续", async ({ page }) => {
   await closeAutomaticUpdateLog(page);
-  test.skip(
-    await readGameLayout(page) === "mobile",
-    "手机端使用常驻城市情报，不验证鼠标悬停层",
-  );
   await startSingleGame(page, "情报所长");
   await clickLayaNode(page, explorationEntryNode(await readGameLayout(page)));
-  await waitForScreen(page, "expedition_prepare");
+  await waitForScreen(page, "expedition_city_list");
   const disabledCity = (await readDebugSnapshot(page)).cities.find(
     (city) => city.disabled,
   );
   if (disabledCity === undefined) {
     throw new Error("当前城市拓扑缺少禁用城市。");
   }
-  const cityNode = `page-expedition-city-${disabledCity.id}`;
-  await scrollLayaNodeIntoView(page, cityNode, "page-expedition-prepare-scroll");
-  expect(await readLayaNodeBounds(page, "page-expedition-tooltip")).toBeNull();
-  await hoverLayaNode(page, cityNode);
-  await expect.poll(async () =>
-    readLayaNodeBounds(page, "page-expedition-tooltip"),
-  ).not.toBeNull();
-  const tooltipBounds = await readLayaNodeBounds(page, "page-expedition-tooltip");
-  expect(tooltipBounds?.x).toBeGreaterThanOrEqual(0);
-  expect(tooltipBounds?.y).toBeGreaterThanOrEqual(0);
-  expect((tooltipBounds?.x ?? 0) + (tooltipBounds?.width ?? 0)).toBeLessThanOrEqual(
-    tooltipBounds?.stageWidth ?? 0,
+  const cityNode = `page-expedition-city-list-option-${disabledCity.id}`;
+  await clickScrollableLayaNode(
+    page,
+    cityNode,
+    "page-expedition-city-list-scroll",
   );
-  await clickLayaNode(page, cityNode);
+  await waitForScreen(page, "expedition_city_detail");
+  expect(
+    await readLayaNodeBounds(
+      page,
+      "page-expedition-city-detail-requirement-city-access",
+    ),
+  ).not.toBeNull();
+  expect(
+    await readLayaNodeBounds(page, "page-expedition-city-detail-confirm"),
+  ).not.toBeNull();
+  await clickLayaNode(page, "page-expedition-city-detail-confirm");
   await expect.poll(async () => page.evaluate(() =>
     document.body.dataset.gameScreen ?? null,
-  )).toBe("expedition_prepare");
+  )).toBe("expedition_city_detail");
   expect((await readDebugSnapshot(page)).expeditionStatus).toBeNull();
+  await clickLayaNode(page, "page-expedition-city-detail-back");
+  await waitForScreen(page, "expedition_city_list");
 });
 
 test("真实手机能力使用移动布局且关键入口满足触控尺寸", async ({ page }) => {
@@ -887,16 +962,16 @@ test("真实手机能力使用移动布局且关键入口满足触控尺寸", as
     document.body.dataset.gameLayout,
   )).toBe("mobile");
   const firstButton = await readCssNodeBounds(page, "menu-new-game");
-  const exitButton = await readCssNodeBounds(page, "menu-exit");
+  const coverSettingsButton = await readCssNodeBounds(page, "menu-settings");
   expect(firstButton).not.toBeNull();
-  expect(exitButton).not.toBeNull();
+  expect(coverSettingsButton).not.toBeNull();
   expect(firstButton?.height).toBeGreaterThanOrEqual(
     qualityConfig.minimum_touch_css_px,
   );
-  expect(exitButton?.height).toBeGreaterThanOrEqual(
+  expect(coverSettingsButton?.height).toBeGreaterThanOrEqual(
     qualityConfig.minimum_touch_css_px,
   );
-  expect(exitButton?.y).toBeLessThan(firstButton?.y ?? 0);
+  expect(coverSettingsButton?.y).toBeLessThan(firstButton?.y ?? 0);
 
   await startSingleGame(page, "触控所长");
   const settingsButton = await readCssNodeBounds(page, "dashboard-settings");
@@ -938,6 +1013,23 @@ test("手机软键盘尺寸变化不会清空姓名或夺走输入焦点", async
   const input = page.getByPlaceholder(
     webConfigDocument.texts.profile_name_label,
     { exact: true },
+  );
+  const inputConfig = webConfigDocument.new_game_setup.name_input;
+  await expect(input).toHaveAttribute("type", inputConfig.html_type);
+  await expect(input).toHaveAttribute("inputmode", inputConfig.input_mode);
+  await expect(input).toHaveAttribute("lang", inputConfig.language);
+  await expect(input).toHaveAttribute(
+    "enterkeyhint",
+    inputConfig.enter_key_hint,
+  );
+  await expect(input).toHaveAttribute("autocomplete", inputConfig.autocomplete);
+  await expect(input).toHaveAttribute(
+    "autocapitalize",
+    inputConfig.autocapitalize,
+  );
+  await expect(input).toHaveAttribute(
+    "spellcheck",
+    String(inputConfig.spellcheck),
   );
   await input.fill("手机守夜人");
   await input.focus();

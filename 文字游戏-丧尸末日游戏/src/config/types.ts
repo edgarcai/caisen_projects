@@ -17,8 +17,8 @@ export type EngineHorizontalAlignment = "left" | "center" | "right";
 /** LayaAir 垂直对齐标识。 */
 export type EngineVerticalAlignment = "top" | "middle" | "bottom";
 
-/** 封面设置键相对安全区或退出键的水平锚点。 */
-export type CoverSettingsButtonAnchor = "left" | "before_exit";
+/** 封面设置键相对安全区的水平锚点。 */
+export type CoverSettingsButtonAnchor = "left" | "right";
 
 /** 指挥台标题栏导航在安全区内的水平锚点。 */
 export type HeaderNavigationAnchor = "left" | "right";
@@ -197,6 +197,42 @@ export interface ControlConfig {
   readonly tooltip_offset_y: number;
 }
 
+/** 姓名输入允许使用的 HTML 控件类型。 */
+export type NameInputHtmlType = "text";
+
+/** 姓名输入向手机键盘声明的输入模式。 */
+export type NameInputMode = "text";
+
+/** 姓名输入的软键盘确认键语义。 */
+export type NameInputEnterKeyHint = "done" | "next";
+
+/** 姓名输入可使用的浏览器自动填充策略。 */
+export type NameInputAutocomplete = "off" | "name";
+
+/** 姓名输入可使用的移动端自动大写策略。 */
+export type NameInputAutocapitalize =
+  | "none"
+  | "sentences"
+  | "words"
+  | "characters";
+
+/** 浏览器原生姓名输入的配置化属性。 */
+export interface NativeNameInputConfig {
+  readonly html_type: NameInputHtmlType;
+  readonly input_mode: NameInputMode;
+  readonly language: string;
+  readonly enter_key_hint: NameInputEnterKeyHint;
+  readonly autocomplete: NameInputAutocomplete;
+  readonly autocapitalize: NameInputAutocapitalize;
+  readonly spellcheck: boolean;
+}
+
+/** 新游戏建档页使用的姓名输入与预设名称配置。 */
+export interface NewGameSetupConfig {
+  readonly name_input: NativeNameInputConfig;
+  readonly preset_names: readonly string[];
+}
+
 /** 单个响应式封面菜单结构。 */
 export interface CoverMenuLayoutConfig {
   readonly horizontal_alignment: EngineHorizontalAlignment;
@@ -215,10 +251,6 @@ export interface CoverMenuLayoutConfig {
   readonly settings_button_top: number;
   readonly settings_button_width: number;
   readonly settings_button_height: number;
-  readonly exit_button_top: number;
-  readonly exit_button_right: number;
-  readonly exit_button_width: number;
-  readonly exit_button_height: number;
   readonly changelog_button_right: number;
   readonly changelog_button_bottom: number;
   readonly changelog_button_width: number;
@@ -432,6 +464,32 @@ export interface TextConfig {
   readonly crafting_locked: string;
   readonly expedition_prepare_title: string;
   readonly expedition_prepare_body: string;
+  readonly expedition_city_list_title: string;
+  readonly expedition_city_list_body: string;
+  readonly expedition_city_detail_confirm: string;
+  readonly expedition_district_list_title: string;
+  readonly expedition_district_list_body: string;
+  readonly expedition_district_detail_confirm: string;
+  readonly expedition_detail_fields_title: string;
+  readonly expedition_detail_requirements_title: string;
+  readonly expedition_detail_field_format: string;
+  readonly expedition_detail_requirement_format: string;
+  readonly expedition_requirement_met: string;
+  readonly expedition_requirement_unmet: string;
+  readonly expedition_requirement_informational: string;
+  readonly expedition_field_neighbors: string;
+  readonly expedition_field_relation: string;
+  readonly expedition_field_terrain: string;
+  readonly expedition_field_travel_steps: string;
+  readonly expedition_field_intelligence: string;
+  readonly expedition_field_path_items: string;
+  readonly expedition_field_transport_items: string;
+  readonly expedition_field_danger: string;
+  readonly expedition_field_event_steps: string;
+  readonly expedition_field_events: string;
+  readonly expedition_access_requirement: string;
+  readonly expedition_district_requirement: string;
+  readonly expedition_empty_value: string;
   readonly expedition_city_title: string;
   readonly expedition_companion_title: string;
   readonly expedition_item_title: string;
@@ -444,6 +502,7 @@ export interface TextConfig {
   readonly expedition_begin: string;
   readonly expedition_status_title: string;
   readonly expedition_status_format: string;
+  readonly exploration_location_format: string;
   readonly expedition_loot_format: string;
   readonly expedition_continue: string;
   readonly expedition_safe_return: string;
@@ -460,6 +519,7 @@ export interface TextConfig {
   readonly profile_setup_title: string;
   readonly profile_setup_body: string;
   readonly profile_name_label: string;
+  readonly profile_name_preset_format: string;
   readonly profile_mode_label: string;
   readonly profile_difficulty_label: string;
   readonly profile_origin_label: string;
@@ -493,6 +553,7 @@ export interface WebGameConfig {
   readonly typography: TypographyConfig;
   readonly motion: MotionConfig;
   readonly controls: ControlConfig;
+  readonly new_game_setup: NewGameSetupConfig;
   readonly layout: LayoutConfig;
   readonly storage: StorageConfig;
   readonly update_log: UpdateLogConfig;

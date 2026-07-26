@@ -1,3 +1,4 @@
+import { formatTemplate } from "../../domain/content";
 import type { GameUiConfig } from "../../styles/GameTheme";
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
 import type { UiFactory } from "../components/UiFactory";
@@ -63,6 +64,7 @@ export function createNewGameSetupPage(
     profile: UiCampaignProfileSelection,
     slotId: number,
   ) => void,
+  prepareNameInput: () => void,
   onTextEntryFocusOut: () => void,
 ): NewGameSetupPageView {
   validatePlayerCount(playerCount);
@@ -166,6 +168,7 @@ export function createNewGameSetupPage(
       index,
       playerCount,
       inputs,
+      prepareNameInput,
       onTextEntryFocusOut,
     ));
   }
@@ -248,6 +251,26 @@ function validatePlayerCount(playerCount: number): void {
   if (!Number.isInteger(playerCount) || playerCount <= 0) {
     throw new Error("玩家输入框数量必须是正整数配置值。");
   }
+}
+
+/** 为每位玩家创建从不同起点循环的预设姓名选择器。 */
+function createPresetNameSelection(
+  presetNames: readonly string[],
+  playerIndex: number,
+): CyclingSelection<string> {
+  if (presetNames.length === 0) {
+    throw new Error("预设姓名配置不能为空。");
+  }
+  const options = presetNames.map((name) => ({
+    id: name,
+    label: name,
+    description: name,
+  }));
+  const initial = options[playerIndex % options.length];
+  if (initial === undefined) {
+    throw new Error("预设姓名初始项不存在。");
+  }
+  return createCyclingSelection(options, initial.id, "预设姓名");
 }
 
 /** 将领域开局选项转换为以默认 ID 起步的循环选择器。 */
@@ -366,15 +389,21 @@ function createNameField(
   index: number,
   playerCount: number,
   inputs: LayaInputLike[],
+  prepareNameInput: () => void,
   onTextEntryFocusOut: () => void,
 ): SetupField {
   const labelHeight = config.typography.body_line_height;
   const gap = config.layout.page.option_gap;
   const inputHeight = config.controls.button_height;
+  const presetButtonHeight = config.controls.compact_button_height;
   const ordinal = index + 1;
   const label = playerCount === 1
     ? config.texts.profile_name_label
     : `${config.texts.profile_name_label} ${String(ordinal)}`;
+  const presetSelection = createPresetNameSelection(
+    config.new_game_setup.preset_names,
+    index,
+  );
 
   /** 在响应式网格指定位置绘制姓名标签和输入框。 */
   const render = (x: number, y: number): void => {
@@ -397,13 +426,49 @@ function createNameField(
       width: fieldWidth,
       height: inputHeight,
       maxChars: config.controls.max_player_name_characters,
+      type: config.new_game_setup.name_input.html_type,
     });
+    input.text = presetSelection.current().label;
+    input.on("focus", input, prepareNameInput);
     input.on("blur", input, onTextEntryFocusOut);
     inputs.push(input);
+
+    let presetButtonLabel: LayaTextLike | null = null;
+
+    /** 切换至下一个预设姓名，并与可继续编辑的输入框同步。 */
+    const handlePresetCycle = (): void => {
+      const selected = presetSelection.advance();
+      input.text = selected.label;
+      if (presetButtonLabel !== null) {
+        presetButtonLabel.text = formatTemplate(
+          config.texts.profile_name_preset_format,
+          { name: selected.label },
+        );
+      }
+    };
+
+    const presetButton = factory.button(parent, {
+      testId: `player-name-${String(ordinal)}-preset`,
+      label: formatTemplate(config.texts.profile_name_preset_format, {
+        name: presetSelection.current().label,
+      }),
+      x,
+      y: y + labelHeight + gap + inputHeight + gap,
+      width: fieldWidth,
+      height: presetButtonHeight,
+      tone: "muted",
+      fontSize: config.typography.caption_size,
+      wordWrap: false,
+      onClick: handlePresetCycle,
+    });
+    presetButtonLabel = requireButtonLabel(
+      presetButton,
+      `player-name-${String(ordinal)}-preset`,
+    );
   };
 
   return {
-    height: labelHeight + gap + inputHeight,
+    height: labelHeight + gap + inputHeight + gap + presetButtonHeight,
     render,
   };
 }

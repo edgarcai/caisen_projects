@@ -10,7 +10,7 @@ export type ExpeditionNavigationSnapshot = Pick<
 >;
 
 /**
- * 为指挥台的“探索”入口选择安全页面：先恢复待决事件，再恢复远征，否则进入整备。
+ * 为指挥台的“探索”入口选择安全页面：先恢复待决事件，再恢复远征，否则进入城市列表。
  */
 export function resolveExpeditionEntryScreen(
   snapshot: ExpeditionNavigationSnapshot,
@@ -21,7 +21,7 @@ export function resolveExpeditionEntryScreen(
   if (snapshot.expeditionStatus !== null) {
     return "expedition_status";
   }
-  return "expedition_prepare";
+  return "expedition_city_list";
 }
 
 /**

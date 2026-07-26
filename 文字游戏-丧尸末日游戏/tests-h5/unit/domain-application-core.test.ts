@@ -181,34 +181,54 @@ describe("剧情、探索与首领战", () => {
   });
 
   it("持久化首次抽取的探索事件，重复打开不会免费重抽", () => {
-    const application = buildApplication(new QueueRandomSource([50], [0, 3]));
+    const application = buildApplication(new QueueRandomSource([], [0, 0]));
     application.startNewGame(["白菜"], "single");
+    const city = application.content.city("city_a");
+    const district = application.content.district(
+      city.id,
+      city.default_district_id,
+    );
 
     const first = application.prepareExploration("city_a");
     const repeated = application.prepareExploration("city_h");
 
-    expect(first.eventId).toBe("bank");
+    expect(district.event_ids).toContain(first.eventId);
     expect(repeated.eventId).toBe(first.eventId);
     expect(requireState(application).pending_exploration).toEqual({
       city_id: "city_a",
-      event_id: "bank",
+      district_id: district.id,
+      event_id: first.eventId,
     });
     expect(requireState(application).turn_number).toBe(0);
 
-    const report = application.resolveExploration(first.eventId);
+    const event = application.content.event(first.eventId);
+    const choiceId = event.choices?.find(
+      (choice) => (choice.requirements ?? []).length === 0,
+    )?.id ?? null;
+    const report = application.resolveExploration(first.eventId, choiceId);
 
     expect(report.stateChanged).toBe(true);
     expect(requireState(application).pending_exploration).toBeNull();
     expect(requireState(application).turn_number).toBe(1);
-    expect(requireState(application).players[0]?.coins).toBe(40);
-    expect(application.expeditionStatus()?.loot.coins).toBe(50);
+    expect(application.expeditionStatus()?.eventsResolved).toBe(1);
   });
 
   it("取消探索仍应用开场代价且只消耗一个行动", () => {
     const application = buildApplication(new QueueRandomSource([6]));
     application.startNewGame(["白菜"], "single");
     const state = requireState(application);
-    state.pending_exploration = { city_id: "city_a", event_id: "thief" };
+    const city = application.content.city("city_a");
+    const district = city.districts.find((candidate) => (
+      candidate.event_ids.includes("thief")
+    ));
+    if (district === undefined) {
+      throw new Error("测试要求 A 市至少一个区划包含小偷事件。");
+    }
+    state.pending_exploration = {
+      city_id: city.id,
+      district_id: district.id,
+      event_id: "thief",
+    };
 
     const report = application.cancelExploration();
 

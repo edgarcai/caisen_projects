@@ -9,3 +9,4 @@ export * from "./SaveStateValidator";
 export * from "./V1ToV2SaveMigrator";
 export * from "./V2ToV3SaveMigrator";
 export * from "./V3ToV4SaveMigrator";
+export * from "./V4ToV5SaveMigrator";

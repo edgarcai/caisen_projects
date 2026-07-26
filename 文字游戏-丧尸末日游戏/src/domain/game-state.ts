@@ -95,6 +95,7 @@ export interface BattleState {
 
 export interface PendingExplorationState {
   city_id: string;
+  district_id: string;
   event_id: string;
 }
 
@@ -110,6 +111,7 @@ export interface ResearchState {
 
 export interface ExpeditionState {
   city_id: string;
+  district_id: string;
   travel_step_cost: number;
   leader_player_index: number;
   companion_ids: string[];

@@ -1,4 +1,9 @@
-import type { CampaignProfilesConfig, GameRuleConfig } from "../domain/content";
+import type {
+  CampaignProfilesConfig,
+  CityConfig,
+  CityDistrictConfig,
+  GameRuleConfig,
+} from "../domain/content";
 import { SaveDataError } from "../domain/errors";
 import type {
   BattleState,
@@ -103,7 +108,8 @@ const BATTLE_FIELDS = [
   "victory",
   "retreated",
 ] as const;
-const PENDING_FIELDS = ["city_id", "event_id"] as const;
+const V4_PENDING_FIELDS = ["city_id", "event_id"] as const;
+const V5_PENDING_FIELDS = ["city_id", "district_id", "event_id"] as const;
 const ENDING_FIELDS = ["ending_id", "outcome", "message"] as const;
 const LOG_ENTRY_FIELDS = ["survival_day", "turn_number", "clock", "message"] as const;
 const WEEKLY_ARCHIVE_FIELDS = [
@@ -141,6 +147,10 @@ const V4_EXPEDITION_FIELDS = [
   ...V3_EXPEDITION_FIELDS,
   "travel_step_cost",
 ] as const;
+const V5_EXPEDITION_FIELDS = [
+  ...V4_EXPEDITION_FIELDS,
+  "district_id",
+] as const;
 const COMPANION_STATUSES = new Set(["active", "locked", "exiled", "lost", "dead"]);
 
 /** 严格校验版本化存档的字段集合、数据类型与领域不变量。 */
@@ -149,22 +159,25 @@ export class SaveStateValidator {
   private readonly facilityIds: readonly string[];
   private readonly companionIds: readonly string[];
   private readonly survivalSystems: SurvivalSystemsConfigDocument;
+  private readonly cityById: ReadonlyMap<string, CityConfig>;
   private readonly campaignDifficultyIds: ReadonlySet<string>;
   private readonly campaignOriginIds: ReadonlySet<string>;
   private readonly campaignTraitIds: ReadonlySet<string>;
 
-  /** 注入生存规则、内容 ID、开局档案与生存系统的版本化配置。 */
+  /** 注入生存规则、内容 ID、城市地图、开局档案与生存系统配置。 */
   public constructor(
     rules: GameRuleConfig,
     facilityIds: readonly string[],
     companionIds: readonly string[],
     survivalSystems: SurvivalSystemsConfigDocument,
     campaignProfiles: CampaignProfilesConfig,
+    cities: readonly CityConfig[],
   ) {
     this.rules = rules;
     this.facilityIds = [...facilityIds];
     this.companionIds = [...companionIds];
     this.survivalSystems = survivalSystems;
+    this.cityById = new Map(cities.map((city) => [city.id, city]));
     this.campaignDifficultyIds = new Set(
       campaignProfiles.difficulties.map((difficulty) => difficulty.id),
     );
@@ -231,9 +244,25 @@ export class SaveStateValidator {
     return state;
   }
 
-  /** 从已通过 v4 结构检查的数据创建副本并验证完整状态。 */
+  /** 在构造领域对象前验证 v5 区划字段及检查点快照的精确结构。 */
+  public validateRawV5(rawState: unknown): JsonObject {
+    const state = exactObject(rawState, V4_STATE_FIELDS, "v5 game_state");
+    this.validateRawV5Base(state, "v5 game_state");
+    if (state.checkpoint !== null) {
+      const checkpoint = exactObject(state.checkpoint, CHECKPOINT_FIELDS, "v5 checkpoint");
+      const snapshot = exactObject(
+        checkpoint.snapshot,
+        RESTORABLE_V4_STATE_FIELDS,
+        "v5 checkpoint.snapshot",
+      );
+      this.validateRawV5Base(snapshot, "v5 checkpoint.snapshot");
+    }
+    return state;
+  }
+
+  /** 从已通过 v5 结构检查的数据创建副本并验证完整状态。 */
   public parse(rawState: unknown): GameState {
-    const state = structuredClone(this.validateRawV4(rawState)) as unknown as GameState;
+    const state = structuredClone(this.validateRawV5(rawState)) as unknown as GameState;
     this.validate(state);
     return state;
   }
@@ -269,11 +298,21 @@ export class SaveStateValidator {
     if (state.battle !== null) this.validateBattle(state.battle);
     if (state.pending_exploration !== null) {
       requireNonEmptyString(state.pending_exploration.city_id, "pending_exploration.city_id");
-      requireNonEmptyString(state.pending_exploration.event_id, "pending_exploration.event_id");
-      this.requireKnownCity(
-        state.pending_exploration.city_id,
-        "pending_exploration.city_id",
+      requireNonEmptyString(
+        state.pending_exploration.district_id,
+        "pending_exploration.district_id",
       );
+      requireNonEmptyString(state.pending_exploration.event_id, "pending_exploration.event_id");
+      const pendingDistrict = this.requireKnownDistrict(
+        state.pending_exploration.city_id,
+        state.pending_exploration.district_id,
+        "pending_exploration",
+      );
+      if (!pendingDistrict.event_ids.includes(state.pending_exploration.event_id)) {
+        throw new SaveDataError(
+          "pending_exploration.event_id 不属于所选区划事件池。",
+        );
+      }
     }
     if (state.battle !== null && !state.battle.finished && state.pending_exploration !== null) {
       throw new SaveDataError("不能同时存在进行中的首领战和待结算探索。");
@@ -297,7 +336,11 @@ export class SaveStateValidator {
   }
 
   /** 校验 v2 与 v3 共用的剧情、伙伴及交互容器。 */
-  private validateGameplayContainers(state: JsonObject, version: string): void {
+  private validateGameplayContainers(
+    state: JsonObject,
+    version: string,
+    pendingFields: readonly string[] = V4_PENDING_FIELDS,
+  ): void {
     this.validateCommonContainers(state);
     exactObject(state.story, STORY_FIELDS, `${version} story`);
     const companions = requireArray(state.companions, `${version} companions`);
@@ -308,7 +351,7 @@ export class SaveStateValidator {
     this.validateOptionalObject(state.battle, BATTLE_FIELDS, `${version} battle`);
     this.validateOptionalObject(
       state.pending_exploration,
-      PENDING_FIELDS,
+      pendingFields,
       `${version} pending_exploration`,
     );
     this.validateOptionalObject(state.ending, ENDING_FIELDS, `${version} ending`);
@@ -319,8 +362,9 @@ export class SaveStateValidator {
     state: JsonObject,
     path: string,
     expeditionFields: readonly string[],
+    pendingFields: readonly string[] = V4_PENDING_FIELDS,
   ): void {
-    this.validateGameplayContainers(state, path);
+    this.validateGameplayContainers(state, path, pendingFields);
     const communicationLog = requireArray(state.communication_log, `${path}.communication_log`);
     for (const [index, entry] of communicationLog.entries()) {
       const item = exactObject(
@@ -362,6 +406,17 @@ export class SaveStateValidator {
   /** 校验 v4 可回档状态的新开局档案与远征路费容器。 */
   private validateRawV4Base(state: JsonObject, path: string): void {
     this.validateRawSurvivalBase(state, path, V4_EXPEDITION_FIELDS);
+    exactObject(state.campaign, CAMPAIGN_FIELDS, `${path}.campaign`);
+  }
+
+  /** 校验 v5 可回档状态的区划化待决事件、远征与开局档案。 */
+  private validateRawV5Base(state: JsonObject, path: string): void {
+    this.validateRawSurvivalBase(
+      state,
+      path,
+      V5_EXPEDITION_FIELDS,
+      V5_PENDING_FIELDS,
+    );
     exactObject(state.campaign, CAMPAIGN_FIELDS, `${path}.campaign`);
   }
 
@@ -646,7 +701,12 @@ export class SaveStateValidator {
     const expedition = state.expedition;
     if (expedition === null) return;
     requireNonEmptyString(expedition.city_id, "expedition.city_id");
-    this.requireKnownCity(expedition.city_id, "expedition.city_id");
+    requireNonEmptyString(expedition.district_id, "expedition.district_id");
+    this.requireKnownDistrict(
+      expedition.city_id,
+      expedition.district_id,
+      "expedition",
+    );
     requireInteger(expedition.travel_step_cost, "expedition.travel_step_cost", 1);
     const configuredTravelStepCosts = new Set(Object.values(this.rules.city_travel));
     if (!configuredTravelStepCosts.has(expedition.travel_step_cost)) {
@@ -715,9 +775,12 @@ export class SaveStateValidator {
     }
     if (
       state.pending_exploration !== null
-      && state.pending_exploration.city_id !== expedition.city_id
+      && (
+        state.pending_exploration.city_id !== expedition.city_id
+        || state.pending_exploration.district_id !== expedition.district_id
+      )
     ) {
-      throw new SaveDataError("远征城市与待结算探索城市不一致。");
+      throw new SaveDataError("远征城市或区划与待结算探索不一致。");
     }
   }
 
@@ -740,11 +803,26 @@ export class SaveStateValidator {
     }
   }
 
-  /** 要求城市 ID 存在于配置化远征城市成本表中。 */
+  /** 要求城市 ID 存在于配置化世界地图中。 */
   private requireKnownCity(cityId: string, path: string): void {
-    if (!Object.hasOwn(this.survivalSystems.expedition.city_step_costs, cityId)) {
+    if (!this.cityById.has(cityId)) {
       throw new SaveDataError(`${path} 引用未知城市：${cityId}。`);
     }
+  }
+
+  /** 要求区划属于指定城市，避免存档伪造跨城市组合。 */
+  private requireKnownDistrict(
+    cityId: string,
+    districtId: string,
+    path: string,
+  ): CityDistrictConfig {
+    this.requireKnownCity(cityId, `${path}.city_id`);
+    const city = this.cityById.get(cityId);
+    const district = city?.districts.find((candidate) => candidate.id === districtId);
+    if (district === undefined) {
+      throw new SaveDataError(`${path}.district_id 引用了不属于城市的区划：${districtId}。`);
+    }
+    return district;
   }
 
   /** 校验检查点元数据、建立周期与无递归快照。 */

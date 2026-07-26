@@ -63,6 +63,42 @@ export interface GameControlTokens {
   readonly tooltip_offset_y: number;
 }
 
+/** UI 层允许的姓名输入 HTML 类型。 */
+export type NameInputHtmlTypeToken = "text";
+
+/** UI 层向手机软键盘声明的姓名输入模式。 */
+export type NameInputModeToken = "text";
+
+/** UI 层可用的姓名输入确认键语义。 */
+export type NameInputEnterKeyHintToken = "done" | "next";
+
+/** UI 层可用的姓名自动填充策略。 */
+export type NameInputAutocompleteToken = "off" | "name";
+
+/** UI 层可用的姓名自动大写策略。 */
+export type NameInputAutocapitalizeToken =
+  | "none"
+  | "sentences"
+  | "words"
+  | "characters";
+
+/** UI 层的浏览器原生姓名输入配置。 */
+export interface NativeNameInputTokens {
+  readonly html_type: NameInputHtmlTypeToken;
+  readonly input_mode: NameInputModeToken;
+  readonly language: string;
+  readonly enter_key_hint: NameInputEnterKeyHintToken;
+  readonly autocomplete: NameInputAutocompleteToken;
+  readonly autocapitalize: NameInputAutocapitalizeToken;
+  readonly spellcheck: boolean;
+}
+
+/** UI 层的新游戏建档配置。 */
+export interface GameNewGameSetupTokens {
+  readonly name_input: NativeNameInputTokens;
+  readonly preset_names: readonly string[];
+}
+
 /** 单个响应式封面菜单布局配置。 */
 export interface CoverMenuLayoutTokens {
   readonly horizontal_alignment: "left" | "center" | "right";
@@ -76,15 +112,11 @@ export interface CoverMenuLayoutTokens {
   readonly menu_column_gap: number;
   readonly menu_row_gap: number;
   readonly menu_row_step_x: number;
-  readonly settings_button_anchor: "left" | "before_exit";
+  readonly settings_button_anchor: "left" | "right";
   readonly settings_button_offset: number;
   readonly settings_button_top: number;
   readonly settings_button_width: number;
   readonly settings_button_height: number;
-  readonly exit_button_top: number;
-  readonly exit_button_right: number;
-  readonly exit_button_width: number;
-  readonly exit_button_height: number;
   readonly changelog_button_right: number;
   readonly changelog_button_bottom: number;
   readonly changelog_button_width: number;
@@ -364,6 +396,32 @@ export interface GameTextTokens {
   readonly crafting_locked: string;
   readonly expedition_prepare_title: string;
   readonly expedition_prepare_body: string;
+  readonly expedition_city_list_title: string;
+  readonly expedition_city_list_body: string;
+  readonly expedition_city_detail_confirm: string;
+  readonly expedition_district_list_title: string;
+  readonly expedition_district_list_body: string;
+  readonly expedition_district_detail_confirm: string;
+  readonly expedition_detail_fields_title: string;
+  readonly expedition_detail_requirements_title: string;
+  readonly expedition_detail_field_format: string;
+  readonly expedition_detail_requirement_format: string;
+  readonly expedition_requirement_met: string;
+  readonly expedition_requirement_unmet: string;
+  readonly expedition_requirement_informational: string;
+  readonly expedition_field_neighbors: string;
+  readonly expedition_field_relation: string;
+  readonly expedition_field_terrain: string;
+  readonly expedition_field_travel_steps: string;
+  readonly expedition_field_intelligence: string;
+  readonly expedition_field_path_items: string;
+  readonly expedition_field_transport_items: string;
+  readonly expedition_field_danger: string;
+  readonly expedition_field_event_steps: string;
+  readonly expedition_field_events: string;
+  readonly expedition_access_requirement: string;
+  readonly expedition_district_requirement: string;
+  readonly expedition_empty_value: string;
   readonly expedition_city_title: string;
   readonly expedition_companion_title: string;
   readonly expedition_item_title: string;
@@ -376,6 +434,7 @@ export interface GameTextTokens {
   readonly expedition_begin: string;
   readonly expedition_status_title: string;
   readonly expedition_status_format: string;
+  readonly exploration_location_format: string;
   readonly expedition_loot_format: string;
   readonly expedition_continue: string;
   readonly expedition_safe_return: string;
@@ -392,6 +451,7 @@ export interface GameTextTokens {
   readonly profile_setup_title: string;
   readonly profile_setup_body: string;
   readonly profile_name_label: string;
+  readonly profile_name_preset_format: string;
   readonly profile_mode_label: string;
   readonly profile_difficulty_label: string;
   readonly profile_origin_label: string;
@@ -425,6 +485,7 @@ export interface GameUiConfig {
   readonly typography: GameTypographyTokens;
   readonly motion: GameMotionTokens;
   readonly controls: GameControlTokens;
+  readonly new_game_setup: GameNewGameSetupTokens;
   readonly layout: GameLayoutTokens;
   readonly web_exit: GameWebExitTokens;
   readonly update_log: GameUpdateLogTokens;

@@ -96,10 +96,17 @@ export class ExpeditionService {
     }));
   }
 
+  /** 返回一次所选区划事件需要扣除的真实总步数。 */
+  public eventStepCost(cityId: string, districtId: string): number {
+    return this.config.expedition.event_step_cost
+      + this.content.district(cityId, districtId).event_step_cost;
+  }
+
   /** 校验远征准备并原子保存队伍、携带物与最大步数。 */
   public prepare(
     state: GameState,
     cityId: string,
+    districtId: string,
     companionIds: readonly string[],
     carriedItems: Readonly<Record<string, number>>,
   ): SurvivalSystemResolution {
@@ -111,6 +118,7 @@ export class ExpeditionService {
         turnsConsumed: 0,
       };
     }
+    this.content.district(cityId, districtId);
     if (state.expedition !== null) {
       return {
         applied: false,
@@ -141,6 +149,7 @@ export class ExpeditionService {
     this.inventory.withdraw(working, carriedItems, leaderPlayerIndex);
     working.expedition = {
       city_id: cityId,
+      district_id: districtId,
       travel_step_cost: access.travelStepCost,
       leader_player_index: leaderPlayerIndex,
       companion_ids: [...companionIds],
@@ -167,14 +176,10 @@ export class ExpeditionService {
     };
   }
 
-  /** 在抽取下一事件前扣除城市步数；不足时立即执行强制返程。 */
+  /** 在抽取下一事件前扣除全局与所选区划步数；不足时立即强制返程。 */
   public spendEventSteps(state: GameState): SurvivalSystemResolution {
     const current = this.requireExpedition(state);
-    const cityCost = this.config.expedition.city_step_costs[current.city_id];
-    if (cityCost === undefined) {
-      throw new GameApplicationError(this.config.expedition.selection_invalid_text);
-    }
-    const spentSteps = this.config.expedition.event_step_cost + cityCost;
+    const spentSteps = this.eventStepCost(current.city_id, current.district_id);
     if (current.remaining_steps < spentSteps) {
       return this.forceReturn(state);
     }
@@ -306,6 +311,7 @@ export class ExpeditionService {
     ];
     return {
       cityId: expedition.city_id,
+      districtId: expedition.district_id,
       travelStepCost: expedition.travel_step_cost,
       leaderPlayerIndex: expedition.leader_player_index,
       remainingSteps: expedition.remaining_steps,

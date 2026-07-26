@@ -3,6 +3,7 @@ import type {
   GameControlTokens,
   GameThemeTokens,
   GameTypographyTokens,
+  NameInputHtmlTypeToken,
 } from "../../styles/GameTheme";
 import type { UiMeterView, UiTone } from "../ports/GameUiPort";
 import type {
@@ -46,6 +47,8 @@ export interface ButtonSpec {
   readonly icon?: string;
   readonly iconPlacement?: "inline" | "stacked";
   readonly disabled?: boolean;
+  /** 使用禁用色和禁用皮肤，但保留指针与点击交互。 */
+  readonly lockedAppearance?: boolean;
   readonly shape?: "rectangle" | "parallelogram";
   readonly skin?: ButtonSkinSpec;
   readonly fontSize?: number;
@@ -91,6 +94,7 @@ export interface InputSpec {
   readonly width: number;
   readonly height: number;
   readonly maxChars: number;
+  readonly type: NameInputHtmlTypeToken;
 }
 
 /**
@@ -209,7 +213,7 @@ export class UiFactory {
     node.fontSize = this.typography.control_size;
     node.bgColor = this.theme.panel_elevated;
     node.borderColor = this.theme.border;
-    node.type = "text";
+    node.type = spec.type;
     node.maxChars = spec.maxChars;
     node.multiline = false;
     node.mouseEnabled = true;
@@ -233,6 +237,7 @@ export class UiFactory {
     node.pos(spec.x, spec.y);
     node.size(spec.width, spec.height);
     const disabled = spec.disabled === true;
+    const usesLockedAppearance = disabled || spec.lockedAppearance === true;
     const acceptsDisabledHover = disabled && spec.hoverableWhenDisabled === true;
     node.mouseEnabled = !disabled || acceptsDisabledHover;
     const skinLayer = this.createButtonSkinLayer(node, spec);
@@ -246,9 +251,15 @@ export class UiFactory {
      */
     const renderButton = (): void => {
       const colors = this.resolveButtonColors(spec.tone ?? "default", state);
-      const fillColor = disabled ? this.theme.background_soft : colors.fill;
-      const textColor = disabled ? this.theme.muted_text : colors.text;
-      const borderColor = disabled ? this.theme.border : colors.border;
+      const fillColor = usesLockedAppearance
+        ? this.theme.background_soft
+        : colors.fill;
+      const textColor = usesLockedAppearance
+        ? this.theme.muted_text
+        : colors.text;
+      const borderColor = usesLockedAppearance
+        ? this.theme.border
+        : colors.border;
       node.graphics.clear();
       const skin = this.resolveButtonSkin(spec, state);
       if (skinLayer !== null && skin.length > 0) {
@@ -494,7 +505,7 @@ export class UiFactory {
     if (spec.skin === undefined) {
       return "";
     }
-    if (spec.disabled === true) {
+    if (spec.disabled === true || spec.lockedAppearance === true) {
       return spec.skin.disabled;
     }
     if (state === "hover") {

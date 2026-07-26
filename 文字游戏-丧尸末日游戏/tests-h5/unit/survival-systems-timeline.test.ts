@@ -22,8 +22,29 @@ function startedApplication(
   return application;
 }
 
+/** 从内容配置读取城市默认区划，避免测试夹具复制业务 ID。 */
+function defaultDistrictId(application: GameApplication, cityId: string): string {
+  return application.content.city(cityId).default_district_id;
+}
+
+/** 使用当前事件中无前置需求的选项完成待决探索。 */
+function resolvePendingExploration(
+  application: GameApplication,
+  state: GameState,
+): void {
+  const pending = state.pending_exploration;
+  if (pending === null) throw new Error("测试要求存在待决探索事件。");
+  const event = application.content.event(pending.event_id);
+  const choiceId = event.choices?.find(
+    (choice) => (choice.requirements ?? []).length === 0,
+  )?.id ?? null;
+  application.resolveExploration(pending.event_id, choiceId);
+}
+
 /** 创建一个只有主档的合法存档，再按测试用例注入指定损坏状态。 */
-function corruptedStorage(mutator: (state: GameState) => void): MemoryStorage {
+function corruptedStorage(
+  mutator: (state: GameState, application: GameApplication) => void,
+): MemoryStorage {
   const storage = new MemoryStorage();
   const source = buildH5Harness({ storage }).application;
   source.startNewGame(["白菜"], "single");
@@ -31,7 +52,7 @@ function corruptedStorage(mutator: (state: GameState) => void): MemoryStorage {
   const serialized = storage.getItem(H5_TEST_STORAGE_KEY);
   if (serialized === null) throw new Error("测试主档没有写入隔离存储。");
   const document = JSON.parse(serialized) as { game_state: GameState };
-  mutator(document.game_state);
+  mutator(document.game_state, source);
   storage.setItem(H5_TEST_STORAGE_KEY, JSON.stringify(document));
   return storage;
 }
@@ -122,6 +143,22 @@ describe("研发、制作与仓库不变量", () => {
     expect(state.inventory.equipped_armor_id).toBe("reinforced_coat");
     expect(application.warehouseItems().map((item) => item.itemId))
       .not.toContain("reinforced_coat");
+  });
+
+  it("完整物品目录在新开局未持有通行物品时仍提供配置名称", () => {
+    const application = startedApplication();
+    const accessItemIds = ["route_map", "armored_car", "helicopter"];
+    const inventoryItemIds = application.warehouseItems().map((item) => item.itemId);
+    const catalogById = new Map(
+      application.warehouseItemCatalog().map((item) => [item.itemId, item]),
+    );
+
+    expect(inventoryItemIds).not.toContain("route_map");
+    for (const itemId of accessItemIds) {
+      const catalogItem = catalogById.get(itemId);
+      expect(catalogItem).toBeDefined();
+      expect(catalogItem?.name).not.toBe(itemId);
+    }
   });
 
   it("关键物品以只读档案进入仓库，且不能携带或装备", () => {
@@ -246,6 +283,7 @@ describe("配置化远征", () => {
 
     const report = application.prepareExpedition(
       "city_d",
+      defaultDistrictId(application, "city_d"),
       ["haocai"],
       { field_ration: 2 },
     );
@@ -253,6 +291,7 @@ describe("配置化远征", () => {
     expect(report.stateChanged).toBe(true);
     expect(application.expeditionStatus()).toMatchObject({
       cityId: "city_d",
+      districtId: defaultDistrictId(application, "city_d"),
       travelStepCost: 3,
       maximumSteps: 14,
       remainingSteps: 9,
@@ -265,19 +304,23 @@ describe("配置化远征", () => {
 
   it("高危城市比安全城市消耗更多首事件步数", () => {
     const safe = startedApplication();
-    safe.prepareExpedition("city_a", [], {});
+    const safeDistrictId = defaultDistrictId(safe, "city_a");
+    safe.prepareExpedition("city_a", safeDistrictId, [], {});
     const dangerous = startedApplication();
     const dangerousState = requireState(dangerous);
     dangerousState.shelter.newspapers = 10;
     dangerousState.inventory.crafted_items.route_map = 1;
-    dangerous.prepareExpedition("city_h", [], {});
+    const dangerousDistrictId = defaultDistrictId(dangerous, "city_g");
+    dangerous.prepareExpedition("city_g", dangerousDistrictId, [], {});
 
     expect(safe.expeditionStatus()).toMatchObject({
+      districtId: safeDistrictId,
       travelStepCost: 1,
       maximumSteps: 6,
       remainingSteps: 4,
     });
     expect(dangerous.expeditionStatus()).toMatchObject({
+      districtId: dangerousDistrictId,
       travelStepCost: 3,
       maximumSteps: 6,
       remainingSteps: 0,
@@ -287,8 +330,10 @@ describe("配置化远征", () => {
   it("继续远征锁定下一事件，安全返程保留战利品并清理上下文", () => {
     const application = startedApplication();
     const state = requireState(application);
+    const districtId = defaultDistrictId(application, "city_a");
     state.expedition = {
       city_id: "city_a",
+      district_id: districtId,
       travel_step_cost: 1,
       leader_player_index: 0,
       companion_ids: [],
@@ -302,12 +347,15 @@ describe("配置化远征", () => {
     const continued = application.continueExpedition();
 
     expect(continued.stateChanged).toBe(true);
-    expect(state.pending_exploration).not.toBeNull();
+    expect(state.pending_exploration).toMatchObject({
+      city_id: "city_a",
+      district_id: districtId,
+    });
     expect(application.expeditionStatus()?.remainingSteps).toBe(2);
 
     const pending = state.pending_exploration;
     if (pending === null) throw new Error("继续远征没有锁定事件。");
-    application.resolveExploration(pending.event_id);
+    resolvePendingExploration(application, state);
     const coinsBeforeReturn = requirePlayer(state).coins;
     const expeditionCoins = application.expeditionStatus()?.loot.coins ?? 0;
     const returned = application.returnExpeditionSafely();
@@ -323,8 +371,15 @@ describe("配置化远征", () => {
     const application = buildH5Harness({ random }).application;
     application.startNewGame(["白菜", "豪菜"], "multiplayer");
     const state = requireState(application);
+    const city = application.content.city("city_a");
+    const bankDistrict = city.districts.find((district) => (
+      district.event_ids[0] === "bank"
+    ));
+    if (bankDistrict === undefined) {
+      throw new Error("测试要求 A 市存在以银行事件为首选的区划。");
+    }
 
-    application.prepareExpedition("city_a", [], {});
+    application.prepareExpedition(city.id, bankDistrict.id, [], {});
     const firstEvent = state.pending_exploration;
     if (firstEvent === null) throw new Error("首个远征事件不存在。");
     application.resolveExploration(firstEvent.event_id);
@@ -350,7 +405,12 @@ describe("配置化远征", () => {
     source.startNewGame(["白菜"], "single");
     const sourceState = requireState(source);
     sourceState.inventory.crafted_items.field_ration = 2;
-    source.prepareExpedition("city_a", [], { field_ration: 2 });
+    source.prepareExpedition(
+      "city_a",
+      defaultDistrictId(source, "city_a"),
+      [],
+      { field_ration: 2 },
+    );
     if (sourceState.expedition === null) throw new Error("测试远征未建立。");
     sourceState.expedition.loot.game_consoles = 1;
     source.saveGame();
@@ -375,6 +435,7 @@ describe("配置化远征", () => {
     player.food = 100;
     state.expedition = {
       city_id: "city_h",
+      district_id: defaultDistrictId(application, "city_h"),
       travel_step_cost: 3,
       leader_player_index: 0,
       companion_ids: [],
@@ -439,9 +500,14 @@ describe("生存系统存档校验", () => {
     },
     {
       name: "未知远征城市",
-      mutate: (state: GameState): void => {
+      mutate: (state: GameState, application: GameApplication): void => {
+        const configuredCity = application.content.game.cities[0];
+        if (configuredCity === undefined) {
+          throw new Error("测试要求至少配置一座城市。");
+        }
         state.expedition = {
           city_id: "unknown_city",
+          district_id: configuredCity.default_district_id,
           travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: [],
@@ -455,9 +521,10 @@ describe("生存系统存档校验", () => {
     },
     {
       name: "未知远征战利品",
-      mutate: (state: GameState): void => {
+      mutate: (state: GameState, application: GameApplication): void => {
         state.expedition = {
           city_id: "city_a",
+          district_id: defaultDistrictId(application, "city_a"),
           travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: [],
@@ -471,9 +538,10 @@ describe("生存系统存档校验", () => {
     },
     {
       name: "超过配置携带容量",
-      mutate: (state: GameState): void => {
+      mutate: (state: GameState, application: GameApplication): void => {
         state.expedition = {
           city_id: "city_a",
+          district_id: defaultDistrictId(application, "city_a"),
           travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: [],
@@ -487,9 +555,10 @@ describe("生存系统存档校验", () => {
     },
     {
       name: "超过配置携带种类",
-      mutate: (state: GameState): void => {
+      mutate: (state: GameState, application: GameApplication): void => {
         state.expedition = {
           city_id: "city_a",
+          district_id: defaultDistrictId(application, "city_a"),
           travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: [],
@@ -508,9 +577,10 @@ describe("生存系统存档校验", () => {
     },
     {
       name: "配置禁止携带的物品",
-      mutate: (state: GameState): void => {
+      mutate: (state: GameState, application: GameApplication): void => {
         state.expedition = {
           city_id: "city_a",
+          district_id: defaultDistrictId(application, "city_a"),
           travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: [],
@@ -524,9 +594,10 @@ describe("生存系统存档校验", () => {
     },
     {
       name: "超过配置同行人数",
-      mutate: (state: GameState): void => {
+      mutate: (state: GameState, application: GameApplication): void => {
         state.expedition = {
           city_id: "city_a",
+          district_id: defaultDistrictId(application, "city_a"),
           travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: ["haocai", "yangguan", "linlan"],

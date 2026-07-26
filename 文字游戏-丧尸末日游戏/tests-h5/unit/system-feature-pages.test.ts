@@ -5,7 +5,10 @@ import {
   resolveExpeditionEntryScreen,
   resolveExpeditionProgressScreen,
 } from "../../src/ui/navigation/ExpeditionNavigation";
-import { buildExpeditionStatusBody } from "../../src/ui/pages/ExpeditionPages";
+import {
+  buildExpeditionStatusBody,
+  resolveExpeditionDistrict,
+} from "../../src/ui/pages/ExpeditionPages";
 import {
   buildCraftingPrompt,
   buildHistoryDocument,
@@ -13,6 +16,7 @@ import {
   buildWarehousePrompt,
 } from "../../src/ui/pages/SystemFeaturePages";
 import type {
+  UiCityView,
   UiExpeditionStatusView,
   UiPromptView,
 } from "../../src/ui/ports/GameUiPort";
@@ -29,11 +33,43 @@ function pendingExploration(): UiPromptView {
   };
 }
 
+/** 创建包含两个配置区划的最小城市展示夹具。 */
+function cityWithDistricts(): UiCityView {
+  const district = (id: string, code: string) => ({
+    id,
+    code,
+    name: `${code}地标`,
+    label: `${code} · ${code}地标`,
+    description: `${code}简介`,
+    dangerLevel: 2,
+    eventStepCost: 1,
+    eventLabels: ["事件"],
+    fields: [],
+    requirements: [],
+  });
+  return {
+    id: "city_a",
+    label: "A市",
+    description: "城市简介",
+    disabled: false,
+    districtLabel: "旧城中区",
+    terrainLabel: "陆地",
+    relationLabel: "所在城市",
+    travelStepCost: 1,
+    defaultDistrictId: "district_b",
+    districts: [district("district_a", "A区"), district("district_b", "B区")],
+    fields: [],
+    requirements: [],
+  };
+}
+
 /** 创建一份最小远征状态夹具。 */
 function activeExpedition(): UiExpeditionStatusView {
   return {
     cityId: "city_a",
     cityName: "a市",
+    districtId: "city_a_district_b",
+    districtName: "B区 · 旧银行街",
     travelStepCost: 1,
     remainingSteps: 3,
     maximumSteps: 5,
@@ -46,11 +82,11 @@ function activeExpedition(): UiExpeditionStatusView {
 }
 
 describe("远征页面导航闭环", () => {
-  it("探索入口从整备开始，并优先恢复远征或待决事件", () => {
+  it("探索入口从城市列表开始，并优先恢复远征或待决事件", () => {
     expect(resolveExpeditionEntryScreen({
       explorationPrompt: null,
       expeditionStatus: null,
-    })).toBe("expedition_prepare");
+    })).toBe("expedition_city_list");
     expect(resolveExpeditionEntryScreen({
       explorationPrompt: null,
       expeditionStatus: activeExpedition(),
@@ -70,6 +106,14 @@ describe("远征页面导航闭环", () => {
       explorationPrompt: null,
       expeditionStatus: null,
     })).toBe("dashboard");
+  });
+
+  it("区划草稿缺失或失效时回退配置默认区划", () => {
+    const city = cityWithDistricts();
+
+    expect(resolveExpeditionDistrict(city, null)?.id).toBe("district_b");
+    expect(resolveExpeditionDistrict(city, "missing")?.id).toBe("district_b");
+    expect(resolveExpeditionDistrict(city, "district_a")?.id).toBe("district_a");
   });
 });
 
@@ -196,6 +240,7 @@ describe("通讯过场与远征状态文案", () => {
     );
 
     expect(body).toContain("阳关");
+    expect(body).toContain("B区 · 旧银行街");
     expect(body).toContain("野战口粮 ×1");
     expect(body).toContain("食物 ×8");
     expect(body).not.toContain("field_ration");

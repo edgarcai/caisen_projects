@@ -83,6 +83,7 @@ export function createNameInputPage(
       width: inputWidth,
       height: inputHeight,
       maxChars: config.controls.max_player_name_characters,
+      type: config.new_game_setup.name_input.html_type,
     });
     inputs.push(input);
   }

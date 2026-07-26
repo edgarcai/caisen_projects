@@ -19,7 +19,6 @@ import {
   resolveCoverArtwork,
   resolveCoverChangelogGeometry,
   resolveCoverDescriptionGeometry,
-  resolveCoverExitGeometry,
   resolveCoverMenuLayout,
   resolveCoverMenuItemGeometry,
   resolveCoverSettingsGeometry,
@@ -217,7 +216,7 @@ describe("手机、紧凑与桌面响应式基础", () => {
   });
 });
 
-describe("五入口响应式封面与独立退出契约", () => {
+describe("五入口响应式封面与系统键契约", () => {
   /** 创建不产生副作用的封面回调夹具。 */
   function createActions() {
     return {
@@ -227,11 +226,10 @@ describe("五入口响应式封面与独立退出契约", () => {
       startStory: vi.fn(),
       showCredits: vi.fn(),
       openSettings: vi.fn(),
-      exitGame: vi.fn(),
     };
   }
 
-  it("主菜单包含五项精确顺序，退出由独立系统键承载", () => {
+  it("主菜单包含五项精确顺序，且封面不承载退出", () => {
     const items = buildCoverMenuItems(webConfig, false, createActions());
 
     expect(items.map((item) => item.label)).toEqual([
@@ -261,11 +259,9 @@ describe("五入口响应式封面与独立退出契约", () => {
     const desktopFirst = resolveCoverMenuItemGeometry(webConfig, desktop, 0, itemCount);
     const desktopSecondRow = resolveCoverMenuItemGeometry(webConfig, desktop, 2, itemCount);
     const desktopLast = resolveCoverMenuItemGeometry(webConfig, desktop, 4, itemCount);
-    const desktopExit = resolveCoverExitGeometry(webConfig, desktop);
     const mobileFirst = resolveCoverMenuItemGeometry(webConfig, mobile, 0, itemCount);
     const mobileSecond = resolveCoverMenuItemGeometry(webConfig, mobile, 1, itemCount);
     const mobileLast = resolveCoverMenuItemGeometry(webConfig, mobile, 4, itemCount);
-    const mobileExit = resolveCoverExitGeometry(webConfig, mobile);
 
     expect(webConfig.assets.skins.cover_button_idle)
       .toMatch(/menu_button_idle(?:_2k)?\.png$/u);
@@ -273,10 +269,6 @@ describe("五入口响应式封面与独立退出契约", () => {
     expect(desktopSecondRow.y).toBeGreaterThan(desktopFirst.y);
     expect(desktopSecondRow.x).toBeGreaterThan(desktopFirst.x);
     expect(desktopLast.y).toBeGreaterThan(desktopSecondRow.y);
-    expect(desktopExit.y).toBeLessThan(desktopLast.y);
-    expect(desktopExit.x + desktopExit.width).toBeLessThanOrEqual(
-      desktop.stageWidth - desktop.safeArea.right,
-    );
     expect(webConfig.layout.cover.desktop.description_height).toBeGreaterThanOrEqual(
       webConfig.layout.desktop.panel_padding * 2
         + webConfig.typography.body_line_height * 4,
@@ -286,10 +278,6 @@ describe("五入口响应式封面与独立退出契约", () => {
     expect(mobileSecond.x).toBe(mobileFirst.x);
     expect(mobileSecond.y).toBeGreaterThan(mobileFirst.y);
     expect(mobileLast.y).toBeGreaterThan(mobileSecond.y);
-    expect(mobileExit.y).toBeLessThan(mobileLast.y);
-    expect(mobileExit.x + mobileExit.width).toBeLessThanOrEqual(
-      mobile.stageWidth - mobile.safeArea.right,
-    );
     expect(resolveCoverArtwork(webConfig, desktop)).toBe(webConfig.assets.cover);
     expect(resolveCoverArtwork(webConfig, mobile)).toBe(
       webConfig.assets.mobile_cover,
@@ -306,7 +294,6 @@ describe("五入口响应式封面与独立退出契约", () => {
     const first = resolveCoverMenuItemGeometry(webConfig, landscape, 0, itemCount);
     const second = resolveCoverMenuItemGeometry(webConfig, landscape, 1, itemCount);
     const last = resolveCoverMenuItemGeometry(webConfig, landscape, 4, itemCount);
-    const exit = resolveCoverExitGeometry(webConfig, landscape);
 
     expect(landscape.kind).toBe("mobile");
     expect(landscape.isLandscape).toBe(true);
@@ -314,7 +301,6 @@ describe("五入口响应式封面与独立退出契约", () => {
     expect(second.x).toBeGreaterThan(first.x);
     expect(second.y).toBe(first.y);
     expect(last.y + last.height).toBeLessThanOrEqual(landscape.stageHeight);
-    expect(exit.y + exit.height).toBeLessThanOrEqual(landscape.stageHeight);
   });
 
   it("手机竖屏与横屏的鸣谢均不与更新日志重叠", () => {
@@ -350,7 +336,7 @@ describe("五入口响应式封面与独立退出契约", () => {
     }
   });
 
-  it("手机封面设置键锚定左安全区，电脑仍位于退出键左侧", () => {
+  it("手机封面设置键锚定左安全区，电脑锚定右安全区", () => {
     const desktop = resolveTestLayout(1440, 900, false, {
       top: 12,
       right: 18,
@@ -373,7 +359,6 @@ describe("五入口响应式封面与独立退出契约", () => {
 
     for (const layout of layouts) {
       const geometry = resolveCoverSettingsGeometry(webConfig, layout);
-      const exit = resolveCoverExitGeometry(webConfig, layout);
       const tokens = resolveCoverMenuLayout(webConfig, layout);
       expect(geometry.width).toBeGreaterThanOrEqual(
         webConfig.controls.minimum_touch_size,
@@ -394,11 +379,12 @@ describe("五入口响应式封面与独立退出契约", () => {
         expect(geometry.x).toBe(
           layout.safeArea.left + tokens.settings_button_offset,
         );
-        expect(geometry.x + geometry.width).toBeLessThan(exit.x);
       } else {
-        expect(tokens.settings_button_anchor).toBe("before_exit");
-        expect(geometry.x + geometry.width + tokens.settings_button_offset).toBe(
-          exit.x,
+        expect(tokens.settings_button_anchor).toBe("right");
+        expect(geometry.x + geometry.width).toBe(
+          layout.stageWidth -
+            layout.safeArea.right -
+            tokens.settings_button_offset,
         );
       }
     }
@@ -417,12 +403,15 @@ describe("五入口响应式封面与独立退出契约", () => {
       },
     );
     const settings = resolveCoverSettingsGeometry(webConfig, compactDesktop);
-    const exit = resolveCoverExitGeometry(webConfig, compactDesktop);
     const tokens = resolveCoverMenuLayout(webConfig, compactDesktop);
 
     expect(compactDesktop.kind).toBe("compact");
-    expect(tokens.settings_button_anchor).toBe("before_exit");
-    expect(settings.x + settings.width + tokens.settings_button_offset).toBe(exit.x);
+    expect(tokens.settings_button_anchor).toBe("right");
+    expect(settings.x + settings.width).toBe(
+      compactDesktop.stageWidth -
+        compactDesktop.safeArea.right -
+        tokens.settings_button_offset,
+    );
   });
 
   it("悬停满配置化延迟才发布简介，离开立即清空", () => {

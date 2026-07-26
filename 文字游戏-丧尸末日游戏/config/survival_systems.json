@@ -251,16 +251,6 @@
     "maximum_carried_item_types": 3,
     "maximum_carried_units": 6,
     "event_step_cost": 1,
-    "city_step_costs": {
-      "city_a": 0,
-      "city_b": 0,
-      "city_c": 0,
-      "city_d": 1,
-      "city_e": 1,
-      "city_f": 1,
-      "city_g": 2,
-      "city_h": 2
-    },
     "companion_step_bonuses": [
       {"companion_id": "haocai", "trait_name": "就地取材", "base_steps": 1, "trust_thresholds": [{"trust": 1, "steps": 1}, {"trust": 3, "steps": 2}]},
       {"companion_id": "yangguan", "trait_name": "尸群盲区", "base_steps": 2, "trust_thresholds": [{"trust": 1, "steps": 1}, {"trust": 3, "steps": 2}]},

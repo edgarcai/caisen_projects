@@ -9,6 +9,7 @@ import type {
   LayoutConfig,
   MotionConfig,
   NavigationConfig,
+  NewGameSetupConfig,
   QualityViewport,
   ResponsiveConfig,
   SafeAreaInsets,
@@ -43,7 +44,7 @@ const SCALE_MODES = [
 const SCREEN_MODES = ["none", "horizontal", "vertical"] as const;
 const HORIZONTAL_ALIGNMENTS = ["left", "center", "right"] as const;
 const VERTICAL_ALIGNMENTS = ["top", "middle", "bottom"] as const;
-const COVER_SETTINGS_BUTTON_ANCHORS = ["left", "before_exit"] as const;
+const COVER_SETTINGS_BUTTON_ANCHORS = ["left", "right"] as const;
 const HEADER_NAVIGATION_ANCHORS = ["left", "right"] as const;
 const FRAME_MODES = ["fast", "slow", "mouse", "sleep"] as const;
 const NAVIGATION_PLACEMENTS = [
@@ -59,6 +60,16 @@ const WEB_EXIT_STRATEGIES = [
 ] as const;
 const COVER_BRAND_MODES = ["overlay", "embedded"] as const;
 const COVER_ARTWORK_FITS = ["cover", "contain"] as const;
+const NAME_INPUT_HTML_TYPES = ["text"] as const;
+const NAME_INPUT_MODES = ["text"] as const;
+const NAME_INPUT_ENTER_KEY_HINTS = ["done", "next"] as const;
+const NAME_INPUT_AUTOCOMPLETE_VALUES = ["off", "name"] as const;
+const NAME_INPUT_AUTOCAPITALIZE_VALUES = [
+  "none",
+  "sentences",
+  "words",
+  "characters",
+] as const;
 
 const SKIN_KEYS = [
   "cover_button_idle",
@@ -135,10 +146,6 @@ const COVER_LAYOUT_KEYS = [
   "settings_button_top",
   "settings_button_width",
   "settings_button_height",
-  "exit_button_top",
-  "exit_button_right",
-  "exit_button_width",
-  "exit_button_height",
   "changelog_button_right",
   "changelog_button_bottom",
   "changelog_button_width",
@@ -260,6 +267,32 @@ const TEXT_KEYS = [
   "crafting_locked",
   "expedition_prepare_title",
   "expedition_prepare_body",
+  "expedition_city_list_title",
+  "expedition_city_list_body",
+  "expedition_city_detail_confirm",
+  "expedition_district_list_title",
+  "expedition_district_list_body",
+  "expedition_district_detail_confirm",
+  "expedition_detail_fields_title",
+  "expedition_detail_requirements_title",
+  "expedition_detail_field_format",
+  "expedition_detail_requirement_format",
+  "expedition_requirement_met",
+  "expedition_requirement_unmet",
+  "expedition_requirement_informational",
+  "expedition_field_neighbors",
+  "expedition_field_relation",
+  "expedition_field_terrain",
+  "expedition_field_travel_steps",
+  "expedition_field_intelligence",
+  "expedition_field_path_items",
+  "expedition_field_transport_items",
+  "expedition_field_danger",
+  "expedition_field_event_steps",
+  "expedition_field_events",
+  "expedition_access_requirement",
+  "expedition_district_requirement",
+  "expedition_empty_value",
   "expedition_city_title",
   "expedition_companion_title",
   "expedition_item_title",
@@ -272,6 +305,7 @@ const TEXT_KEYS = [
   "expedition_begin",
   "expedition_status_title",
   "expedition_status_format",
+  "exploration_location_format",
   "expedition_loot_format",
   "expedition_continue",
   "expedition_safe_return",
@@ -287,6 +321,7 @@ const TEXT_KEYS = [
   "profile_setup_title",
   "profile_setup_body",
   "profile_name_label",
+  "profile_name_preset_format",
   "profile_mode_label",
   "profile_difficulty_label",
   "profile_origin_label",
@@ -759,6 +794,83 @@ function parseControls(value: unknown): ControlConfig {
   );
 }
 
+/** 返回字符串的 Unicode 码点数，避免把一个代理对拆成两个名字字符。 */
+function countUnicodeCharacters(value: string): number {
+  return Array.from(value).length;
+}
+
+/** 解析原生姓名输入属性和不重复的预设名称集合。 */
+function parseNewGameSetup(
+  value: unknown,
+  maximumNameCharacters: number,
+): NewGameSetupConfig {
+  const source = expectObject(value, "new_game_setup");
+  const inputSource = expectObject(
+    source.name_input,
+    "new_game_setup.name_input",
+  );
+  const presetNames = expectArray(
+    source.preset_names,
+    "new_game_setup.preset_names",
+  ).map((entry, index) =>
+    expectString(
+      entry,
+      `new_game_setup.preset_names[${String(index)}]`,
+    ).trim(),
+  );
+  if (presetNames.length === 0) {
+    throw new WebConfigError("new_game_setup.preset_names 至少需要一个预设姓名");
+  }
+  if (new Set(presetNames).size !== presetNames.length) {
+    throw new WebConfigError("new_game_setup.preset_names 不能包含重复姓名");
+  }
+  presetNames.forEach((name, index) => {
+    if (countUnicodeCharacters(name) > maximumNameCharacters) {
+      throw new WebConfigError(
+        `new_game_setup.preset_names[${String(index)}] 不能超过 ${String(maximumNameCharacters)} 个字符`,
+      );
+    }
+  });
+  return {
+    name_input: {
+      html_type: expectEnum(
+        inputSource.html_type,
+        NAME_INPUT_HTML_TYPES,
+        "new_game_setup.name_input.html_type",
+      ),
+      input_mode: expectEnum(
+        inputSource.input_mode,
+        NAME_INPUT_MODES,
+        "new_game_setup.name_input.input_mode",
+      ),
+      language: expectString(
+        inputSource.language,
+        "new_game_setup.name_input.language",
+      ),
+      enter_key_hint: expectEnum(
+        inputSource.enter_key_hint,
+        NAME_INPUT_ENTER_KEY_HINTS,
+        "new_game_setup.name_input.enter_key_hint",
+      ),
+      autocomplete: expectEnum(
+        inputSource.autocomplete,
+        NAME_INPUT_AUTOCOMPLETE_VALUES,
+        "new_game_setup.name_input.autocomplete",
+      ),
+      autocapitalize: expectEnum(
+        inputSource.autocapitalize,
+        NAME_INPUT_AUTOCAPITALIZE_VALUES,
+        "new_game_setup.name_input.autocapitalize",
+      ),
+      spellcheck: expectBoolean(
+        inputSource.spellcheck,
+        "new_game_setup.name_input.spellcheck",
+      ),
+    },
+    preset_names: presetNames,
+  };
+}
+
 /** 解析一个响应式封面菜单，并要求列数为正整数。 */
 function parseCoverMenuLayout(
   value: unknown,
@@ -1048,6 +1160,7 @@ export function parseWebGameConfig(value: unknown): WebGameConfig {
       `不支持的 H5 配置版本 ${String(schemaVersion)}，当前仅支持 ${String(SUPPORTED_SCHEMA_VERSION)}`,
     );
   }
+  const controls = parseControls(source.controls);
   return {
     schema_version: schemaVersion,
     engine: parseEngine(source.engine),
@@ -1056,7 +1169,11 @@ export function parseWebGameConfig(value: unknown): WebGameConfig {
     theme: parseTheme(source.theme),
     typography: parseTypography(source.typography),
     motion: parseMotion(source.motion),
-    controls: parseControls(source.controls),
+    controls,
+    new_game_setup: parseNewGameSetup(
+      source.new_game_setup,
+      controls.max_player_name_characters,
+    ),
     layout: parseLayout(source.layout),
     storage: parseStorage(source.storage),
     update_log: parseUpdateLog(source.update_log),
@@ -1068,6 +1185,26 @@ export function parseWebGameConfig(value: unknown): WebGameConfig {
     ),
     texts: parseTexts(source.texts),
   };
+}
+
+/** 跨配置校验预设姓名数量能覆盖所有模式的最大玩家数。 */
+export function validateNamePresetCoverage(
+  config: WebGameConfig,
+  playerCounts: Readonly<Record<string, { readonly maximum: number }>>,
+): void {
+  const maximumCounts = Object.values(playerCounts).map((entry) => entry.maximum);
+  if (
+    maximumCounts.length === 0 ||
+    maximumCounts.some((count) => !Number.isInteger(count) || count <= 0)
+  ) {
+    throw new WebConfigError("玩家数配置必须包含正整数 maximum");
+  }
+  const maximumPlayerCount = Math.max(...maximumCounts);
+  if (config.new_game_setup.preset_names.length < maximumPlayerCount) {
+    throw new WebConfigError(
+      `new_game_setup.preset_names 至少需要 ${String(maximumPlayerCount)} 个姓名才能覆盖最大玩家数`,
+    );
+  }
 }
 
 /** 跨配置校验封面主题引用的成就必须由剧情结局声明。 */

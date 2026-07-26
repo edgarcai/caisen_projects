@@ -12,6 +12,8 @@ export interface GameRouteContext {
   readonly mode?: GameMode;
   readonly saveSlotsMode?: SaveSlotsPageMode;
   readonly categoryId?: string;
+  readonly cityId?: string;
+  readonly districtId?: string;
   readonly document?: UiDocumentView;
 }
 
