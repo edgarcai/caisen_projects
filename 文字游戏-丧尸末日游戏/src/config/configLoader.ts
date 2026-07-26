@@ -1,6 +1,7 @@
 import type {
   ActionGroupConfig,
   AssetConfig,
+  CoverMenuLayoutConfig,
   ControlConfig,
   EngineConfig,
   LayoutConfig,
@@ -13,6 +14,8 @@ import type {
   TextConfig,
   ThemeConfig,
   TypographyConfig,
+  WebActionConfig,
+  WebExitConfig,
   WebGameConfig,
 } from "./types";
 
@@ -37,6 +40,20 @@ const SCREEN_MODES = ["none", "horizontal", "vertical"] as const;
 const HORIZONTAL_ALIGNMENTS = ["left", "center", "right"] as const;
 const VERTICAL_ALIGNMENTS = ["top", "middle", "bottom"] as const;
 const FRAME_MODES = ["fast", "slow", "mouse", "sleep"] as const;
+const WEB_EXIT_STRATEGIES = [
+  "close_only",
+  "history_back",
+  "close_then_history_back",
+] as const;
+
+const SKIN_KEYS = [
+  "cover_button_idle",
+  "cover_button_hover",
+  "cover_button_pressed",
+  "cover_button_disabled",
+  "page_surface",
+  "action_bar",
+] as const;
 
 const THEME_KEYS = [
   "background",
@@ -90,9 +107,16 @@ const COVER_LAYOUT_KEYS = [
   "content_left",
   "content_top",
   "menu_top",
+  "menu_bottom",
   "menu_width",
-  "menu_step_x",
-  "menu_gap",
+  "menu_columns",
+  "menu_column_gap",
+  "menu_row_gap",
+  "menu_row_step_x",
+  "description_left",
+  "description_top",
+  "description_width",
+  "description_height",
 ] as const;
 const DESKTOP_LAYOUT_KEYS = [
   "outer_padding",
@@ -121,6 +145,7 @@ const PAGE_LAYOUT_KEYS = [
   "max_content_width",
   "header_height",
   "footer_height",
+  "footer_action_max_width",
   "body_padding",
   "option_gap",
   "desktop_option_columns",
@@ -129,9 +154,19 @@ const PAGE_LAYOUT_KEYS = [
 const TEXT_KEYS = [
   "loading",
   "load_failed",
+  "connection_title",
   "start_single",
   "start_load",
   "start_multiplayer",
+  "start_story",
+  "credits",
+  "exit",
+  "start_single_description",
+  "start_load_description",
+  "start_multiplayer_description",
+  "start_story_description",
+  "credits_description",
+  "exit_description",
   "name_submit",
   "back",
   "continue",
@@ -139,11 +174,69 @@ const TEXT_KEYS = [
   "cancel",
   "close",
   "save",
+  "save_description",
   "no_save",
   "auto_saved",
   "storage_unavailable",
   "portrait_hint",
   "offline_ready",
+  "function_menu_title",
+  "function_menu_body",
+  "settings",
+  "settings_description",
+  "rollback",
+  "rollback_description",
+  "settings_title",
+  "settings_body",
+  "reduced_motion_description",
+  "reduced_motion_on",
+  "reduced_motion_off",
+  "rollback_title",
+  "rollback_body",
+  "exit_title",
+  "exit_body",
+  "exit_failed_title",
+  "exit_failed_body",
+  "warehouse_title",
+  "warehouse_body",
+  "warehouse_item_format",
+  "warehouse_detail_format",
+  "warehouse_equip",
+  "warehouse_not_equippable",
+  "research_title",
+  "research_body",
+  "research_item_format",
+  "research_detail_format",
+  "research_complete",
+  "research_completed",
+  "research_locked",
+  "crafting_title",
+  "crafting_body",
+  "crafting_item_format",
+  "crafting_detail_format",
+  "crafting_action",
+  "crafting_locked",
+  "expedition_prepare_title",
+  "expedition_prepare_body",
+  "expedition_city_title",
+  "expedition_companion_title",
+  "expedition_item_title",
+  "expedition_city_format",
+  "expedition_companion_format",
+  "expedition_item_format",
+  "expedition_selected",
+  "expedition_unselected",
+  "expedition_unknown_item",
+  "expedition_begin",
+  "expedition_status_title",
+  "expedition_status_format",
+  "expedition_loot_format",
+  "expedition_continue",
+  "expedition_safe_return",
+  "history_title",
+  "history_empty",
+  "history_week_format",
+  "history_entry_format",
   "option_intelligence_title",
   "option_intelligence_format",
 ] as const;
@@ -174,6 +267,14 @@ function expectString(value: unknown, path: string): string {
     throw new WebConfigError(`${path} 必须是非空字符串`);
   }
   return value;
+}
+
+/** 读取允许为空的可选资源路径，非字符串仍立即失败。 */
+function expectOptionalString(value: unknown, path: string): string {
+  if (typeof value !== "string") {
+    throw new WebConfigError(`${path} 必须是字符串`);
+  }
+  return value.trim();
 }
 
 /** 读取允许由空白符组成、但原始长度必须大于零的字符串配置项。 */
@@ -252,6 +353,19 @@ function readStringFields<const TKeys extends readonly string[]>(
   const result: Record<string, string> = {};
   for (const key of keys) {
     result[key] = expectString(source[key], `${path}.${key}`);
+  }
+  return result as Readonly<Record<TKeys[number], string>>;
+}
+
+/** 按给定键集读取允许为空的可选字符串映射。 */
+function readOptionalStringFields<const TKeys extends readonly string[]>(
+  source: JsonObject,
+  keys: TKeys,
+  path: string,
+): Readonly<Record<TKeys[number], string>> {
+  const result: Record<string, string> = {};
+  for (const key of keys) {
+    result[key] = expectOptionalString(source[key], `${path}.${key}`);
   }
   return result as Readonly<Record<TKeys[number], string>>;
 }
@@ -368,6 +482,11 @@ function parseAssets(value: unknown): AssetConfig {
     cover: expectString(source.cover, "assets.cover"),
     cover_width: expectInteger(source.cover_width, "assets.cover_width", 1),
     cover_height: expectInteger(source.cover_height, "assets.cover_height", 1),
+    skins: readOptionalStringFields(
+      expectObject(source.skins, "assets.skins"),
+      SKIN_KEYS,
+      "assets.skins",
+    ),
   };
 }
 
@@ -393,6 +512,10 @@ function parseMotion(value: unknown): MotionConfig {
       source.page_transition_ms,
       "motion.page_transition_ms",
     ),
+    connection_transition_ms: expectNumber(
+      source.connection_transition_ms,
+      "motion.connection_transition_ms",
+    ),
     button_press_ms: expectNumber(
       source.button_press_ms,
       "motion.button_press_ms",
@@ -400,6 +523,10 @@ function parseMotion(value: unknown): MotionConfig {
     cover_drift_ms: expectNumber(
       source.cover_drift_ms,
       "motion.cover_drift_ms",
+    ),
+    cover_menu_description_delay_ms: expectNumber(
+      source.cover_menu_description_delay_ms,
+      "motion.cover_menu_description_delay_ms",
     ),
     toast_duration_ms: expectNumber(
       source.toast_duration_ms,
@@ -418,13 +545,42 @@ function parseControls(value: unknown): ControlConfig {
   );
 }
 
+/** 解析一个响应式封面菜单，并要求列数为正整数。 */
+function parseCoverMenuLayout(
+  value: unknown,
+  path: string,
+): CoverMenuLayoutConfig {
+  const source = expectObject(value, path);
+  return {
+    horizontal_alignment: expectEnum(
+      source.horizontal_alignment,
+      HORIZONTAL_ALIGNMENTS,
+      `${path}.horizontal_alignment`,
+    ),
+    vertical_alignment: expectEnum(
+      source.vertical_alignment,
+      VERTICAL_ALIGNMENTS,
+      `${path}.vertical_alignment`,
+    ),
+    ...readNumberFields(source, COVER_LAYOUT_KEYS, path),
+    menu_columns: expectInteger(source.menu_columns, `${path}.menu_columns`, 1),
+  };
+}
+
 /** 解析封面、桌面、移动与二级页布局标尺。 */
 function parseLayout(value: unknown): LayoutConfig {
   const source = expectObject(value, "layout");
   const coverSource = expectObject(source.cover, "layout.cover");
   return {
     cover: {
-      ...readNumberFields(coverSource, COVER_LAYOUT_KEYS, "layout.cover"),
+      desktop: parseCoverMenuLayout(
+        coverSource.desktop,
+        "layout.cover.desktop",
+      ),
+      mobile: parseCoverMenuLayout(
+        coverSource.mobile,
+        "layout.cover.mobile",
+      ),
       image_dark_edge_ratio: expectRatio(
         coverSource.image_dark_edge_ratio,
         "layout.cover.image_dark_edge_ratio",
@@ -457,12 +613,38 @@ function parseLayout(value: unknown): LayoutConfig {
   };
 }
 
+/** 解析浏览器关闭失败时的可回退退出策略。 */
+function parseWebExit(value: unknown): WebExitConfig {
+  const source = expectObject(value, "web_exit");
+  return {
+    strategy: expectEnum(
+      source.strategy,
+      WEB_EXIT_STRATEGIES,
+      "web_exit.strategy",
+    ),
+    history_back_steps: expectInteger(
+      source.history_back_steps,
+      "web_exit.history_back_steps",
+      1,
+    ),
+    verification_delay_ms: expectNumber(
+      source.verification_delay_ms,
+      "web_exit.verification_delay_ms",
+    ),
+  };
+}
+
 /** 解析本地存档策略。 */
 function parseStorage(value: unknown): StorageConfig {
   const source = expectObject(value, "storage");
   return {
     key: expectString(source.key, "storage.key"),
     settings_key: expectString(source.settings_key, "storage.settings_key"),
+    settings_schema_version: expectInteger(
+      source.settings_schema_version,
+      "storage.settings_schema_version",
+      1,
+    ),
     schema_version: expectInteger(
       source.schema_version,
       "storage.schema_version",
@@ -502,6 +684,31 @@ function parseActionGroup(value: unknown, index: number): ActionGroupConfig {
   };
 }
 
+/** 解析一个 H5 专属动作展示定义。 */
+function parseWebAction(value: unknown, index: number): WebActionConfig {
+  const path = `actions[${String(index)}]`;
+  const source = expectObject(value, path);
+  return {
+    id: expectString(source.id, `${path}.id`),
+    label: expectString(source.label, `${path}.label`),
+    style: expectString(source.style, `${path}.style`),
+    icon: expectString(source.icon, `${path}.icon`),
+  };
+}
+
+/** 拒绝 H5 动作定义中的重复稳定 ID。 */
+function parseWebActions(value: unknown): readonly WebActionConfig[] {
+  const actions = expectArray(value, "actions").map(parseWebAction);
+  const ids = new Set<string>();
+  for (const action of actions) {
+    if (ids.has(action.id)) {
+      throw new WebConfigError(`actions 出现重复 ID：${action.id}`);
+    }
+    ids.add(action.id);
+  }
+  return actions;
+}
+
 /** 解析 H5 界面文案。 */
 function parseTexts(value: unknown): TextConfig {
   const source = expectObject(value, "texts");
@@ -538,7 +745,9 @@ export function parseWebGameConfig(value: unknown): WebGameConfig {
     controls: parseControls(source.controls),
     layout: parseLayout(source.layout),
     storage: parseStorage(source.storage),
+    web_exit: parseWebExit(source.web_exit),
     navigation: expectArray(source.navigation, "navigation").map(parseNavigation),
+    actions: parseWebActions(source.actions),
     action_groups: expectArray(source.action_groups, "action_groups").map(
       parseActionGroup,
     ),

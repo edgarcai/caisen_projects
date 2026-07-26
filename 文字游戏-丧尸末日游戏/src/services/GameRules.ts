@@ -8,17 +8,24 @@ import {
 } from "../domain/game-state";
 import type { RuleModifierProvider } from "../domain/ports";
 import { advanceClock } from "./GameClock";
+import type { ChronicleService } from "./ChronicleService";
 import type { GameContent } from "./GameContent";
 
 /** 集中处理世界时间、生存消耗、不变量和失败优先级。 */
 export class GameRules {
   private readonly content: GameContent;
   private readonly modifiers: RuleModifierProvider;
+  private readonly chronicle: ChronicleService;
 
-  /** 注入统一配置和避难所被动修正提供者。 */
-  public constructor(content: GameContent, modifiers: RuleModifierProvider) {
+  /** 注入统一配置、避难所被动修正与时间线记录服务。 */
+  public constructor(
+    content: GameContent,
+    modifiers: RuleModifierProvider,
+    chronicle: ChronicleService,
+  ) {
     this.content = content;
     this.modifiers = modifiers;
+    this.chronicle = chronicle;
   }
 
   /** 暴露已经配置的生存上限，供应用服务复用。 */
@@ -31,16 +38,19 @@ export class GameRules {
     state: GameState,
     rotate = true,
     turns = 1,
+    actionType?: string,
   ): string[] {
     if (isEnded(state)) {
       return [state.ending?.message ?? ""];
     }
     if (!Number.isInteger(turns) || turns < 1) {
-      throw new RangeError("生存回合数必须是正整数。");
+      throw new RangeError(this.content.text("invalid_survival_turn_count"));
     }
+    const hungerCosts = this.actionHungerCosts(actionType);
+    const modePercent = this.modeSurvivalCostPercent(state.mode);
     const messages: string[] = [];
     for (let index = 0; index < turns; index += 1) {
-      messages.push(...this.advanceSingleTurn(state));
+      messages.push(...this.advanceSingleTurn(state, hungerCosts, modePercent));
       if (isEnded(state)) {
         return messages;
       }
@@ -48,7 +58,11 @@ export class GameRules {
     if (rotate) {
       rotatePlayer(state);
       if (state.players.length > 1) {
-        messages.push(this.content.text("next_player", { player_name: activePlayer(state).name }));
+        const nextPlayerMessage = this.content.text("next_player", {
+          player_name: activePlayer(state).name,
+        });
+        messages.push(nextPlayerMessage);
+        this.chronicle.record(state, [nextPlayerMessage]);
       }
     }
     return messages;
@@ -122,44 +136,52 @@ export class GameRules {
   }
 
   /** 结算一个基础行动时段的消耗、日历、产出和失败。 */
-  private advanceSingleTurn(state: GameState): string[] {
+  private advanceSingleTurn(
+    state: GameState,
+    hungerCosts: GameContent["game"]["rules"]["action_hunger_costs"][string],
+    modePercent: number,
+  ): string[] {
     const { turn_costs: costs, time } = this.content.game.rules;
     const negativePercent = 100 + this.modifier(
       state,
       "rules.negative_status_health_loss_percent",
     );
     for (const player of state.players) {
-      const healthLoss = Math.max(
-        0,
-        Math.floor(
-          (costs.health_loss_per_negative_status *
-            player.negative_status *
-            negativePercent) /
-            100,
-        ),
+      const healthLoss = this.scaledSurvivalCost(
+        costs.health_loss_per_negative_status * player.negative_status,
+        negativePercent,
+        modePercent,
       );
       player.health -= healthLoss;
-      player.hunger += costs.player_hunger_gain;
+      player.hunger += this.scaledSurvivalCost(
+        hungerCosts.player_hunger_gain,
+        100,
+        modePercent,
+      );
     }
     const shelterDamagePercent = 100 + this.modifier(
       state,
       "rules.shelter_turn_damage_percent",
     );
-    state.shelter.health -= Math.max(
-      0,
-      Math.floor((costs.shelter_health_loss * shelterDamagePercent) / 100),
+    state.shelter.health -= this.scaledSurvivalCost(
+      costs.shelter_health_loss,
+      shelterDamagePercent,
+      modePercent,
     );
     const hungerPercent = 100 + this.modifier(state, "rules.group_hunger_gain_percent");
-    state.shelter.group_hunger += Math.max(
-      0,
-      Math.floor(
-        (costs.group_hunger_gain_per_person * state.shelter.population * hungerPercent) /
-          100,
-      ),
+    state.shelter.group_hunger += this.scaledSurvivalCost(
+      hungerCosts.group_hunger_gain_per_person * state.shelter.population,
+      hungerPercent,
+      modePercent,
     );
-    state.shelter.activity -= costs.activity_loss;
+    state.shelter.activity -= this.scaledSurvivalCost(
+      costs.activity_loss,
+      100,
+      modePercent,
+    );
     state.turn_number += 1;
 
+    const completedClock = structuredClone(state.clock);
     const advance = advanceClock(state.clock, time.hours_per_action, time);
     this.normalize(state);
     const messages: string[] = [];
@@ -182,7 +204,59 @@ export class GameRules {
       state.ending = ending;
       messages.push(ending.message);
     }
+    if (advance.dayChanged) {
+      messages.push(...this.chronicle.completeDay(state, completedClock, messages));
+    } else {
+      this.chronicle.record(state, messages);
+    }
     return messages;
+  }
+
+  /** 读取并校验指定行动类型的个人与群体饥饿增量。 */
+  private actionHungerCosts(
+    actionType?: string,
+  ): GameContent["game"]["rules"]["action_hunger_costs"][string] {
+    const rules = this.content.game.rules;
+    const resolvedType = actionType ?? rules.default_survival_action_type;
+    const costs = rules.action_hunger_costs[resolvedType];
+    if (costs === undefined) {
+      throw new DomainError(this.content.text("unknown_survival_action_type", {
+        action_type: resolvedType,
+      }));
+    }
+    if (
+      !Number.isInteger(costs.player_hunger_gain)
+      || costs.player_hunger_gain < 0
+      || !Number.isInteger(costs.group_hunger_gain_per_person)
+      || costs.group_hunger_gain_per_person < 0
+    ) {
+      throw new DomainError(this.content.text("invalid_action_hunger_config", {
+        action_type: resolvedType,
+      }));
+    }
+    return costs;
+  }
+
+  /** 读取当前模式的生存损耗百分比。 */
+  private modeSurvivalCostPercent(mode: GameState["mode"]): number {
+    const percent = this.content.game.rules.mode_survival_cost_percent[mode];
+    if (!Number.isInteger(percent) || percent < 0) {
+      throw new DomainError(this.content.text("invalid_mode_survival_cost", { mode }));
+    }
+    return percent;
+  }
+
+  /** 将基础损耗、被动修正和模式比例合并为非负整数。 */
+  private scaledSurvivalCost(
+    base: number,
+    modifierPercent: number,
+    modePercent: number,
+  ): number {
+    if (base <= 0 || modifierPercent <= 0 || modePercent <= 0) return 0;
+    return Math.max(
+      1,
+      Math.floor((base * modifierPercent * modePercent) / 10_000),
+    );
   }
 
   /** 读取某个生存规则的累计被动修正。 */
@@ -198,7 +272,9 @@ export class GameRules {
   ): EndingState {
     const failure = this.content.game.rules.failure_endings[failureId];
     if (failure === undefined) {
-      throw new DomainError(`缺少失败结局配置：${failureId}`);
+      throw new DomainError(this.content.text("missing_failure_ending", {
+        failure_id: failureId,
+      }));
     }
     const textKey = failure.mode_text_keys?.[mode] ?? failure.text_key;
     return {

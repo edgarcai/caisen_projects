@@ -1,6 +1,6 @@
 import { DomainError } from "./errors";
 
-export type GameMode = "single" | "multiplayer";
+export type GameMode = "single" | "multiplayer" | "story";
 
 export interface PlayerState {
   name: string;
@@ -36,6 +36,12 @@ export interface GameClockState {
   month: number;
   day: number;
   hour: number;
+}
+
+export interface GameDateState {
+  year: number;
+  month: number;
+  day: number;
 }
 
 export interface StoryState {
@@ -76,6 +82,42 @@ export interface PendingExplorationState {
   event_id: string;
 }
 
+export interface InventoryState {
+  crafted_items: Record<string, number>;
+  equipped_weapon_id: string | null;
+  equipped_armor_id: string | null;
+}
+
+export interface ResearchState {
+  completed_project_ids: string[];
+}
+
+export interface ExpeditionState {
+  city_id: string;
+  leader_player_index: number;
+  companion_ids: string[];
+  carried_items: Record<string, number>;
+  loot: Record<string, number>;
+  remaining_steps: number;
+  maximum_steps: number;
+  events_resolved: number;
+}
+
+export interface CommunicationLogEntry {
+  survival_day: number;
+  turn_number: number;
+  clock: GameClockState;
+  message: string;
+}
+
+export interface WeeklyArchiveState {
+  week_number: number;
+  start_date: GameDateState;
+  end_date: GameDateState;
+  summary: string;
+  entries: CommunicationLogEntry[];
+}
+
 export type EndingOutcome = "victory" | "failure";
 
 export interface EndingState {
@@ -84,7 +126,7 @@ export interface EndingState {
   message: string;
 }
 
-export interface GameState {
+export interface RestorableGameState {
   mode: GameMode;
   players: PlayerState[];
   active_player_index: number;
@@ -97,6 +139,22 @@ export interface GameState {
   pending_exploration: PendingExplorationState | null;
   ending: EndingState | null;
   turn_number: number;
+  survival_days: number;
+  communication_log: CommunicationLogEntry[];
+  weekly_archives: WeeklyArchiveState[];
+  inventory: InventoryState;
+  research: ResearchState;
+  expedition: ExpeditionState | null;
+}
+
+export interface CheckpointState {
+  survival_day: number;
+  created_turn: number;
+  snapshot: RestorableGameState;
+}
+
+export interface GameState extends RestorableGameState {
+  checkpoint: CheckpointState | null;
 }
 
 /** 返回当前执行行动的所长，并拒绝越界索引。 */

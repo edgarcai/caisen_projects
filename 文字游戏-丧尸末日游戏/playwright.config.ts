@@ -20,7 +20,10 @@ interface QualityConfig {
 }
 
 interface WebTestConfig {
-  responsive: { quality_viewports: QualityViewport[] };
+  responsive: {
+    mobile_max_stage_width: number;
+    quality_viewports: QualityViewport[];
+  };
   quality_assurance: QualityConfig;
 }
 
@@ -30,20 +33,21 @@ function loadWebTestConfig(): WebTestConfig {
   return JSON.parse(readFileSync(path, "utf8")) as WebTestConfig;
 }
 
-/** 按配置 ID 查找一个必须存在的验收视口。 */
-function requireViewport(config: WebTestConfig, id: string): QualityViewport {
-  const viewport = config.responsive.quality_viewports.find((item) => item.id === id);
-  if (viewport === undefined) {
-    throw new Error(`缺少验收视口配置：${id}`);
-  }
-  return viewport;
-}
-
 const webConfig = loadWebTestConfig();
 const quality = webConfig.quality_assurance;
-const desktop = requireViewport(webConfig, "desktop");
-const mobile = requireViewport(webConfig, "mobile");
 const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
+
+/** 将每个配置化 QA 视口转换为桌面或触控测试项目。 */
+function buildViewportProject(viewport: QualityViewport) {
+  const isMobile = viewport.width <= webConfig.responsive.mobile_max_stage_width;
+  return {
+    name: viewport.id,
+    use: {
+      viewport: { width: viewport.width, height: viewport.height },
+      ...(isMobile ? { hasTouch: true, isMobile: true } : {}),
+    },
+  };
+}
 
 export default defineConfig({
   testDir: "tests-h5/e2e",
@@ -60,20 +64,7 @@ export default defineConfig({
     trace: quality.trace_mode,
     ...(browserChannel === undefined ? {} : { channel: browserChannel }),
   },
-  projects: [
-    {
-      name: desktop.id,
-      use: { viewport: { width: desktop.width, height: desktop.height } },
-    },
-    {
-      name: mobile.id,
-      use: {
-        viewport: { width: mobile.width, height: mobile.height },
-        hasTouch: true,
-        isMobile: true,
-      },
-    },
-  ],
+  projects: webConfig.responsive.quality_viewports.map(buildViewportProject),
   webServer: {
     command: quality.web_server_command,
     url: quality.base_url,

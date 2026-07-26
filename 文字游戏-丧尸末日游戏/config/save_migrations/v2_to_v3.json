@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "from_version": 2,
+  "to_version": 3,
+  "campaign_start_date": {
+    "year": 2166,
+    "month": 1,
+    "day": 1
+  },
+  "state_defaults": {
+    "communication_log": [],
+    "weekly_archives": [],
+    "checkpoint": null,
+    "inventory": {
+      "crafted_items": {},
+      "equipped_weapon_id": null,
+      "equipped_armor_id": null
+    },
+    "research": {
+      "completed_project_ids": []
+    },
+    "expedition": null
+  }
+}

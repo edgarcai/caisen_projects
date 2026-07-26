@@ -1,10 +1,14 @@
-import type { GameScreenId, UiDocumentView } from "../ports/GameUiPort";
+import type {
+  GameMode,
+  GameScreenId,
+  UiDocumentView,
+} from "../ports/GameUiPort";
 
 /**
  * 页面实例可携带的纯展示上下文。
  */
 export interface GameRouteContext {
-  readonly mode?: "single" | "multiplayer";
+  readonly mode?: GameMode;
   readonly categoryId?: string;
   readonly document?: UiDocumentView;
 }
@@ -39,6 +43,20 @@ export class PageStack {
       throw new Error("页面栈不能处于空状态。");
     }
     return route;
+  }
+
+  /**
+   * 返回从根页面到顶层页面的只读快照，供覆盖式渲染器对齐显示树。
+   */
+  public entries(): readonly GameRoute[] {
+    return [...this.routes];
+  }
+
+  /**
+   * 返回当前页面层级数量。
+   */
+  public depth(): number {
+    return this.routes.length;
   }
 
   /**

@@ -4,6 +4,7 @@
 export type GameScreenId =
   | "menu"
   | "name_input"
+  | "connection"
   | "dashboard"
   | "story"
   | "exploration_city"
@@ -16,12 +17,23 @@ export type GameScreenId =
   | "tutorial"
   | "message"
   | "ending"
-  | "return_menu_confirm";
+  | "return_menu_confirm"
+  | "function_menu"
+  | "settings"
+  | "warehouse"
+  | "research"
+  | "crafting"
+  | "expedition_prepare"
+  | "expedition_status"
+  | "history"
+  | "rollback_confirm"
+  | "exit_confirm"
+  | "credits";
 
 /**
  * 游戏支持的启动模式。
  */
-export type GameMode = "single" | "multiplayer";
+export type GameMode = "single" | "multiplayer" | "story";
 
 /**
  * 通用提示的语义颜色，不携带具体视觉值。
@@ -162,6 +174,106 @@ export interface UiCompanionView {
 }
 
 /**
+ * 仓库中一项可展示、可装备或可携带的实时库存。
+ */
+export interface UiWarehouseItemView {
+  readonly id: string;
+  readonly name: string;
+  readonly category: string;
+  readonly categoryLabel: string;
+  readonly quantity: number;
+  readonly carryable: boolean;
+  readonly equippable: boolean;
+  readonly equipped: boolean;
+  readonly description: string;
+}
+
+/**
+ * 一项研发计划的前置、成本与远征收益投影。
+ */
+export interface UiResearchProjectView {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly completed: boolean;
+  readonly available: boolean;
+  readonly costDescription: string;
+  readonly expeditionStepBonus: number;
+}
+
+/**
+ * 一项制作配方的解锁、成本与产物投影。
+ */
+export interface UiCraftingRecipeView {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly available: boolean;
+  readonly unlocked: boolean;
+  readonly costDescription: string;
+  readonly outputItemId: string;
+  readonly outputQuantity: number;
+}
+
+/**
+ * 远征准备页中的同行伙伴选项。
+ */
+export interface UiExpeditionCompanionView {
+  readonly id: string;
+  readonly name: string;
+  readonly traitName: string;
+  readonly trust: number;
+  readonly stepBonus: number;
+}
+
+/**
+ * 远征准备页中的可携带物资选项。
+ */
+export interface UiExpeditionCarryItemView {
+  readonly id: string;
+  readonly name: string;
+  readonly availableQuantity: number;
+  readonly stepBonusPerUnit: number;
+}
+
+/**
+ * 一次正在进行的远征摘要。
+ */
+export interface UiExpeditionStatusView {
+  readonly cityId: string;
+  readonly cityName: string;
+  readonly remainingSteps: number;
+  readonly maximumSteps: number;
+  readonly eventsResolved: number;
+  readonly companionIds: readonly string[];
+  readonly carriedItems: Readonly<Record<string, number>>;
+  readonly loot: Readonly<Record<string, number>>;
+  readonly itemNames: Readonly<Record<string, string>>;
+}
+
+/**
+ * 周档案中的一条不可变通讯记录。
+ */
+export interface UiHistoryEntryView {
+  readonly survivalDay: number;
+  readonly turnNumber: number;
+  readonly dateLabel: string;
+  readonly timeLabel: string;
+  readonly message: string;
+}
+
+/**
+ * 每七个生存日生成的一份历史档案。
+ */
+export interface UiWeeklyArchiveView {
+  readonly weekNumber: number;
+  readonly startDateLabel: string;
+  readonly endDateLabel: string;
+  readonly summary: string;
+  readonly entries: readonly UiHistoryEntryView[];
+}
+
+/**
  * 教程、消息和结局等长文本页面。
  */
 export interface UiDocumentView {
@@ -188,6 +300,7 @@ export interface GameUiSnapshot {
   readonly playerCounts: Readonly<Record<GameMode, number>>;
   readonly mode: GameMode | null;
   readonly ended: boolean;
+  readonly canRollback: boolean;
   readonly activePlayer: UiPlayerView | null;
   readonly players: readonly UiPlayerView[];
   readonly clock: UiClockView | null;
@@ -203,6 +316,13 @@ export interface GameUiSnapshot {
   readonly battle: UiBattleView | null;
   readonly managementCategories: readonly UiManagementCategoryView[];
   readonly companions: readonly UiCompanionView[];
+  readonly warehouseItems: readonly UiWarehouseItemView[];
+  readonly researchProjects: readonly UiResearchProjectView[];
+  readonly craftingRecipes: readonly UiCraftingRecipeView[];
+  readonly expeditionCompanions: readonly UiExpeditionCompanionView[];
+  readonly expeditionCarryItems: readonly UiExpeditionCarryItemView[];
+  readonly expeditionStatus: UiExpeditionStatusView | null;
+  readonly weeklyArchives: readonly UiWeeklyArchiveView[];
   readonly tutorial: UiDocumentView | null;
   readonly ending: UiDocumentView | null;
   readonly notice: UiNoticeView | null;
@@ -219,6 +339,18 @@ export type GameUiCommand =
     }
   | { readonly type: "load_game" }
   | { readonly type: "save_game" }
+  | { readonly type: "rollback_checkpoint" }
+  | { readonly type: "research_complete"; readonly projectId: string }
+  | { readonly type: "craft_item"; readonly recipeId: string }
+  | { readonly type: "equip_item"; readonly itemId: string }
+  | {
+      readonly type: "expedition_begin";
+      readonly cityId: string;
+      readonly companionIds: readonly string[];
+      readonly carriedItems: Readonly<Record<string, number>>;
+    }
+  | { readonly type: "expedition_continue" }
+  | { readonly type: "expedition_safe_return" }
   | { readonly type: "story_choice"; readonly choiceId: string }
   | { readonly type: "exploration_prepare"; readonly cityId: string }
   | { readonly type: "exploration_resolve"; readonly choiceId: string }

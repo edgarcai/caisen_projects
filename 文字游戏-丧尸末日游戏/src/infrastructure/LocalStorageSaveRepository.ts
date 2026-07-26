@@ -2,7 +2,7 @@ import { SaveDataError } from "../domain/errors";
 import type { GameState } from "../domain/game-state";
 import type { SaveRepository, StorageLike } from "../domain/ports";
 import type { SaveStateValidator } from "./SaveStateValidator";
-import type { SaveDocument, SaveMigrator } from "./V1ToV2SaveMigrator";
+import type { SaveDocument, SaveMigrator } from "./SaveMigration";
 
 export interface LocalStorageSaveOptions {
   storage: StorageLike;
@@ -65,9 +65,10 @@ export class LocalStorageSaveRepository implements SaveRepository {
     }
   }
 
-  /** 验证状态、滚动可信主档到备份，并写入新的 v2 文档。 */
+  /** 验证状态、滚动可信主档到备份，并写入当前版本文档。 */
   public save(state: GameState): void {
     try {
+      this.validator.validateRawV3(state);
       this.validator.validate(state);
       const savedAt = this.now();
       if (Number.isNaN(savedAt.getTime())) {
@@ -186,6 +187,8 @@ export class LocalStorageSaveRepository implements SaveRepository {
     while (version < this.schemaVersion) {
       if (version === 1) {
         this.validator.validateRawV1(prepared.game_state);
+      } else if (version === 2) {
+        this.validator.validateRawV2(prepared.game_state);
       } else {
         throw new SaveDataError(`缺少存档版本 ${String(version)} 的结构校验器。`);
       }
@@ -202,7 +205,7 @@ export class LocalStorageSaveRepository implements SaveRepository {
       }
       version = migrator.toVersion;
     }
-    this.validator.validateRawV2(prepared.game_state);
+    this.validator.validateRawV3(prepared.game_state);
     return prepared;
   }
 

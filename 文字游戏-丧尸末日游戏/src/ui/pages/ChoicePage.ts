@@ -2,6 +2,7 @@ import type { GameUiConfig } from "../../styles/GameTheme";
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
 import type { UiOptionView, UiPromptView } from "../ports/GameUiPort";
 import type { UiFactory } from "../components/UiFactory";
+import type { PageActionSpec } from "../components/PageActionBar";
 import type { LayaRuntimeLike } from "../laya/LayaRuntime";
 import { PageScaffold } from "./PageView";
 
@@ -13,6 +14,7 @@ export interface ChoicePageSpec {
   readonly title: string;
   readonly prompt: UiPromptView;
   readonly onBack: () => void;
+  readonly footerActions?: readonly PageActionSpec[];
   readonly onSelect: (option: UiOptionView) => void;
 }
 
@@ -34,6 +36,7 @@ export function createChoicePage(
     spec.testId,
     spec.title,
     spec.onBack,
+    spec.footerActions,
   );
   const heading = factory.autoText(page.content, {
     testId: `${spec.testId}-prompt-title`,

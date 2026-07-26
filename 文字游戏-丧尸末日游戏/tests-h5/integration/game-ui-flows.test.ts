@@ -23,7 +23,7 @@ function requireAction(snapshot: GameUiSnapshot, actionId: string): UiOptionView
 }
 
 describe("H5 剧情、战斗与探索命令流", () => {
-  it("剧情锁定选择不修改状态，合法选择推进任务和自动存档", () => {
+  it("剧情锁定选择不修改状态，合法选择推进任务且检查点前不自动存档", () => {
     const harness = buildH5Harness();
     harness.adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
     const state = requireState(harness.application);
@@ -47,7 +47,7 @@ describe("H5 剧情、战斗与探索命令流", () => {
     expect(resolved.accepted).toBe(true);
     expect(requireSnapshot(resolved.snapshot).storyPrompt?.id).toBe("money_and_secrets");
     expect(state.turn_number).toBe(1);
-    expect(harness.adapter.canLoadGame()).toBe(true);
+    expect(harness.adapter.canLoadGame()).toBe(false);
   });
 
   it("首领路线显示战斗快照，胜利后清空战斗并推进主线", () => {
@@ -107,10 +107,10 @@ describe("H5 剧情、战斗与探索命令流", () => {
     expect(state.battle).toMatchObject({ finished: true, retreated: true });
     expect(snapshot.battle).toBeNull();
     expect(requireAction(snapshot, "shelter_management").disabled).toBe(false);
-    expect(snapshot.managementCategories).toHaveLength(4);
+    expect(snapshot.managementCategories).toHaveLength(5);
   });
 
-  it("探索事件只抽取一次，并在自动存档恢复后继续同一事件", () => {
+  it("探索事件只抽取一次，并在显式存档恢复后继续同一事件", () => {
     const random = new ScriptedRandomSource([50], [0, 4]);
     const writer = buildH5Harness({ random });
     writer.adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
@@ -136,6 +136,7 @@ describe("H5 剧情、战斗与探索命令流", () => {
     });
     expect(requireSnapshot(forgedRepeat.snapshot).explorationPrompt?.id).toBe("bank");
     expect(random.weightedChoiceCalls).toBe(1);
+    writer.adapter.execute({ type: "save_game" });
 
     const readerRandom = new ScriptedRandomSource([], [7]);
     const reader = buildH5Harness({ storage: writer.storage, random: readerRandom });

@@ -6,7 +6,6 @@ import type {
   CompanionState,
   GameMode,
   GameState,
-  PlayerState,
   ShelterState,
 } from "../domain/game-state";
 import type { ActionReport, ManagementOption } from "../domain/reports";
@@ -20,14 +19,22 @@ import type {
   UiBattleView,
   UiCityView,
   UiCompanionView,
+  UiCraftingRecipeView,
+  UiExpeditionCarryItemView,
+  UiExpeditionCompanionView,
+  UiExpeditionStatusView,
+  UiHistoryEntryView,
   UiManagementCategoryView,
   UiMeterView,
   UiNoticeView,
   UiOptionView,
   UiPromptView,
+  UiResearchProjectView,
   UiStatView,
   UiTone,
   UiPlayerView,
+  UiWarehouseItemView,
+  UiWeeklyArchiveView,
 } from "../ui/ports/GameUiPort";
 
 interface GameActionPresentation {
@@ -44,6 +51,12 @@ interface DashboardMeterPresentation {
   readonly maximum_path: string;
   readonly direction: "lower_is_worse" | "higher_is_worse";
   readonly thresholds: { readonly warning: number; readonly danger: number };
+}
+
+interface ManagementCategoryPresentation {
+  readonly id: string;
+  readonly label: string;
+  readonly action_ids?: readonly string[];
 }
 
 interface H5Presentation {
@@ -67,10 +80,7 @@ interface GamePresentationConfig {
   readonly interface: {
     readonly cover: { readonly title: string; readonly subtitle: string };
     readonly pages: {
-      readonly management_categories: readonly {
-        readonly id: string;
-        readonly label: string;
-      }[];
+      readonly management_categories: readonly ManagementCategoryPresentation[];
     };
     readonly dashboard: {
       readonly log_hint: string;
@@ -99,15 +109,17 @@ export class GameUiAdapter implements GameUiPort {
   private readonly presentation: GamePresentationConfig;
   private readonly listeners = new Set<(snapshot: GameUiSnapshot) => void>();
   private revision = 0;
-  private logs: string[];
+  private persistentLogs: string[] = [];
+  private sessionLogs: string[];
   private notice: UiNoticeView | null = null;
+  private lastAutoSavedCheckpointDay: number | null = null;
 
   /** 保存应用服务与配置化展示内容，不复制任何领域状态。 */
   public constructor(application: GameApplication, webConfig: WebGameConfig) {
     this.application = application;
     this.webConfig = webConfig;
     this.presentation = application.content.game as unknown as GamePresentationConfig;
-    this.logs = [application.content.text("welcome_log")];
+    this.sessionLogs = [application.content.text("welcome_log")];
   }
 
   /** 构建当前游戏状态对应的完整不可变快照。 */
@@ -123,13 +135,14 @@ export class GameUiAdapter implements GameUiPort {
       playerCounts: this.playerCounts(),
       mode: state?.mode ?? null,
       ended: state === null ? false : isEnded(state),
+      canRollback: state?.checkpoint !== null && state?.checkpoint !== undefined,
       activePlayer: state === null ? null : this.playerView(state, state.active_player_index),
       players: state === null
         ? []
         : state.players.map((_player, index) => this.playerView(state, index)),
       clock: state === null ? null : this.clockView(state),
       meters: state === null ? [] : this.meterViews(state),
-      resources: state === null ? [] : this.resourceViews(activePlayer(state)),
+      resources: state === null ? [] : this.resourceViews(state),
       shelterStats: state === null ? [] : this.shelterStatViews(state.shelter),
       mission: storyStatus === null
         ? null
@@ -139,7 +152,7 @@ export class GameUiAdapter implements GameUiPort {
             objective: storyStatus.objective,
             progressLabel: storyStatus.progressText,
           },
-      logs: [...this.logs],
+      logs: this.visibleLogs(),
       actionGroups: state === null ? [] : this.actionGroupViews(state),
       storyPrompt: state === null ? null : this.storyPromptView(),
       cities: state === null ? [] : this.cityViews(state),
@@ -147,6 +160,13 @@ export class GameUiAdapter implements GameUiPort {
       battle: state === null ? null : this.battleView(state),
       managementCategories: state === null ? [] : this.managementCategoryViews(state),
       companions: state === null ? [] : this.companionViews(state),
+      warehouseItems: state === null ? [] : this.warehouseItemViews(state),
+      researchProjects: state === null ? [] : this.researchProjectViews(),
+      craftingRecipes: state === null ? [] : this.craftingRecipeViews(),
+      expeditionCompanions: state === null ? [] : this.expeditionCompanionViews(),
+      expeditionCarryItems: state === null ? [] : this.expeditionCarryItemViews(),
+      expeditionStatus: state === null ? null : this.expeditionStatusView(),
+      weeklyArchives: state === null ? [] : this.weeklyArchiveViews(),
       tutorial: {
         title: this.actionLabel("tutorial"),
         body: this.application.content.game.game.tutorial,
@@ -176,7 +196,7 @@ export class GameUiAdapter implements GameUiPort {
     try {
       const execution = this.executeCommand(command);
       if (execution.report !== null) {
-        this.appendMessages(execution.report.messages);
+        this.updateLogsFromReport(command, execution.report);
         this.notice = this.noticeFromReport(command, execution.report);
         if (execution.report.stateChanged) {
           this.autoSave();
@@ -198,7 +218,7 @@ export class GameUiAdapter implements GameUiPort {
         message: error instanceof Error ? error.message : String(error),
         tone: "danger",
       };
-      this.appendMessages([this.notice.message]);
+      this.appendSessionMessages([this.notice.message]);
       this.revision += 1;
       const snapshot = this.getSnapshot();
       this.emit(snapshot);
@@ -218,16 +238,59 @@ export class GameUiAdapter implements GameUiPort {
     switch (command.type) {
       case "start_game": {
         const report = this.application.startNewGame(command.playerNames, command.mode);
+        this.lastAutoSavedCheckpointDay = null;
         return { accepted: true, report };
       }
       case "load_game": {
         if (!this.application.hasSave()) {
           throw new GameApplicationError(this.application.content.text("no_save"));
         }
-        return { accepted: true, report: this.application.loadGame() };
+        const report = this.application.loadGame();
+        this.lastAutoSavedCheckpointDay =
+          this.application.state?.checkpoint?.survival_day ?? null;
+        return { accepted: true, report };
       }
-      case "save_game":
-        return { accepted: true, report: this.application.saveGame() };
+      case "save_game": {
+        const report = this.application.saveGame();
+        this.lastAutoSavedCheckpointDay =
+          this.application.state?.checkpoint?.survival_day ?? null;
+        return { accepted: true, report };
+      }
+      case "rollback_checkpoint": {
+        const report = this.application.rollbackToCheckpoint();
+        if (report.stateChanged) {
+          this.persistRollback();
+        }
+        return { accepted: report.stateChanged, report };
+      }
+      case "research_complete": {
+        const report = this.application.completeResearch(command.projectId);
+        return { accepted: report.stateChanged, report };
+      }
+      case "craft_item": {
+        const report = this.application.craftItem(command.recipeId);
+        return { accepted: report.stateChanged, report };
+      }
+      case "equip_item": {
+        const report = this.application.equipItem(command.itemId);
+        return { accepted: report.stateChanged, report };
+      }
+      case "expedition_begin": {
+        const report = this.application.prepareExpedition(
+          command.cityId,
+          command.companionIds,
+          command.carriedItems,
+        );
+        return { accepted: report.stateChanged, report };
+      }
+      case "expedition_continue": {
+        const report = this.application.continueExpedition();
+        return { accepted: report.stateChanged, report };
+      }
+      case "expedition_safe_return": {
+        const report = this.application.returnExpeditionSafely();
+        return { accepted: report.stateChanged, report };
+      }
       case "story_choice": {
         const prompt = this.application.currentStoryPrompt();
         if (prompt === null) {
@@ -237,13 +300,8 @@ export class GameUiAdapter implements GameUiPort {
         return { accepted: report.stateChanged, report };
       }
       case "exploration_prepare": {
-        const prompt = this.application.prepareExploration(command.cityId);
-        this.appendMessages([
-          formatTemplate(this.presentation.interface.h5.exploration_log_format, {
-            title: prompt.title,
-            intro: prompt.intro,
-          }),
-        ]);
+        this.application.prepareExploration(command.cityId);
+        this.syncPersistentMessages();
         this.autoSave();
         return { accepted: true, report: null };
       }
@@ -267,6 +325,14 @@ export class GameUiAdapter implements GameUiPort {
         return { accepted: report.stateChanged, report };
       }
       case "management_action": {
+        const supplyActionId = this.resolveManagementSupplyAction(
+          command.categoryId,
+          command.optionId,
+        );
+        if (supplyActionId !== null) {
+          const report = this.application.performAction(supplyActionId);
+          return { accepted: report.stateChanged, report };
+        }
         const option = this.resolveManagementOption(command.categoryId, command.optionId);
         const report = this.application.performManagement(option.category, option.optionId);
         return { accepted: report.stateChanged, report };
@@ -280,15 +346,36 @@ export class GameUiAdapter implements GameUiPort {
     }
   }
 
-  /** 在自动存档开启时保存状态；失败只降级提示，不回滚已完成行动。 */
+  /** 仅在领域生成新的十日检查点时自动落盘，避免每次行动覆盖存档。 */
   private autoSave(): void {
-    if (!this.webConfig.storage.auto_save || this.application.state === null) {
+    const state = this.application.state;
+    if (!this.webConfig.storage.auto_save || state === null) {
+      return;
+    }
+    const checkpointDay = state.checkpoint?.survival_day;
+    if (
+      checkpointDay === undefined
+      || checkpointDay === this.lastAutoSavedCheckpointDay
+    ) {
       return;
     }
     try {
       this.application.saveGame();
+      this.lastAutoSavedCheckpointDay = checkpointDay;
+      this.appendSessionMessages([this.webConfig.texts.auto_saved]);
     } catch {
-      this.appendMessages([this.webConfig.texts.storage_unavailable]);
+      this.appendSessionMessages([this.webConfig.texts.storage_unavailable]);
+    }
+  }
+
+  /** 回档是显式用户决策，成功后立即持久化恢复结果。 */
+  private persistRollback(): void {
+    try {
+      this.application.saveGame();
+      this.lastAutoSavedCheckpointDay =
+        this.application.state?.checkpoint?.survival_day ?? null;
+    } catch {
+      this.appendSessionMessages([this.webConfig.texts.storage_unavailable]);
     }
   }
 
@@ -304,7 +391,9 @@ export class GameUiAdapter implements GameUiPort {
       ? this.dialog("save_title")
       : command.type === "load_game"
         ? this.dialog("load_title")
-        : this.dialog("info_title");
+        : command.type === "rollback_checkpoint"
+          ? this.webConfig.texts.rollback_title
+          : this.dialog("info_title");
     const state = this.application.state;
     const tone: UiTone = report.gameOver
       ? state !== null && isVictory(state) ? "success" : "danger"
@@ -316,15 +405,16 @@ export class GameUiAdapter implements GameUiPort {
     };
   }
 
-  /** 返回由主配置定义的单人和多人输入框数量。 */
+  /** 返回由主配置定义的单人、多人和剧情模式输入框数量。 */
   private playerCounts(): Readonly<Record<GameMode, number>> {
     const rules = this.application.content.game.rules.player_counts;
     const single = rules.single?.maximum;
     const multiplayer = rules.multiplayer?.maximum;
-    if (single === undefined || multiplayer === undefined) {
+    const story = rules.story?.maximum;
+    if (single === undefined || multiplayer === undefined || story === undefined) {
       throw new Error("游戏模式缺少玩家数量配置。");
     }
-    return { single, multiplayer };
+    return { single, multiplayer, story };
   }
 
   /** 把一名所长转换为标题栏展示模型。 */
@@ -379,12 +469,16 @@ export class GameUiAdapter implements GameUiPort {
     });
   }
 
-  /** 把当前所长背包和属性转换为配置化统计行。 */
-  private resourceViews(player: PlayerState): UiStatView[] {
+  /** 把当前所长背包和计入装备的有效属性转换为统计行。 */
+  private resourceViews(state: GameState): UiStatView[] {
+    const player = activePlayer(state);
+    const attributes = this.application.effectivePlayerAttributes();
     return this.presentation.labels.player_stats.map(([field, label]) => ({
       id: `player-${field}`,
       label,
-      value: String(this.readNumericField(player, field)),
+      value: String(field === "attack" || field === "defense" || field === "agility"
+        ? attributes[field]
+        : this.readNumericField(player, field)),
       emphasized: field === "food" || field === "medical_supplies" || field === "parts",
     }));
   }
@@ -513,7 +607,7 @@ export class GameUiAdapter implements GameUiPort {
     };
   }
 
-  /** 按设施、工作、交易和招募四组构造经营页面。 */
+  /** 按配置汇总设施、工作、交易、招募及避难所保障页面。 */
   private managementCategoryViews(state: GameState): UiManagementCategoryView[] {
     if (
       isEnded(state)
@@ -524,14 +618,21 @@ export class GameUiAdapter implements GameUiPort {
     }
     const options = this.application.managementOptions();
     return this.presentation.interface.pages.management_categories.map((category) => {
-      const categoryOptions = options.filter((option) => this.outerCategory(option) === category.id);
+      const configuredActionIds = category.action_ids ?? [];
+      const categoryOptions = configuredActionIds.length > 0
+        ? configuredActionIds.map((actionId) =>
+            this.managementSupplyOptionView(category.id, actionId, state),
+          )
+        : options
+            .filter((option) => this.outerCategory(option) === category.id)
+            .map((option) => this.managementOptionView(option));
       return {
         id: category.id,
         label: category.label,
         description: this.application.content.text("management_category_prompt"),
         disabled: categoryOptions.length === 0,
         tone: "primary",
-        options: categoryOptions.map((option) => this.managementOptionView(option)),
+        options: categoryOptions,
       };
     });
   }
@@ -567,9 +668,134 @@ export class GameUiAdapter implements GameUiPort {
     });
   }
 
+  /** 把统一仓库投影为可显示装备状态的库存清单。 */
+  private warehouseItemViews(state: GameState): UiWarehouseItemView[] {
+    return this.application.warehouseItems().map((item) => ({
+      id: item.itemId,
+      name: item.name,
+      category: item.category,
+      categoryLabel: item.categoryLabel,
+      quantity: item.quantity,
+      carryable: item.carryable,
+      equippable: item.category === "weapon" || item.category === "armor",
+      equipped: state.inventory.equipped_weapon_id === item.itemId
+        || state.inventory.equipped_armor_id === item.itemId,
+      description: item.description,
+    }));
+  }
+
+  /** 把研发服务结果转换为不泄漏可变领域状态的页面模型。 */
+  private researchProjectViews(): UiResearchProjectView[] {
+    return this.application.researchProjects().map((project) => ({
+      id: project.projectId,
+      name: project.name,
+      description: project.description,
+      completed: project.completed,
+      available: project.available,
+      costDescription: project.costDescription,
+      expeditionStepBonus: project.expeditionStepBonus,
+    }));
+  }
+
+  /** 把制作服务结果转换为配方页面模型。 */
+  private craftingRecipeViews(): UiCraftingRecipeView[] {
+    return this.application.craftingRecipes().map((recipe) => ({
+      id: recipe.recipeId,
+      name: recipe.name,
+      description: recipe.description,
+      available: recipe.available,
+      unlocked: recipe.unlocked,
+      costDescription: recipe.costDescription,
+      outputItemId: recipe.outputItemId,
+      outputQuantity: recipe.outputQuantity,
+    }));
+  }
+
+  /** 把可用伙伴投影为远征准备选项。 */
+  private expeditionCompanionViews(): UiExpeditionCompanionView[] {
+    return this.application.expeditionCompanions().map((companion) => ({
+      id: companion.companionId,
+      name: companion.name,
+      traitName: companion.traitName,
+      trust: companion.trust,
+      stepBonus: companion.stepBonus,
+    }));
+  }
+
+  /** 把可调拨库存投影为远征携带物选项。 */
+  private expeditionCarryItemViews(): UiExpeditionCarryItemView[] {
+    return this.application.expeditionCarryItems().map((item) => ({
+      id: item.itemId,
+      name: item.name,
+      availableQuantity: item.availableQuantity,
+      stepBonusPerUnit: item.stepBonusPerUnit,
+    }));
+  }
+
+  /** 把当前远征上下文转换为状态页摘要。 */
+  private expeditionStatusView(): UiExpeditionStatusView | null {
+    const status = this.application.expeditionStatus();
+    if (status === null) return null;
+    return {
+      cityId: status.cityId,
+      cityName: this.application.content.city(status.cityId).name,
+      remainingSteps: status.remainingSteps,
+      maximumSteps: status.maximumSteps,
+      eventsResolved: status.eventsResolved,
+      companionIds: [...status.companionIds],
+      carriedItems: { ...status.carriedItems },
+      loot: { ...status.loot },
+      itemNames: { ...status.itemNames },
+    };
+  }
+
+  /** 把周档案和其中的通讯时间戳转换为历史页面模型。 */
+  private weeklyArchiveViews(): UiWeeklyArchiveView[] {
+    return this.application.weeklyArchives().map((archive) => ({
+      weekNumber: archive.week_number,
+      startDateLabel: this.formatDate(
+        archive.start_date.year,
+        archive.start_date.month,
+        archive.start_date.day,
+      ),
+      endDateLabel: this.formatDate(
+        archive.end_date.year,
+        archive.end_date.month,
+        archive.end_date.day,
+      ),
+      summary: archive.summary,
+      entries: archive.entries.map((entry) => this.historyEntryView(entry)),
+    }));
+  }
+
+  /** 格式化一条历史通讯记录的日期、时刻和来源回合。 */
+  private historyEntryView(
+    entry: ReturnType<GameApplication["weeklyArchives"]>[number]["entries"][number],
+  ): UiHistoryEntryView {
+    return {
+      survivalDay: entry.survival_day,
+      turnNumber: entry.turn_number,
+      dateLabel: this.formatDate(entry.clock.year, entry.clock.month, entry.clock.day),
+      timeLabel: formatTemplate(this.presentation.interface.h5.time_format, {
+        hour: entry.clock.hour,
+      }),
+      message: entry.message,
+    };
+  }
+
+  /** 使用统一日期模板格式化不带时刻的游戏日期。 */
+  private formatDate(year: number, month: number, day: number): string {
+    return formatTemplate(this.presentation.interface.h5.date_format, {
+      year,
+      month,
+      day,
+      hour: 0,
+    });
+  }
+
   /** 按 Web 行动分组装配指挥台按钮，并应用阻塞状态。 */
   private actionGroupViews(state: GameState): UiActionGroupView[] {
-    const actions = new Map(this.presentation.actions.map((action) => [action.id, action]));
+    const actions = new Map(this.actionPresentations().map((action) => [action.id, action]));
     return this.webConfig.action_groups.map((group) => ({
       id: group.id,
       label: group.label,
@@ -626,6 +852,43 @@ export class GameUiAdapter implements GameUiPort {
         : this.application.content.text("management_failed"),
       tone: option.available ? "primary" : "default",
     };
+  }
+
+  /** 把配置化基础行动包装为避难所管理中的二级选项。 */
+  private managementSupplyOptionView(
+    categoryId: string,
+    actionId: string,
+    state: GameState,
+  ): UiOptionView {
+    const action = this.actionPresentations().find((candidate) => candidate.id === actionId);
+    if (action === undefined) {
+      throw new Error(this.application.content.text("unknown_action", {
+        action_id: actionId,
+      }));
+    }
+    const blockedReason = this.actionBlockedReason(state, actionId);
+    return {
+      id: `${categoryId}${MANAGEMENT_OPTION_SEPARATOR}${actionId}`,
+      label: action.label,
+      description: "",
+      disabled: blockedReason !== null,
+      disabledReason: blockedReason ?? undefined,
+      tone: this.actionTone(action.style),
+    };
+  }
+
+  /** 校验管理页提交的配置化基础行动，未命中时交由领域经营命令处理。 */
+  private resolveManagementSupplyAction(
+    categoryId: string,
+    uiOptionId: string,
+  ): string | null {
+    const category = this.presentation.interface.pages.management_categories.find(
+      (candidate) => candidate.id === categoryId,
+    );
+    const actionId = category?.action_ids?.find(
+      (candidate) => `${categoryId}${MANAGEMENT_OPTION_SEPARATOR}${candidate}` === uiOptionId,
+    );
+    return actionId ?? null;
   }
 
   /** 校验 UI 经营项目仍与当前领域选项一致。 */
@@ -695,7 +958,12 @@ export class GameUiAdapter implements GameUiPort {
 
   /** 返回主配置中的行动标签。 */
   private actionLabel(actionId: string): string {
-    return this.presentation.actions.find((action) => action.id === actionId)?.label ?? "";
+    return this.actionPresentations().find((action) => action.id === actionId)?.label ?? "";
+  }
+
+  /** 合并共享领域动作与 H5 专属页面入口，不污染旧 Python 界面配置。 */
+  private actionPresentations(): readonly GameActionPresentation[] {
+    return [...this.presentation.actions, ...this.webConfig.actions];
   }
 
   /** 返回故事胜利标题或配置化失败页标题。 */
@@ -718,13 +986,44 @@ export class GameUiAdapter implements GameUiPort {
     return state;
   }
 
-  /** 追加行动日志并按配置保留最近记录。 */
-  private appendMessages(messages: readonly string[]): void {
-    this.logs.push(...messages.filter((message) => message.trim().length > 0));
-    const limit = this.presentation.interface.h5.log_limit;
-    if (this.logs.length > limit) {
-      this.logs = this.logs.slice(this.logs.length - limit);
+  /** 按报告类型同步持久通讯，并把存档或失败提示留在当前会话。 */
+  private updateLogsFromReport(command: GameUiCommand, report: ActionReport): void {
+    if (!report.stateChanged) {
+      this.appendSessionMessages(report.messages);
+      return;
     }
+    if (
+      command.type === "start_game"
+      || command.type === "load_game"
+      || command.type === "rollback_checkpoint"
+    ) {
+      this.sessionLogs = [];
+    }
+    this.syncPersistentMessages();
+    if (command.type === "load_game") {
+      this.appendSessionMessages(report.messages);
+    }
+  }
+
+  /** 从应用聚合根恢复已持久化通讯，避免成功报告重复显示。 */
+  private syncPersistentMessages(): void {
+    this.persistentLogs = [...this.application.communicationMessages()];
+  }
+
+  /** 追加不进入存档的会话提示，并单独执行容量钳制。 */
+  private appendSessionMessages(messages: readonly string[]): void {
+    this.sessionLogs.push(...messages.filter((message) => message.trim().length > 0));
+    const limit = this.presentation.interface.h5.log_limit;
+    if (this.sessionLogs.length > limit) {
+      this.sessionLogs = this.sessionLogs.slice(this.sessionLogs.length - limit);
+    }
+  }
+
+  /** 合并持久通讯和会话提示，并只向 UI 暴露配置化最大条数。 */
+  private visibleLogs(): string[] {
+    const combined = [...this.persistentLogs, ...this.sessionLogs];
+    const limit = this.presentation.interface.h5.log_limit;
+    return combined.length > limit ? combined.slice(combined.length - limit) : combined;
   }
 
   /** 向所有订阅者推送同一份不可变快照。 */

@@ -7,12 +7,13 @@
   "game": {
     "title": "避难所：余烬纪元",
     "story": "2166年，行动敏捷、成群出没的感染者令世界各地接连沦陷。人类重新启用废弃防空洞，才保住最后的火种。你是B-17避难所的所长：粮食即将耗尽，一段来自凌晨三点十七分的广播却警告你‘粮食会咬人’。从最后一锅粥到白塔顶端，你将与伙伴穿越四章、十三个连续场景，面对三名首领，并决定幸存者、感染者与整座晦城的未来。",
-    "tutorial": "欢迎来到B-17避难所，所长。请先记住：活下去是基础，但你怎样活下去，会决定所有人的结局。\n\n【生存与时间】普通探索、物品、经营和剧情结算会推进世界时间，并结算饥饿与避难所损耗。个人饥饿值达到150、群体饥饿值达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。食物可降低个人或群体饥饿，医疗用品治疗伤势，零件用于修复和建设。\n\n【四章主线】点击‘剧情任务’推进十三个连续场景。选择可能要求属性、资源、设施、伙伴状态或关键物品；锁定选择不会扣资源或消耗回合。主线包含《饥饿会说话》《尸群在唱谁的名字》《人比末日更会撒谎》《余烬之后是什么》四章。\n\n【三场Boss】铁轨屠夫、鸣钟母体与无冕王都有多条处理路线。战斗可执行攻击、防御、专注、使用医疗用品和撤退。单个战斗回合不会推进世界时间；整场胜利结算或成功撤退才消耗一次世界行动。战斗中可以保存，Boss生命、回合与路线都会保留。\n\n【避难所管理】设施升级会消耗零件和金币，提供即时效果或长期增益；工作会消耗时间并产生配置化收益与风险；交易可以买卖物资且不推进世界时间；招募需要满足条件并支付成本，每名幸存者只能加入一次。资源不足时不会偷偷消耗回合。\n\n【伙伴信任】豪菜、阳关、林岚和小满拥有独立信任与状态。帮助、怀疑或牺牲他们会改变可用路线与能力。‘伙伴档案’会显示当前状态和秘密提示；多人模式下两名所长共享伙伴、设施与主线进度。\n\n【线索与结局】隐藏账本、病历、频率、名单和维护密钥会开启非暴力路线。游戏有北行余烬、白塔成灰、静默王冠、长夜守望和秘密结局再燃黎明。最终结果会综合人性、证据、信任、线索、避难所状态及三场Boss的处理方式。\n\n【探索与存档】A至H市可获得食物、药品、金币、零件和随机事件。已经抽取的事件不能通过保存或读取免费重抽。存档会保存剧情、伙伴、设施、战斗和待结算探索；旧v1存档读取后会迁移为v2状态。准备好后，先打开‘剧情任务’，决定最后一锅粥该留给谁。"
+    "tutorial": "欢迎来到B-17避难所，所长。活下去只是基础；你选择怎样活下去，才会决定所有人的结局。\n\n【生存与时间】只有探索、战斗、设施建设、工作和修复等高消耗行动会增加饥饿；剧情阅读、交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【远征步数】探索前先选择城市、同行伙伴与携带物。伙伴词条、信任、研发成果和特定物资会提高最大步数；危险城市每次事件消耗更多步数。尚有步数时可继续深入或安全返程；步数不足会被尸群强制逼退，只保住20%本次战利品，所长生命会降到7至45。\n\n【仓库、研发与制作】仓库统一显示资源和制作物，已装备的武器、防具不计入可用库存。研究台消耗资料与材料解锁技术，制作工坊据此生产远征物资、武器和防具。失败的研发或制作不会扣除任何材料。\n\n【四章主线】点击‘剧情任务’推进十三个连续场景。选择可能要求属性、资源、设施、伙伴状态或关键物品；锁定选择不会扣资源或消耗回合。主线包含《饥饿会说话》《尸群在唱谁的名字》《人比末日更会撒谎》《余烬之后是什么》四章。\n\n【三场Boss】铁轨屠夫、鸣钟母体与无冕王都有多条处理路线。战斗可执行攻击、防御、专注、使用医疗用品和撤退。单个战斗回合不会推进世界时间；整场胜利结算或成功撤退才消耗一次世界行动。\n\n【避难所管理】供餐、修复、设施、工作、交易和招募统一收在避难所管理中。设施提供即时效果或长期增益；工作产生收益与风险；交易不推进时间；资源不足时不会偷偷消耗回合。\n\n【伙伴、线索与结局】豪菜、阳关、林岚和小满拥有独立信任与状态。隐藏账本、病历、频率、名单和维护密钥会开启非暴力路线。最终结果会综合人性、证据、信任、线索、避难所状态及三场Boss的处理方式。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录，随后清空开始新一周。系统每十个生存日建立检查点并自动保存一次；ESC功能菜单仍可随时手动存档、设置、回档或退出。已经抽取的探索事件不能通过保存或读取免费重抽，旧v1、v2存档会安全迁移为v3状态。"
   },
   "paths": {
     "events": "config/events.json",
     "story": "config/story.json",
     "save_migration_v1_to_v2": "config/save_migrations/v1_to_v2.json",
+    "save_migration_v2_to_v3": "config/save_migrations/v2_to_v3.json",
     "save": "saves/savegame.json",
     "concept_art": "assets/menu_concept.png",
     "cover_art": "assets/cover_art.png"
@@ -195,6 +196,7 @@
       "option_details_block_format": "{body}\n\n【选项情报】\n{details}",
       "option_detail_format": "• {label}：{description}",
       "management_categories": [
+        {"id": "support", "label": "生存保障", "action_ids": ["feed_shelter", "repair_shelter"]},
         {"id": "facility", "label": "设施升级"},
         {"id": "job", "label": "安排工作"},
         {"id": "trade", "label": "幸存者交易"},
@@ -336,13 +338,42 @@
   },
   "mode_labels": {
     "single": "单人求生",
-    "multiplayer": "本地双人合作"
+    "multiplayer": "本地双人合作",
+    "story": "剧情沉浸"
   },
   "rules": {
     "companion_secret_unlock_trust": 2,
     "player_counts": {
       "single": {"minimum": 1, "maximum": 1},
-      "multiplayer": {"minimum": 2, "maximum": 2}
+      "multiplayer": {"minimum": 2, "maximum": 2},
+      "story": {"minimum": 1, "maximum": 1}
+    },
+    "mode_survival_cost_percent": {
+      "single": 100,
+      "multiplayer": 100,
+      "story": 35
+    },
+    "default_survival_action_type": "default",
+    "action_hunger_costs": {
+      "default": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
+      "story": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
+      "exploration": {"player_hunger_gain": 4, "group_hunger_gain_per_person": 2},
+      "combat": {"player_hunger_gain": 3, "group_hunger_gain_per_person": 2},
+      "facility": {"player_hunger_gain": 3, "group_hunger_gain_per_person": 1},
+      "job": {"player_hunger_gain": 4, "group_hunger_gain_per_person": 2},
+      "recruit": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
+      "use_food": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
+      "use_medicine": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
+      "feed_shelter": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
+      "repair_shelter": {"player_hunger_gain": 3, "group_hunger_gain_per_person": 1},
+      "research": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
+      "crafting": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
+      "equipment": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0}
+    },
+    "timeline": {
+      "weekly_archive_interval_days": 7,
+      "checkpoint_interval_days": 10,
+      "communication_log_max_entries": 256
     },
     "time": {
       "start_year": 2166,
@@ -410,6 +441,19 @@
     }
   },
   "defaults": {
+    "survival_days": 0,
+    "communication_log": [],
+    "weekly_archives": [],
+    "checkpoint": null,
+    "inventory": {
+      "crafted_items": {},
+      "equipped_weapon_id": null,
+      "equipped_armor_id": null
+    },
+    "research": {
+      "completed_project_ids": []
+    },
+    "expedition": null,
     "player": {
       "health": 100,
       "attack": 20,
@@ -495,6 +539,7 @@
     "welcome_log": "通讯接通。避难所等待你的第一项指令。",
     "new_game_started": "{player_name}成为避难所所长，生存行动正式开始。",
     "multiplayer_started": "{player_names}组成双人指挥组，将轮流执行生存行动。",
+    "story_mode_started": "{player_name}进入剧情沉浸模式，生存损耗降低，但命运的代价不会消失。",
     "save_success": "进度已安全保存到本地。",
     "no_save": "还没有可读取的存档，请先开始新的游戏。",
     "load_success": "存档读取成功，欢迎回来，所长。",
@@ -566,6 +611,19 @@
     "daily_food_produced": "水培温室完成本日收获，获得{produced}份食物。",
     "turn_month": "避难所迎来了新的一月。",
     "turn_year": "你和朋友们又共同撑过了一年。",
+    "weekly_summary_format": "第{week_number}周：已归档{entry_count}条通讯，避难所耐久{shelter_health}，群体饥饿{group_hunger}，已完成主线场景{completed_scenes}处。",
+    "weekly_archive_notice": "第{week_number}周通讯已归档，新的七日记录开始。",
+    "checkpoint_created": "第{survival_days}个生存日检查点已建立。",
+    "checkpoint_rollback_success": "已回档至第{survival_days}个生存日的检查点。",
+    "checkpoint_rollback_unavailable": "尚未抵达第{required_days}个生存日，没有可用检查点。",
+    "exploration_prepared_log": "发现【{title}】：{intro}",
+    "expedition_leader_invalid": "远征所长状态无效，无法继续结算。",
+    "unknown_survival_action_type": "未配置行动类型的饥饿结算：{action_type}",
+    "invalid_action_hunger_config": "行动类型 {action_type} 的饥饿增量必须是非负整数。",
+    "invalid_mode_survival_cost": "游戏模式 {mode} 缺少有效的生存损耗比例。",
+    "invalid_survival_turn_count": "生存回合数必须是正整数。",
+    "invalid_timeline_rule": "时间线配置必须是正整数：{rule_key}",
+    "missing_failure_ending": "缺少失败结局配置：{failure_id}",
     "next_player": "轮到 {player_name} 下达指令。",
     "medicine_success": "消耗{cost}份医疗用品，恢复了{healed}点生命。",
     "medicine_failed": "医疗用品不足，需要至少{cost}份。",

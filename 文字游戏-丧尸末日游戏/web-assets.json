@@ -5,6 +5,18 @@
       "target": "public/assets/cover_art.png"
     },
     {
+      "source": "assets/ui/menu_button_idle.png",
+      "target": "public/assets/ui/menu_button_idle.png"
+    },
+    {
+      "source": "assets/ui/menu_button_hover.png",
+      "target": "public/assets/ui/menu_button_hover.png"
+    },
+    {
+      "source": "assets/ui/menu_button_pressed.png",
+      "target": "public/assets/ui/menu_button_pressed.png"
+    },
+    {
       "source": "config/game_config.json",
       "target": "public/config/game_config.json"
     },
@@ -19,6 +31,10 @@
     {
       "source": "config/save_migrations/v1_to_v2.json",
       "target": "public/config/save_migrations/v1_to_v2.json"
+    },
+    {
+      "source": "config/save_migrations/v2_to_v3.json",
+      "target": "public/config/save_migrations/v2_to_v3.json"
     },
     {
       "source": "config/web_config.json",

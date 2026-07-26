@@ -26,6 +26,15 @@ export function createDocumentPage(
     testId,
     documentView.title,
     onClose,
+    [
+      {
+        id: "close",
+        testId: `${testId}-close`,
+        label: closeLabel,
+        tone: documentView.tone ?? "primary",
+        onClick: onClose,
+      },
+    ],
   );
   const body = factory.autoText(page.content, {
     testId: `${testId}-content`,
@@ -35,21 +44,6 @@ export function createDocumentPage(
     width: page.contentWidth,
     fontSize: config.typography.body_size,
   });
-  const buttonY = body.height + layout.sectionGap;
-  const buttonWidth = Math.min(
-    page.contentWidth,
-    config.layout.cover.menu_width,
-  );
-  factory.button(page.content, {
-    testId: `${testId}-close`,
-    label: closeLabel,
-    x: (page.contentWidth - buttonWidth) / 2,
-    y: buttonY,
-    width: buttonWidth,
-    height: config.controls.button_height,
-    tone: documentView.tone ?? "primary",
-    onClick: onClose,
-  });
-  page.scroll.setContentHeight(buttonY + config.controls.button_height);
+  page.scroll.setContentHeight(body.height + layout.sectionGap);
   return page;
 }

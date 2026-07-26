@@ -1,6 +1,7 @@
 import { createGameApplication } from "./application";
 import type { WebGameConfig } from "./config/types";
 import type { LayaRuntimeGlobal } from "./engine/runtimeLoader";
+import { createBrowserUiSettingsRepository } from "./infrastructure";
 import { GameUiAdapter } from "./presentation";
 import { GameShell } from "./ui";
 
@@ -46,7 +47,17 @@ export async function mountGame(
   mountedGame?.destroy();
   const application = createGameApplication();
   const adapter = new GameUiAdapter(application, config);
-  const shell = new GameShell(runtime, stage, config, adapter);
+  const settingsRepository = createBrowserUiSettingsRepository(
+    config.storage.settings_key,
+    config.storage.settings_schema_version,
+  );
+  const shell = new GameShell(
+    runtime,
+    stage,
+    config,
+    adapter,
+    settingsRepository,
+  );
   await shell.mount();
 
   const debug: ShelterGameDebugHandle = Object.freeze({

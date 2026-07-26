@@ -1,5 +1,9 @@
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
 import type { GameUiConfig } from "../../styles/GameTheme";
+import {
+  createPageActionBar,
+  type PageActionSpec,
+} from "../components/PageActionBar";
 import { ScrollRegion } from "../components/ScrollRegion";
 import type { UiFactory } from "../components/UiFactory";
 import type {
@@ -35,61 +39,84 @@ export class PageScaffold implements PageView {
     testId: string,
     title: string,
     onBack: () => void,
+    footerActions?: readonly PageActionSpec[],
   ) {
     this.root = factory.container(testId);
     this.root.size(layout.stageWidth, layout.stageHeight);
+    this.root.mouseEnabled = true;
     this.root.graphics.drawRect(
       0,
       0,
       layout.stageWidth,
       layout.stageHeight,
-      config.theme.background,
+      config.theme.scrim,
     );
     const pageWidth = Math.min(
       layout.contentWidth,
       config.layout.page.max_content_width,
     );
     const pageLeft = (layout.stageWidth - pageWidth) / 2;
-    const headerTop = layout.safeArea.top + layout.outerPadding;
-    const backWidth = Math.max(
-      config.controls.minimum_touch_size,
-      config.controls.compact_button_height * 2,
-    );
-    factory.text(this.root, {
+    const pageTop = layout.isMobile
+      ? layout.safeArea.top + config.layout.mobile.sheet_top_margin
+      : layout.safeArea.top + layout.outerPadding;
+    const pageBottom =
+      layout.stageHeight - layout.safeArea.bottom - layout.outerPadding;
+    const minimumPageHeight =
+      config.layout.page.header_height +
+      config.layout.page.footer_height +
+      config.controls.minimum_touch_size;
+    const pageHeight = Math.max(minimumPageHeight, pageBottom - pageTop);
+    const surface = factory.panel(this.root, {
+      testId: `${testId}-surface`,
+      x: pageLeft,
+      y: pageTop,
+      width: pageWidth,
+      height: pageHeight,
+      translucent: true,
+      skin: config.assets.skins.page_surface,
+    });
+    factory.text(surface, {
       testId: `${testId}-title`,
       text: title,
-      x: pageLeft,
-      y: headerTop,
-      width: pageWidth - backWidth - layout.sectionGap,
+      x: config.layout.page.body_padding,
+      y: 0,
+      width: pageWidth - config.layout.page.body_padding * 2,
       height: config.layout.page.header_height,
       fontSize: config.typography.page_title_size,
       color: config.theme.accent,
       bold: true,
       valign: "middle",
     });
-    factory.button(this.root, {
-      testId: `${testId}-back`,
-      label: config.texts.back,
-      x: pageLeft + pageWidth - backWidth,
-      y: headerTop +
-        (config.layout.page.header_height - config.controls.compact_button_height) / 2,
-      width: backWidth,
-      height: config.controls.compact_button_height,
-      onClick: onBack,
-    });
-    const bodyTop = headerTop + config.layout.page.header_height;
-    const bodyBottom =
-      layout.stageHeight - layout.safeArea.bottom - layout.outerPadding;
+    const actions = footerActions ?? [
+      {
+        id: "back",
+        testId: `${testId}-back`,
+        label: config.texts.back,
+        onClick: onBack,
+      },
+    ];
+    createPageActionBar(
+      factory,
+      config,
+      surface,
+      `${testId}-actions`,
+      pageWidth,
+      pageHeight,
+      actions,
+    );
+    const bodyTop = config.layout.page.header_height;
+    const bodyBottom = pageHeight - config.layout.page.footer_height;
     const bodyHeight = Math.max(
       config.controls.minimum_touch_size,
       bodyBottom - bodyTop,
     );
-    const bodyPanel = factory.panel(this.root, {
+    const bodyPanel = factory.panel(surface, {
       testId: `${testId}-body`,
-      x: pageLeft,
+      x: 0,
       y: bodyTop,
       width: pageWidth,
       height: bodyHeight,
+      translucent: true,
     });
     const innerWidth = pageWidth - config.layout.page.body_padding * 2;
     const innerHeight = bodyHeight - config.layout.page.body_padding * 2;

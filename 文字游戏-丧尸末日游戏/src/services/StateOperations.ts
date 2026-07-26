@@ -1,9 +1,9 @@
 import type { NumericEffectConfig, NumericAmount } from "../domain/content";
 import { StateOperationError } from "../domain/errors";
 import {
-  activePlayer,
   findCompanion,
   type GameState,
+  type PlayerState,
 } from "../domain/game-state";
 import type { RandomSource } from "../domain/ports";
 
@@ -47,7 +47,11 @@ export class StateOperations {
   }
 
   /** 读取允许公开给配置的整数状态或派生计数。 */
-  public read(target: string, state: GameState): number {
+  public read(
+    target: string,
+    state: GameState,
+    playerIndex: number = state.active_player_index,
+  ): number {
     if (target === "story.key_item_count") {
       return state.story.key_items.length;
     }
@@ -76,7 +80,7 @@ export class StateOperations {
       const [root, field] = parts;
       if (root === "player" && field !== undefined) {
         this.requireAllowed(field, PLAYER_FIELDS, target);
-        return this.readNumericField(activePlayer(state), field, target);
+        return this.readNumericField(this.playerAt(state, playerIndex), field, target);
       }
       if (root === "shelter" && field !== undefined) {
         this.requireAllowed(field, SHELTER_FIELDS, target);
@@ -106,7 +110,12 @@ export class StateOperations {
   }
 
   /** 更新允许由配置修改的整数状态。 */
-  public write(target: string, value: number, state: GameState): void {
+  public write(
+    target: string,
+    value: number,
+    state: GameState,
+    playerIndex: number = state.active_player_index,
+  ): void {
     if (!Number.isInteger(value)) {
       throw new StateOperationError(`状态目标必须写入整数：${target}`);
     }
@@ -115,7 +124,7 @@ export class StateOperations {
       const [root, field] = parts;
       if (root === "player" && field !== undefined) {
         this.requireAllowed(field, PLAYER_FIELDS, target);
-        this.writeNumericField(activePlayer(state), field, value, target);
+        this.writeNumericField(this.playerAt(state, playerIndex), field, value, target);
         return;
       }
       if (root === "shelter" && field !== undefined) {
@@ -224,5 +233,14 @@ export class StateOperations {
     if (!allowed.has(field)) {
       throw new StateOperationError(`状态目标未列入白名单：${target}`);
     }
+  }
+
+  /** 返回指定索引的所长，拒绝远征存档中的越界领导者索引。 */
+  private playerAt(state: GameState, playerIndex: number): PlayerState {
+    const player = state.players[playerIndex];
+    if (player === undefined) {
+      throw new StateOperationError(`所长索引越界：${String(playerIndex)}`);
+    }
+    return player;
   }
 }

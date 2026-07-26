@@ -9,15 +9,38 @@ import type {
 } from "./laya/LayaRuntime";
 import { PageStack } from "./navigation/PageStack";
 import type { GameRoute } from "./navigation/PageStack";
+import {
+  resolveExpeditionEntryScreen,
+  resolveExpeditionProgressScreen,
+} from "./navigation/ExpeditionNavigation";
 import { createChoicePage } from "./pages/ChoicePage";
 import { createCompanionsPage } from "./pages/CompanionsPage";
 import { createConfirmPage } from "./pages/ConfirmPage";
+import { ConnectionPage } from "./pages/ConnectionPage";
 import { CoverPage } from "./pages/CoverPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { createDocumentPage } from "./pages/DocumentPage";
+import {
+  createExpeditionPreparePage,
+  createExpeditionStatusPage,
+  type ExpeditionDraft,
+} from "./pages/ExpeditionPages";
 import { createNameInputPage } from "./pages/NameInputPage";
 import type { PageView } from "./pages/PageView";
 import { createSuppliesPage } from "./pages/SuppliesPage";
+import {
+  createCraftingPage,
+  createHistoryPage,
+  createResearchPage,
+  createWarehousePage,
+} from "./pages/SystemFeaturePages";
+import {
+  createCreditsPage,
+  createExitConfirmPage,
+  createFunctionMenuPage,
+  createRollbackConfirmPage,
+  createSettingsPage,
+} from "./pages/SystemMenuPages";
 import type {
   GameMode,
   GameScreenId,
@@ -30,6 +53,16 @@ import type {
   UiOptionView,
   UiPromptView,
 } from "./ports/GameUiPort";
+import type {
+  UiPreferences,
+  UiSettingsPort,
+} from "./ports/UiSettingsPort";
+
+/** 已创建页面与其稳定路由的绑定。 */
+interface RenderedPage {
+  readonly route: GameRoute;
+  readonly view: PageView;
+}
 
 /**
  * LayaAir 游戏界面入口，只依赖应用层提供的 GameUiPort。
@@ -42,13 +75,18 @@ export class GameShell {
   private readonly factory: UiFactory;
   private readonly host: LayaSpriteLike;
   private readonly navigation: PageStack;
+  private readonly settingsPort: UiSettingsPort;
   private snapshot: GameUiSnapshot | null;
-  private currentPage: PageView | null;
+  private renderedPages: RenderedPage[];
+  private preferences: UiPreferences;
   private unsubscribe: (() => void) | null;
   private canLoad: boolean;
   private mounted: boolean;
   private executing: boolean;
   private browserGuardInstalled: boolean;
+  private exitVerificationTimer: ReturnType<typeof setTimeout> | null;
+  private connectionTimer: ReturnType<typeof setTimeout> | null;
+  private expeditionDraft: ExpeditionDraft;
 
   /**
    * 保存舞台、配置和倒置端口，但不在构造阶段触发领域请求。
@@ -58,11 +96,13 @@ export class GameShell {
     stage: unknown,
     config: GameUiConfig,
     port: GameUiPort,
+    settingsPort: UiSettingsPort,
   ) {
     this.runtime = expectLayaRuntime(runtime);
     this.stage = expectLayaStage(stage);
     this.config = config;
     this.port = port;
+    this.settingsPort = settingsPort;
     this.factory = new UiFactory(
       this.runtime,
       config.theme,
@@ -72,12 +112,18 @@ export class GameShell {
     this.host = this.factory.container("game-ui-root");
     this.navigation = new PageStack({ screen: "menu" });
     this.snapshot = null;
-    this.currentPage = null;
+    this.renderedPages = [];
+    this.preferences = settingsPort.load({
+      reducedMotion: config.motion.reduced_motion,
+    });
     this.unsubscribe = null;
     this.canLoad = false;
     this.mounted = false;
     this.executing = false;
     this.browserGuardInstalled = false;
+    this.exitVerificationTimer = null;
+    this.connectionTimer = null;
+    this.expeditionDraft = emptyExpeditionDraft();
   }
 
   /**
@@ -100,7 +146,7 @@ export class GameShell {
     ]);
     this.snapshot = snapshot;
     this.canLoad = canLoad;
-    this.render();
+    this.render(true);
   }
 
   /**
@@ -112,8 +158,9 @@ export class GameShell {
     this.stage.off(this.runtime.Event.RESIZE, this, this.handleResize);
     this.stage.off(this.runtime.Event.KEY_DOWN, this, this.handleKeyDown);
     this.removeBrowserBackGuard();
-    this.currentPage?.destroy();
-    this.currentPage = null;
+    this.clearExitVerificationTimer();
+    this.clearConnectionTimer();
+    this.destroyRenderedPages();
     this.host.offAll();
     this.host.destroy(true);
     const browserWindow = getBrowserWindow();
@@ -137,7 +184,7 @@ export class GameShell {
   private readonly handleSnapshot = (snapshot: GameUiSnapshot): void => {
     this.snapshot = snapshot;
     if (this.mounted) {
-      this.render();
+      this.render(true);
     }
   };
 
@@ -146,16 +193,16 @@ export class GameShell {
    */
   private readonly handleResize = (): void => {
     if (this.mounted) {
-      this.render();
+      this.render(true);
     }
   };
 
   /**
-   * 把 Escape 键转发到与页面返回按钮一致的语义。
+   * 把 Escape 键转换为功能菜单的打开或逐层关闭语义。
    */
   private readonly handleKeyDown = (event?: unknown): void => {
     if (isEscapeEvent(event)) {
-      this.requestBack();
+      this.toggleFunctionMenu();
     }
   };
 
@@ -172,29 +219,67 @@ export class GameShell {
   };
 
   /**
-   * 根据页面栈、快照和当前断点重建单一页面。
+   * 按路由前缀增量对齐覆盖式显示树；刷新时重建全部页面快照。
    */
-  private render(): void {
+  private render(refreshAll = false): void {
     if (this.snapshot === null) {
       return;
     }
-    this.currentPage?.destroy();
-    this.currentPage = null;
-    this.host.removeChildren();
     this.host.size(this.stage.width, this.stage.height);
     const layout = resolveResponsiveLayout(
       this.stage.width,
       this.stage.height,
       this.config,
     );
-    const page = this.createPage(this.navigation.current(), layout, this.snapshot);
-    this.currentPage = page;
-    this.host.addChild(page.root);
+    if (refreshAll) {
+      this.destroyRenderedPages();
+    }
+    const routes = this.navigation.entries();
+    let sharedDepth = 0;
+    while (
+      sharedDepth < this.renderedPages.length &&
+      sharedDepth < routes.length &&
+      this.renderedPages[sharedDepth]?.route === routes[sharedDepth]
+    ) {
+      sharedDepth += 1;
+    }
+    for (
+      let index = this.renderedPages.length - 1;
+      index >= sharedDepth;
+      index -= 1
+    ) {
+      this.renderedPages[index]?.view.destroy();
+    }
+    this.renderedPages.length = sharedDepth;
+    for (let index = sharedDepth; index < routes.length; index += 1) {
+      const route = routes[index];
+      if (route === undefined) {
+        continue;
+      }
+      const view = this.createPage(route, layout, this.snapshot);
+      this.host.addChild(view.root);
+      this.renderedPages.push({ route, view });
+    }
+    const topIndex = this.renderedPages.length - 1;
+    this.renderedPages.forEach((entry, index) => {
+      entry.view.root.visible = true;
+      entry.view.root.mouseEnabled = index === topIndex;
+      entry.view.root.zOrder = index;
+    });
     const browserWindow = getBrowserWindow();
     if (browserWindow !== null) {
       browserWindow.document.body.dataset.gameScreen = this.navigation.current().screen;
       browserWindow.document.body.dataset.gameLayout = layout.isMobile ? "mobile" : "desktop";
     }
+  }
+
+  /** 销毁全部已渲染页面并清空宿主显示列表。 */
+  private destroyRenderedPages(): void {
+    for (let index = this.renderedPages.length - 1; index >= 0; index -= 1) {
+      this.renderedPages[index]?.view.destroy();
+    }
+    this.renderedPages = [];
+    this.host.removeChildren();
   }
 
   /**
@@ -210,6 +295,8 @@ export class GameShell {
         return this.createCover(layout, snapshot);
       case "name_input":
         return this.createNameInput(route, layout, snapshot);
+      case "connection":
+        return this.createConnection(layout);
       case "dashboard":
         return this.createDashboard(layout, snapshot);
       case "story":
@@ -228,6 +315,18 @@ export class GameShell {
         return this.createCompanions(layout, snapshot);
       case "supplies":
         return this.createSupplies(layout, snapshot);
+      case "warehouse":
+        return this.createWarehouse(layout, snapshot);
+      case "research":
+        return this.createResearch(layout, snapshot);
+      case "crafting":
+        return this.createCrafting(layout, snapshot);
+      case "expedition_prepare":
+        return this.createExpeditionPrepare(layout, snapshot);
+      case "expedition_status":
+        return this.createExpeditionStatus(layout, snapshot);
+      case "history":
+        return this.createHistory(layout, snapshot);
       case "tutorial":
         return this.createDocumentRoute(
           layout,
@@ -254,11 +353,27 @@ export class GameShell {
         );
       case "return_menu_confirm":
         return this.createReturnConfirm(layout);
+      case "function_menu":
+        return this.createFunctionMenu(layout, snapshot);
+      case "settings":
+        return this.createSettings(layout);
+      case "rollback_confirm":
+        return this.createRollbackConfirm(layout);
+      case "exit_confirm":
+        return this.createExitConfirm(layout);
+      case "credits":
+        return createCreditsPage(
+          this.runtime,
+          this.factory,
+          this.config,
+          layout,
+          this.goBack,
+        );
     }
   }
 
   /**
-   * 创建封面并绑定三个锁定入口。
+   * 创建封面并绑定六个配置化入口。
    */
   private createCover(
     layout: ResponsiveLayout,
@@ -277,6 +392,15 @@ export class GameShell {
           void this.loadGame();
         },
         startMultiplayer: (): void => { this.openNameInput("multiplayer"); },
+        startStory: (): void => { this.openNameInput("story"); },
+        showCredits: (): void => {
+          this.navigation.push({ screen: "credits" });
+          this.render();
+        },
+        exitGame: (): void => {
+          this.navigation.push({ screen: "exit_confirm" });
+          this.render();
+        },
       },
     );
   }
@@ -322,6 +446,17 @@ export class GameShell {
         selectAction: this.handleDashboardAction,
         selectNavigation: this.handleBottomNavigation,
       },
+    );
+  }
+
+  /** 创建新游戏和读档成功后共用的配置化通讯过场。 */
+  private createConnection(layout: ResponsiveLayout): ConnectionPage {
+    return new ConnectionPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      this.connectionDuration(),
     );
   }
 
@@ -543,6 +678,127 @@ export class GameShell {
     );
   }
 
+  /** 创建真实库存页并将可装备项接入装备命令。 */
+  private createWarehouse(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createWarehousePage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.warehouseItems,
+      this.goBack,
+      (itemId): void => { void this.equipWarehouseItem(itemId); },
+    );
+  }
+
+  /** 创建研发页并提交选中的研发项目。 */
+  private createResearch(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createResearchPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.researchProjects,
+      this.goBack,
+      (projectId): void => { void this.completeResearch(projectId); },
+    );
+  }
+
+  /** 创建制作工坊页并提交选中配方。 */
+  private createCrafting(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createCraftingPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.craftingRecipes,
+      this.goBack,
+      (recipeId): void => { void this.craftItem(recipeId); },
+    );
+  }
+
+  /** 创建保留 UI 草稿的远征整备页。 */
+  private createExpeditionPrepare(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createExpeditionPreparePage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.cities,
+      snapshot.expeditionCompanions,
+      snapshot.expeditionCarryItems,
+      this.expeditionDraft,
+      {
+        back: this.goBack,
+        selectCity: this.selectExpeditionCity,
+        toggleCompanion: this.toggleExpeditionCompanion,
+        cycleItem: this.cycleExpeditionItem,
+        begin: (): void => { void this.beginExpedition(); },
+      },
+    );
+  }
+
+  /** 创建继续深入与安全返程的远征状态页。 */
+  private createExpeditionStatus(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const status = snapshot.expeditionStatus;
+    if (status === null) {
+      return this.createDocumentRoute(
+        layout,
+        "page-expedition-status-empty",
+        {
+          title: this.config.texts.expedition_status_title,
+          body: this.config.texts.expedition_unselected,
+        },
+        this.config.texts.back,
+        this.goBack,
+      );
+    }
+    return createExpeditionStatusPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      status,
+      snapshot.expeditionCompanions,
+      this.expeditionItemNameMap(snapshot),
+      {
+        back: this.goBack,
+        continueExpedition: (): void => { void this.continueExpedition(); },
+        safeReturn: (): void => { void this.safeReturnExpedition(); },
+      },
+    );
+  }
+
+  /** 创建按周封存的历史通讯页。 */
+  private createHistory(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createHistoryPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.weeklyArchives,
+      this.goBack,
+    );
+  }
+
   /**
    * 创建教程、消息或结局页面。
    */
@@ -589,6 +845,77 @@ export class GameShell {
     );
   }
 
+  /** 创建可由 Escape 随时叠加的功能菜单。 */
+  private createFunctionMenu(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createFunctionMenuPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.canRollback,
+      {
+        save: (): void => {
+          void this.saveGame();
+        },
+        openSettings: (): void => {
+          this.navigation.push({ screen: "settings" });
+          this.render();
+        },
+        openRollback: (): void => {
+          this.navigation.push({ screen: "rollback_confirm" });
+          this.render();
+        },
+        openExit: (): void => {
+          this.navigation.push({ screen: "exit_confirm" });
+          this.render();
+        },
+        close: this.goBack,
+      },
+    );
+  }
+
+  /** 创建持久化“减少动效”偏好的设置页。 */
+  private createSettings(layout: ResponsiveLayout): PageView {
+    return createSettingsPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      this.preferences,
+      this.toggleReducedMotion,
+      this.goBack,
+    );
+  }
+
+  /** 创建调用独立 rollback_checkpoint 命令的回档确认页。 */
+  private createRollbackConfirm(layout: ResponsiveLayout): PageView {
+    return createRollbackConfirmPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      (): void => {
+        void this.rollbackCheckpoint();
+      },
+      this.goBack,
+    );
+  }
+
+  /** 创建封面和游戏内共用的 Web 退出确认页。 */
+  private createExitConfirm(layout: ResponsiveLayout): PageView {
+    return createExitConfirmPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      this.requestWebExit,
+      this.goBack,
+    );
+  }
+
   /**
    * 打开指定模式的姓名输入页。
    */
@@ -623,6 +950,14 @@ export class GameShell {
     this.render();
   }
 
+  /** 根据待决事件和远征上下文打开正确的探索页。 */
+  private openExpedition(): void {
+    this.navigation.push({
+      screen: resolveExpeditionEntryScreen(this.requireSnapshot()),
+    });
+    this.render();
+  }
+
   /**
    * 处理指挥台行动入口。
    */
@@ -632,17 +967,28 @@ export class GameShell {
         this.openStory();
         return;
       case "explore":
-        this.navigation.push({
-          screen: this.requireSnapshot().explorationPrompt === null
-            ? "exploration_city"
-            : "exploration_event",
-        });
-        break;
+        this.openExpedition();
+        return;
       case "shelter_management":
         this.navigation.push({ screen: "management_categories" });
         break;
       case "companions":
         this.navigation.push({ screen: "companions" });
+        break;
+      case "warehouse":
+        this.navigation.push({ screen: "warehouse" });
+        break;
+      case "research":
+        this.navigation.push({ screen: "research" });
+        break;
+      case "crafting":
+        this.navigation.push({ screen: "crafting" });
+        break;
+      case "expedition":
+        this.openExpedition();
+        return;
+      case "history":
+        this.navigation.push({ screen: "history" });
         break;
       case "tutorial":
         this.navigation.push({ screen: "tutorial" });
@@ -672,12 +1018,8 @@ export class GameShell {
         this.openStory();
         return;
       case "explore":
-        this.navigation.push({
-          screen: this.requireSnapshot().explorationPrompt === null
-            ? "exploration_city"
-            : "exploration_event",
-        });
-        break;
+        this.openExpedition();
+        return;
       case "management":
         this.navigation.push({ screen: "management_categories" });
         break;
@@ -720,10 +1062,10 @@ export class GameShell {
     mode: GameMode,
     playerNames: readonly string[],
   ): Promise<void> {
+    this.expeditionDraft = emptyExpeditionDraft();
     await this.execute(
       { type: "start_game", mode, playerNames },
-      (): void => { this.navigation.reset({ screen: "dashboard" }); },
-      true,
+      (): void => { this.beginConnectionTransition(); },
     );
   }
 
@@ -731,15 +1073,44 @@ export class GameShell {
    * 从本地存档恢复游戏。
    */
   private async loadGame(): Promise<void> {
+    this.expeditionDraft = emptyExpeditionDraft();
     await this.execute(
       { type: "load_game" },
-      (): void => {
-        this.navigation.reset({ screen: "dashboard" });
-        if (this.requireSnapshot().ended) {
-          this.navigation.push({ screen: "ending" });
-        }
-      },
+      (): void => { this.beginConnectionTransition(); },
     );
+  }
+
+  /** 以配置化时长启动通讯过场，完成后进入指挥台或已生成结局。 */
+  private beginConnectionTransition(): void {
+    this.clearConnectionTimer();
+    this.navigation.reset({ screen: "connection" });
+    this.connectionTimer = globalThis.setTimeout(() => {
+      this.connectionTimer = null;
+      if (!this.mounted || this.navigation.current().screen !== "connection") {
+        return;
+      }
+      this.navigation.reset({ screen: "dashboard" });
+      if (this.requireSnapshot().ended) {
+        this.navigation.push({ screen: "ending" });
+      }
+      this.render(true);
+    }, this.connectionDuration());
+  }
+
+  /** 尊重减少动效偏好并只使用配置中的过场时长。 */
+  private connectionDuration(): number {
+    return this.preferences.reducedMotion
+      ? this.config.motion.page_transition_ms
+      : this.config.motion.connection_transition_ms;
+  }
+
+  /** 取消未完成的通讯过场计时。 */
+  private clearConnectionTimer(): void {
+    if (this.connectionTimer === null) {
+      return;
+    }
+    globalThis.clearTimeout(this.connectionTimer);
+    this.connectionTimer = null;
   }
 
   /**
@@ -748,6 +1119,87 @@ export class GameShell {
   private async saveGame(): Promise<void> {
     await this.execute({ type: "save_game" }, (): void => undefined, true);
     this.canLoad = await Promise.resolve(this.port.canLoadGame());
+  }
+
+  /** 回到最近领域检查点，禁止退化为普通读档命令。 */
+  private async rollbackCheckpoint(): Promise<void> {
+    await this.execute(
+      { type: "rollback_checkpoint" },
+      (): void => { this.navigation.reset({ screen: "dashboard" }); },
+      true,
+    );
+    this.canLoad = await Promise.resolve(this.port.canLoadGame());
+  }
+
+  /** 切换并持久化减少动效偏好，然后刷新当前设置页。 */
+  private readonly toggleReducedMotion = (): void => {
+    this.preferences = {
+      reducedMotion: !this.preferences.reducedMotion,
+    };
+    this.settingsPort.save(this.preferences);
+    this.render(true);
+  };
+
+  /** 按配置策略尝试关闭或回退当前 Web 页面。 */
+  private readonly requestWebExit = (): void => {
+    const browserWindow = getBrowserWindow();
+    if (browserWindow === null) {
+      this.showExitFailure();
+      return;
+    }
+    this.clearExitVerificationTimer();
+    this.removeBrowserBackGuard();
+    const strategy = this.config.web_exit.strategy;
+    try {
+      if (strategy === "close_only" || strategy === "close_then_history_back") {
+        browserWindow.close();
+      }
+      if (strategy === "history_back" || strategy === "close_then_history_back") {
+        browserWindow.history.go(-this.config.web_exit.history_back_steps);
+      }
+    } catch {
+      this.installBrowserBackGuard();
+      this.showExitFailure();
+      return;
+    }
+    this.exitVerificationTimer = globalThis.setTimeout(() => {
+      this.exitVerificationTimer = null;
+      if (
+        this.mounted &&
+        !browserWindow.closed &&
+        browserWindow.document.visibilityState !== "hidden"
+      ) {
+        this.installBrowserBackGuard();
+        this.showExitFailure();
+      }
+    }, this.config.web_exit.verification_delay_ms);
+  };
+
+  /** 展示浏览器阻止关闭时的配置化提示页。 */
+  private showExitFailure(): void {
+    if (this.navigation.current().screen === "exit_confirm") {
+      this.navigation.pop();
+    }
+    this.navigation.push({
+      screen: "message",
+      context: {
+        document: {
+          title: this.config.texts.exit_failed_title,
+          body: this.config.texts.exit_failed_body,
+          tone: "warning",
+        },
+      },
+    });
+    this.render();
+  }
+
+  /** 取消尚未完成的退出验证计时。 */
+  private clearExitVerificationTimer(): void {
+    if (this.exitVerificationTimer === null) {
+      return;
+    }
+    globalThis.clearTimeout(this.exitVerificationTimer);
+    this.exitVerificationTimer = null;
   }
 
   /**
@@ -786,8 +1238,7 @@ export class GameShell {
   private async resolveExploration(choiceId: string): Promise<void> {
     await this.execute(
       { type: "exploration_resolve", choiceId },
-      (): void => { this.navigation.reset({ screen: "dashboard" }); },
-      true,
+      (): void => { this.navigateAfterExpeditionProgress(); },
     );
   }
 
@@ -797,9 +1248,125 @@ export class GameShell {
   private async retreatExploration(): Promise<void> {
     await this.execute(
       { type: "exploration_retreat" },
-      (): void => { this.navigation.reset({ screen: "dashboard" }); },
+      (): void => {
+        this.navigation.reset({ screen: "dashboard" });
+      },
+    );
+  }
+
+  /** 提交一项研发并将领域反馈作为独立消息页展示。 */
+  private async completeResearch(projectId: string): Promise<void> {
+    await this.execute(
+      { type: "research_complete", projectId },
+      (): void => undefined,
       true,
     );
+  }
+
+  /** 提交一张制作配方并保留工坊为底层页面。 */
+  private async craftItem(recipeId: string): Promise<void> {
+    await this.execute(
+      { type: "craft_item", recipeId },
+      (): void => undefined,
+      true,
+    );
+  }
+
+  /** 提交一件可用装备并保留仓库为底层页面。 */
+  private async equipWarehouseItem(itemId: string): Promise<void> {
+    await this.execute(
+      { type: "equip_item", itemId },
+      (): void => undefined,
+      true,
+    );
+  }
+
+  /** 保存远征目标城市并刷新整备页选中态。 */
+  private readonly selectExpeditionCity = (cityId: string): void => {
+    this.expeditionDraft = {
+      ...this.expeditionDraft,
+      cityId,
+    };
+    this.render(true);
+  };
+
+  /** 切换一名同行伙伴的 UI 草稿选中态。 */
+  private readonly toggleExpeditionCompanion = (companionId: string): void => {
+    const companionIds = new Set(this.expeditionDraft.companionIds);
+    if (companionIds.has(companionId)) {
+      companionIds.delete(companionId);
+    } else {
+      companionIds.add(companionId);
+    }
+    this.expeditionDraft = { ...this.expeditionDraft, companionIds };
+    this.render(true);
+  };
+
+  /** 在零到可用库存之间循环远征携带数量。 */
+  private readonly cycleExpeditionItem = (itemId: string): void => {
+    const item = this.requireSnapshot().expeditionCarryItems.find(
+      (candidate) => candidate.id === itemId,
+    );
+    if (item === undefined || item.availableQuantity <= 0) {
+      return;
+    }
+    const currentItems = this.expeditionDraft.carriedItems;
+    const nextQuantity = (currentItems[itemId] ?? 0) + 1;
+    const carriedItems = nextQuantity > item.availableQuantity
+      ? Object.fromEntries(
+          Object.entries(currentItems).filter(([candidateId]) => candidateId !== itemId),
+        )
+      : { ...currentItems, [itemId]: nextQuantity };
+    this.expeditionDraft = { ...this.expeditionDraft, carriedItems };
+    this.render(true);
+  };
+
+  /** 提交整备草稿并进入已锁定的首个远征事件。 */
+  private async beginExpedition(): Promise<void> {
+    const cityId = this.expeditionDraft.cityId;
+    if (cityId === null) {
+      return;
+    }
+    await this.execute(
+      {
+        type: "expedition_begin",
+        cityId,
+        companionIds: [...this.expeditionDraft.companionIds],
+        carriedItems: { ...this.expeditionDraft.carriedItems },
+      },
+      (): void => {
+        this.expeditionDraft = emptyExpeditionDraft();
+        this.navigateAfterExpeditionProgress();
+      },
+    );
+  }
+
+  /** 扣除远征步数并在可继续时进入新事件。 */
+  private async continueExpedition(): Promise<void> {
+    await this.execute(
+      { type: "expedition_continue" },
+      (): void => { this.navigateAfterExpeditionProgress(); },
+    );
+  }
+
+  /** 结算携带物与战利品后回到指挥台。 */
+  private async safeReturnExpedition(): Promise<void> {
+    await this.execute(
+      { type: "expedition_safe_return" },
+      (): void => {
+        this.navigation.reset({ screen: "dashboard" });
+      },
+    );
+  }
+
+  /** 根据命令后快照替换为事件、远征状态或指挥台。 */
+  private navigateAfterExpeditionProgress(): void {
+    const screen = resolveExpeditionProgressScreen(this.requireSnapshot());
+    if (screen === "dashboard") {
+      this.navigation.reset({ screen });
+    } else {
+      this.navigation.replace({ screen });
+    }
   }
 
   /**
@@ -849,6 +1416,8 @@ export class GameShell {
    * 确认返回封面，并通知应用层释放当前指挥上下文。
    */
   private async returnToMenu(): Promise<void> {
+    this.clearConnectionTimer();
+    this.expeditionDraft = emptyExpeditionDraft();
     await this.execute(
       { type: "return_to_menu" },
       (): void => { this.navigation.reset({ screen: "menu" }); },
@@ -890,7 +1459,7 @@ export class GameShell {
           },
         });
       }
-      this.render();
+      this.render(true);
     } finally {
       this.executing = false;
     }
@@ -920,6 +1489,32 @@ export class GameShell {
     }
   }
 
+  /** Escape 在游戏中打开功能菜单，在菜单链内部则只关闭最上层。 */
+  private toggleFunctionMenu(): void {
+    const screen = this.navigation.current().screen;
+    if (screen === "menu" || screen === "connection") {
+      return;
+    }
+    const routes = this.navigation.entries();
+    if (routes[0]?.screen === "menu") {
+      this.requestBack();
+      return;
+    }
+    const functionMenuDepth = routes.findIndex(
+      (route) => route.screen === "function_menu",
+    );
+    if (functionMenuDepth >= 0) {
+      this.goBack();
+      return;
+    }
+    if (this.snapshot?.mode === null || screen === "name_input") {
+      this.requestBack();
+      return;
+    }
+    this.navigation.push({ screen: "function_menu" });
+    this.render();
+  }
+
   /**
    * 按当前页面执行统一返回语义。
    */
@@ -929,7 +1524,7 @@ export class GameShell {
       return;
     }
     if (screen === "dashboard") {
-      this.navigation.push({ screen: "return_menu_confirm" });
+      this.navigation.push({ screen: "function_menu" });
       this.render();
       return;
     }
@@ -1012,6 +1607,13 @@ export class GameShell {
     return undefined;
   }
 
+  /** 从远征领域读模型建立稳定名称映射，避免读档后泄露内部 ID。 */
+  private expeditionItemNameMap(
+    snapshot: GameUiSnapshot,
+  ): ReadonlyMap<string, string> {
+    return new Map(Object.entries(snapshot.expeditionStatus?.itemNames ?? {}));
+  }
+
   /**
    * 构造缺少内容时仍可安全渲染的空选择模型。
    */
@@ -1085,6 +1687,15 @@ function isEscapeEvent(event: unknown): boolean {
  */
 function getBrowserWindow(): Window | null {
   return (globalThis as { window?: Window }).window ?? null;
+}
+
+/** 创建一份不共享可变容器的空远征整备草稿。 */
+function emptyExpeditionDraft(): ExpeditionDraft {
+  return {
+    cityId: null,
+    companionIds: new Set<string>(),
+    carriedItems: {},
+  };
 }
 
 /**

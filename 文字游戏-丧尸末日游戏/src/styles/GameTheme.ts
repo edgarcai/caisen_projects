@@ -59,16 +59,29 @@ export interface GameControlTokens {
   readonly drag_threshold: number;
 }
 
-/**
- * 封面布局配置。
- */
-export interface CoverLayoutTokens {
+/** 单个响应式封面菜单布局配置。 */
+export interface CoverMenuLayoutTokens {
+  readonly horizontal_alignment: "left" | "center" | "right";
+  readonly vertical_alignment: "top" | "middle" | "bottom";
   readonly content_left: number;
   readonly content_top: number;
   readonly menu_top: number;
+  readonly menu_bottom: number;
   readonly menu_width: number;
-  readonly menu_step_x: number;
-  readonly menu_gap: number;
+  readonly menu_columns: number;
+  readonly menu_column_gap: number;
+  readonly menu_row_gap: number;
+  readonly menu_row_step_x: number;
+  readonly description_left: number;
+  readonly description_top: number;
+  readonly description_width: number;
+  readonly description_height: number;
+}
+
+/** 封面桌面、手机与遮罩布局配置。 */
+export interface CoverLayoutTokens {
+  readonly desktop: CoverMenuLayoutTokens;
+  readonly mobile: CoverMenuLayoutTokens;
   readonly image_dark_edge_ratio: number;
   readonly image_dark_solid_ratio: number;
   readonly image_dark_fade_steps: number;
@@ -112,6 +125,7 @@ export interface PageLayoutTokens {
   readonly max_content_width: number;
   readonly header_height: number;
   readonly footer_height: number;
+  readonly footer_action_max_width: number;
   readonly body_padding: number;
   readonly option_gap: number;
   readonly desktop_option_columns: number;
@@ -133,8 +147,10 @@ export interface GameLayoutTokens {
  */
 export interface GameMotionTokens {
   readonly page_transition_ms: number;
+  readonly connection_transition_ms: number;
   readonly button_press_ms: number;
   readonly cover_drift_ms: number;
+  readonly cover_menu_description_delay_ms: number;
   readonly toast_duration_ms: number;
   readonly reduced_motion: boolean;
 }
@@ -165,6 +181,24 @@ export interface GameAssetTokens {
   readonly cover: string;
   readonly cover_width?: number;
   readonly cover_height?: number;
+  readonly skins: GameSkinTokens;
+}
+
+/** 可由美术轨道替换的可选皮肤路径。 */
+export interface GameSkinTokens {
+  readonly cover_button_idle: string;
+  readonly cover_button_hover: string;
+  readonly cover_button_pressed: string;
+  readonly cover_button_disabled: string;
+  readonly page_surface: string;
+  readonly action_bar: string;
+}
+
+/** 浏览器关闭能力受限时采用的配置化策略。 */
+export interface GameWebExitTokens {
+  readonly strategy: "close_only" | "history_back" | "close_then_history_back";
+  readonly history_back_steps: number;
+  readonly verification_delay_ms: number;
 }
 
 /**
@@ -182,9 +216,19 @@ export interface NavigationToken {
 export interface GameTextTokens {
   readonly loading: string;
   readonly load_failed: string;
+  readonly connection_title: string;
   readonly start_single: string;
   readonly start_load: string;
   readonly start_multiplayer: string;
+  readonly start_story: string;
+  readonly credits: string;
+  readonly exit: string;
+  readonly start_single_description: string;
+  readonly start_load_description: string;
+  readonly start_multiplayer_description: string;
+  readonly start_story_description: string;
+  readonly credits_description: string;
+  readonly exit_description: string;
   readonly name_submit: string;
   readonly back: string;
   readonly continue: string;
@@ -192,11 +236,69 @@ export interface GameTextTokens {
   readonly cancel: string;
   readonly close: string;
   readonly save: string;
+  readonly save_description: string;
   readonly no_save: string;
   readonly auto_saved: string;
   readonly storage_unavailable: string;
   readonly portrait_hint: string;
   readonly offline_ready: string;
+  readonly function_menu_title: string;
+  readonly function_menu_body: string;
+  readonly settings: string;
+  readonly settings_description: string;
+  readonly rollback: string;
+  readonly rollback_description: string;
+  readonly settings_title: string;
+  readonly settings_body: string;
+  readonly reduced_motion_description: string;
+  readonly reduced_motion_on: string;
+  readonly reduced_motion_off: string;
+  readonly rollback_title: string;
+  readonly rollback_body: string;
+  readonly exit_title: string;
+  readonly exit_body: string;
+  readonly exit_failed_title: string;
+  readonly exit_failed_body: string;
+  readonly warehouse_title: string;
+  readonly warehouse_body: string;
+  readonly warehouse_item_format: string;
+  readonly warehouse_detail_format: string;
+  readonly warehouse_equip: string;
+  readonly warehouse_not_equippable: string;
+  readonly research_title: string;
+  readonly research_body: string;
+  readonly research_item_format: string;
+  readonly research_detail_format: string;
+  readonly research_complete: string;
+  readonly research_completed: string;
+  readonly research_locked: string;
+  readonly crafting_title: string;
+  readonly crafting_body: string;
+  readonly crafting_item_format: string;
+  readonly crafting_detail_format: string;
+  readonly crafting_action: string;
+  readonly crafting_locked: string;
+  readonly expedition_prepare_title: string;
+  readonly expedition_prepare_body: string;
+  readonly expedition_city_title: string;
+  readonly expedition_companion_title: string;
+  readonly expedition_item_title: string;
+  readonly expedition_city_format: string;
+  readonly expedition_companion_format: string;
+  readonly expedition_item_format: string;
+  readonly expedition_selected: string;
+  readonly expedition_unselected: string;
+  readonly expedition_unknown_item: string;
+  readonly expedition_begin: string;
+  readonly expedition_status_title: string;
+  readonly expedition_status_format: string;
+  readonly expedition_loot_format: string;
+  readonly expedition_continue: string;
+  readonly expedition_safe_return: string;
+  readonly history_title: string;
+  readonly history_empty: string;
+  readonly history_week_format: string;
+  readonly history_entry_format: string;
   readonly option_intelligence_title: string;
   readonly option_intelligence_format: string;
   readonly option_intelligence_separator: string;
@@ -213,6 +315,7 @@ export interface GameUiConfig {
   readonly motion: GameMotionTokens;
   readonly controls: GameControlTokens;
   readonly layout: GameLayoutTokens;
+  readonly web_exit: GameWebExitTokens;
   readonly navigation: readonly NavigationToken[];
   readonly texts: GameTextTokens;
 }

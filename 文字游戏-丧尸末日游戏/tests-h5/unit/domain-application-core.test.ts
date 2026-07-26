@@ -104,7 +104,7 @@ describe("领域时钟与新游戏", () => {
     expect(report.stateChanged).toBe(true);
     expect(state.active_player_index).toBe(1);
     expect(state.turn_number).toBe(1);
-    expect(state.players.map((player) => player.hunger)).toEqual([2, 2]);
+    expect(state.players.map((player) => player.hunger)).toEqual([0, 0]);
     expect(report.messages.at(-1)).toContain("乙");
   });
 
@@ -183,7 +183,8 @@ describe("剧情、探索与首领战", () => {
     expect(report.stateChanged).toBe(true);
     expect(requireState(application).pending_exploration).toBeNull();
     expect(requireState(application).turn_number).toBe(1);
-    expect(requireState(application).players[0]?.coins).toBe(90);
+    expect(requireState(application).players[0]?.coins).toBe(40);
+    expect(application.expeditionStatus()?.loot.coins).toBe(50);
   });
 
   it("取消探索仍应用开场代价且只消耗一个行动", () => {

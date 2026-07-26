@@ -59,11 +59,22 @@ export interface ResponsiveConfig {
   readonly quality_viewports: readonly QualityViewport[];
 }
 
+/** 可由美术轨道按需替换的界面皮肤路径。 */
+export interface SkinConfig {
+  readonly cover_button_idle: string;
+  readonly cover_button_hover: string;
+  readonly cover_button_pressed: string;
+  readonly cover_button_disabled: string;
+  readonly page_surface: string;
+  readonly action_bar: string;
+}
+
 /** 引擎直接使用的公共资源路径。 */
 export interface AssetConfig {
   readonly cover: string;
   readonly cover_width: number;
   readonly cover_height: number;
+  readonly skins: SkinConfig;
 }
 
 /** 视觉主题色板。 */
@@ -110,8 +121,10 @@ export interface TypographyConfig {
 /** 页面动效时长与减少动效开关。 */
 export interface MotionConfig {
   readonly page_transition_ms: number;
+  readonly connection_transition_ms: number;
   readonly button_press_ms: number;
   readonly cover_drift_ms: number;
+  readonly cover_menu_description_delay_ms: number;
   readonly toast_duration_ms: number;
   readonly reduced_motion: boolean;
 }
@@ -130,14 +143,29 @@ export interface ControlConfig {
   readonly drag_threshold: number;
 }
 
-/** 封面布局标尺。 */
-export interface CoverLayoutConfig {
+/** 单个响应式封面菜单结构。 */
+export interface CoverMenuLayoutConfig {
+  readonly horizontal_alignment: EngineHorizontalAlignment;
+  readonly vertical_alignment: EngineVerticalAlignment;
   readonly content_left: number;
   readonly content_top: number;
   readonly menu_top: number;
+  readonly menu_bottom: number;
   readonly menu_width: number;
-  readonly menu_step_x: number;
-  readonly menu_gap: number;
+  readonly menu_columns: number;
+  readonly menu_column_gap: number;
+  readonly menu_row_gap: number;
+  readonly menu_row_step_x: number;
+  readonly description_left: number;
+  readonly description_top: number;
+  readonly description_width: number;
+  readonly description_height: number;
+}
+
+/** 封面桌面、手机与遮罩布局标尺。 */
+export interface CoverLayoutConfig {
+  readonly desktop: CoverMenuLayoutConfig;
+  readonly mobile: CoverMenuLayoutConfig;
   readonly image_dark_edge_ratio: number;
   readonly image_dark_solid_ratio: number;
   readonly image_dark_fade_steps: number;
@@ -175,6 +203,7 @@ export interface PageLayoutConfig {
   readonly max_content_width: number;
   readonly header_height: number;
   readonly footer_height: number;
+  readonly footer_action_max_width: number;
   readonly body_padding: number;
   readonly option_gap: number;
   readonly desktop_option_columns: number;
@@ -193,9 +222,23 @@ export interface LayoutConfig {
 export interface StorageConfig {
   readonly key: string;
   readonly settings_key: string;
+  readonly settings_schema_version: number;
   readonly schema_version: number;
   readonly auto_save: boolean;
   readonly backup_slots: number;
+}
+
+/** 浏览器关闭能力受限时采用的退出策略。 */
+export type WebExitStrategy =
+  | "close_only"
+  | "history_back"
+  | "close_then_history_back";
+
+/** 配置化 Web 退出策略。 */
+export interface WebExitConfig {
+  readonly strategy: WebExitStrategy;
+  readonly history_back_steps: number;
+  readonly verification_delay_ms: number;
 }
 
 /** 一个稳定的底部导航入口。 */
@@ -212,13 +255,31 @@ export interface ActionGroupConfig {
   readonly action_ids: readonly string[];
 }
 
+/** 仅由 H5 指挥台使用的动作展示定义。 */
+export interface WebActionConfig {
+  readonly id: string;
+  readonly label: string;
+  readonly style: string;
+  readonly icon: string;
+}
+
 /** H5 界面文案。 */
 export interface TextConfig {
   readonly loading: string;
   readonly load_failed: string;
+  readonly connection_title: string;
   readonly start_single: string;
   readonly start_load: string;
   readonly start_multiplayer: string;
+  readonly start_story: string;
+  readonly credits: string;
+  readonly exit: string;
+  readonly start_single_description: string;
+  readonly start_load_description: string;
+  readonly start_multiplayer_description: string;
+  readonly start_story_description: string;
+  readonly credits_description: string;
+  readonly exit_description: string;
   readonly name_submit: string;
   readonly back: string;
   readonly continue: string;
@@ -226,11 +287,69 @@ export interface TextConfig {
   readonly cancel: string;
   readonly close: string;
   readonly save: string;
+  readonly save_description: string;
   readonly no_save: string;
   readonly auto_saved: string;
   readonly storage_unavailable: string;
   readonly portrait_hint: string;
   readonly offline_ready: string;
+  readonly function_menu_title: string;
+  readonly function_menu_body: string;
+  readonly settings: string;
+  readonly settings_description: string;
+  readonly rollback: string;
+  readonly rollback_description: string;
+  readonly settings_title: string;
+  readonly settings_body: string;
+  readonly reduced_motion_description: string;
+  readonly reduced_motion_on: string;
+  readonly reduced_motion_off: string;
+  readonly rollback_title: string;
+  readonly rollback_body: string;
+  readonly exit_title: string;
+  readonly exit_body: string;
+  readonly exit_failed_title: string;
+  readonly exit_failed_body: string;
+  readonly warehouse_title: string;
+  readonly warehouse_body: string;
+  readonly warehouse_item_format: string;
+  readonly warehouse_detail_format: string;
+  readonly warehouse_equip: string;
+  readonly warehouse_not_equippable: string;
+  readonly research_title: string;
+  readonly research_body: string;
+  readonly research_item_format: string;
+  readonly research_detail_format: string;
+  readonly research_complete: string;
+  readonly research_completed: string;
+  readonly research_locked: string;
+  readonly crafting_title: string;
+  readonly crafting_body: string;
+  readonly crafting_item_format: string;
+  readonly crafting_detail_format: string;
+  readonly crafting_action: string;
+  readonly crafting_locked: string;
+  readonly expedition_prepare_title: string;
+  readonly expedition_prepare_body: string;
+  readonly expedition_city_title: string;
+  readonly expedition_companion_title: string;
+  readonly expedition_item_title: string;
+  readonly expedition_city_format: string;
+  readonly expedition_companion_format: string;
+  readonly expedition_item_format: string;
+  readonly expedition_selected: string;
+  readonly expedition_unselected: string;
+  readonly expedition_unknown_item: string;
+  readonly expedition_begin: string;
+  readonly expedition_status_title: string;
+  readonly expedition_status_format: string;
+  readonly expedition_loot_format: string;
+  readonly expedition_continue: string;
+  readonly expedition_safe_return: string;
+  readonly history_title: string;
+  readonly history_empty: string;
+  readonly history_week_format: string;
+  readonly history_entry_format: string;
   readonly option_intelligence_title: string;
   readonly option_intelligence_format: string;
   readonly option_intelligence_separator: string;
@@ -248,7 +367,9 @@ export interface WebGameConfig {
   readonly controls: ControlConfig;
   readonly layout: LayoutConfig;
   readonly storage: StorageConfig;
+  readonly web_exit: WebExitConfig;
   readonly navigation: readonly NavigationConfig[];
+  readonly actions: readonly WebActionConfig[];
   readonly action_groups: readonly ActionGroupConfig[];
   readonly texts: TextConfig;
 }

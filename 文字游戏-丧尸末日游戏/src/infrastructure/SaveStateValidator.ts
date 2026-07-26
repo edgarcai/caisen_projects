@@ -1,6 +1,17 @@
 import type { GameRuleConfig } from "../domain/content";
 import { SaveDataError } from "../domain/errors";
-import type { BattleState, GameState } from "../domain/game-state";
+import type {
+  BattleState,
+  CommunicationLogEntry,
+  GameClockState,
+  GameDateState,
+  GameState,
+  WeeklyArchiveState,
+} from "../domain/game-state";
+import type {
+  CraftedWarehouseItemConfig,
+  SurvivalSystemsConfigDocument,
+} from "../domain/survival-systems";
 
 type JsonObject = Record<string, unknown>;
 
@@ -28,6 +39,16 @@ const V2_STATE_FIELDS = [
   "ending",
   "turn_number",
 ] as const;
+const RESTORABLE_V3_STATE_FIELDS = [
+  ...V2_STATE_FIELDS,
+  "survival_days",
+  "communication_log",
+  "weekly_archives",
+  "inventory",
+  "research",
+  "expedition",
+] as const;
+const V3_STATE_FIELDS = [...RESTORABLE_V3_STATE_FIELDS, "checkpoint"] as const;
 const PLAYER_FIELDS = [
   "name",
   "health",
@@ -82,6 +103,32 @@ const BATTLE_FIELDS = [
 ] as const;
 const PENDING_FIELDS = ["city_id", "event_id"] as const;
 const ENDING_FIELDS = ["ending_id", "outcome", "message"] as const;
+const LOG_ENTRY_FIELDS = ["survival_day", "turn_number", "clock", "message"] as const;
+const WEEKLY_ARCHIVE_FIELDS = [
+  "week_number",
+  "start_date",
+  "end_date",
+  "summary",
+  "entries",
+] as const;
+const DATE_FIELDS = ["year", "month", "day"] as const;
+const CHECKPOINT_FIELDS = ["survival_day", "created_turn", "snapshot"] as const;
+const INVENTORY_FIELDS = [
+  "crafted_items",
+  "equipped_weapon_id",
+  "equipped_armor_id",
+] as const;
+const RESEARCH_FIELDS = ["completed_project_ids"] as const;
+const EXPEDITION_FIELDS = [
+  "city_id",
+  "leader_player_index",
+  "companion_ids",
+  "carried_items",
+  "loot",
+  "remaining_steps",
+  "maximum_steps",
+  "events_resolved",
+] as const;
 const COMPANION_STATUSES = new Set(["active", "locked", "exiled", "lost", "dead"]);
 
 /** 严格校验版本化存档的字段集合、数据类型与领域不变量。 */
@@ -89,16 +136,19 @@ export class SaveStateValidator {
   private readonly rules: GameRuleConfig;
   private readonly facilityIds: readonly string[];
   private readonly companionIds: readonly string[];
+  private readonly survivalSystems: SurvivalSystemsConfigDocument;
 
-  /** 注入生存规则及当前内容中允许出现的设施和伙伴 ID。 */
+  /** 注入生存规则、内容 ID 与仓库、研发、远征的版本化配置。 */
   public constructor(
     rules: GameRuleConfig,
     facilityIds: readonly string[],
     companionIds: readonly string[],
+    survivalSystems: SurvivalSystemsConfigDocument,
   ) {
     this.rules = rules;
     this.facilityIds = [...facilityIds];
     this.companionIds = [...companionIds];
+    this.survivalSystems = survivalSystems;
   }
 
   /** 在迁移前验证旧 v1 生存状态的精确结构。 */
@@ -116,26 +166,29 @@ export class SaveStateValidator {
   /** 在构造领域对象前验证 v2 所有嵌套字段集合。 */
   public validateRawV2(rawState: unknown): JsonObject {
     const state = exactObject(rawState, V2_STATE_FIELDS, "v2 game_state");
-    this.validateCommonContainers(state);
-    exactObject(state.story, STORY_FIELDS, "v2 story");
-    const companions = requireArray(state.companions, "v2 companions");
-    for (const [index, companion] of companions.entries()) {
-      exactObject(companion, COMPANION_FIELDS, `v2 companions[${String(index)}]`);
-    }
-    requireObject(state.facility_levels, "v2 facility_levels");
-    this.validateOptionalObject(state.battle, BATTLE_FIELDS, "v2 battle");
-    this.validateOptionalObject(
-      state.pending_exploration,
-      PENDING_FIELDS,
-      "v2 pending_exploration",
-    );
-    this.validateOptionalObject(state.ending, ENDING_FIELDS, "v2 ending");
+    this.validateGameplayContainers(state, "v2");
     return state;
   }
 
-  /** 从已通过 v2 结构检查的数据创建副本并验证完整状态。 */
+  /** 在构造领域对象前验证 v3 及检查点快照的精确结构。 */
+  public validateRawV3(rawState: unknown): JsonObject {
+    const state = exactObject(rawState, V3_STATE_FIELDS, "v3 game_state");
+    this.validateRawV3Base(state, "v3 game_state");
+    if (state.checkpoint !== null) {
+      const checkpoint = exactObject(state.checkpoint, CHECKPOINT_FIELDS, "v3 checkpoint");
+      const snapshot = exactObject(
+        checkpoint.snapshot,
+        RESTORABLE_V3_STATE_FIELDS,
+        "v3 checkpoint.snapshot",
+      );
+      this.validateRawV3Base(snapshot, "v3 checkpoint.snapshot");
+    }
+    return state;
+  }
+
+  /** 从已通过 v3 结构检查的数据创建副本并验证完整状态。 */
   public parse(rawState: unknown): GameState {
-    const state = structuredClone(this.validateRawV2(rawState)) as unknown as GameState;
+    const state = structuredClone(this.validateRawV3(rawState)) as unknown as GameState;
     this.validate(state);
     return state;
   }
@@ -160,6 +213,7 @@ export class SaveStateValidator {
       throw new SaveDataError("当前玩家索引越界。");
     }
     requireInteger(state.turn_number, "turn_number", 0);
+    requireInteger(state.survival_days, "survival_days", 0);
     this.validatePlayers(state);
     this.validateShelter(state);
     this.validateStory(state);
@@ -170,11 +224,20 @@ export class SaveStateValidator {
     if (state.pending_exploration !== null) {
       requireNonEmptyString(state.pending_exploration.city_id, "pending_exploration.city_id");
       requireNonEmptyString(state.pending_exploration.event_id, "pending_exploration.event_id");
+      this.requireKnownCity(
+        state.pending_exploration.city_id,
+        "pending_exploration.city_id",
+      );
     }
     if (state.battle !== null && !state.battle.finished && state.pending_exploration !== null) {
       throw new SaveDataError("不能同时存在进行中的首领战和待结算探索。");
     }
     this.validateEnding(state);
+    this.validateChronicle(state);
+    this.validateInventory(state);
+    this.validateResearch(state);
+    this.validateExpedition(state);
+    this.validateCheckpoint(state);
   }
 
   /** 校验玩家和共享容器的 v1/v2 公共字段集合。 */
@@ -185,6 +248,65 @@ export class SaveStateValidator {
     }
     exactObject(state.shelter, SHELTER_FIELDS, "shelter");
     exactObject(state.clock, CLOCK_FIELDS, "clock");
+  }
+
+  /** 校验 v2 与 v3 共用的剧情、伙伴及交互容器。 */
+  private validateGameplayContainers(state: JsonObject, version: string): void {
+    this.validateCommonContainers(state);
+    exactObject(state.story, STORY_FIELDS, `${version} story`);
+    const companions = requireArray(state.companions, `${version} companions`);
+    for (const [index, companion] of companions.entries()) {
+      exactObject(companion, COMPANION_FIELDS, `${version} companions[${String(index)}]`);
+    }
+    requireObject(state.facility_levels, `${version} facility_levels`);
+    this.validateOptionalObject(state.battle, BATTLE_FIELDS, `${version} battle`);
+    this.validateOptionalObject(
+      state.pending_exploration,
+      PENDING_FIELDS,
+      `${version} pending_exploration`,
+    );
+    this.validateOptionalObject(state.ending, ENDING_FIELDS, `${version} ending`);
+  }
+
+  /** 校验 v3 当前状态与可回档快照共用的新增容器。 */
+  private validateRawV3Base(state: JsonObject, path: string): void {
+    this.validateGameplayContainers(state, path);
+    const communicationLog = requireArray(state.communication_log, `${path}.communication_log`);
+    for (const [index, entry] of communicationLog.entries()) {
+      const item = exactObject(
+        entry,
+        LOG_ENTRY_FIELDS,
+        `${path}.communication_log[${String(index)}]`,
+      );
+      exactObject(item.clock, CLOCK_FIELDS, `${path}.communication_log[${String(index)}].clock`);
+    }
+    const weeklyArchives = requireArray(state.weekly_archives, `${path}.weekly_archives`);
+    for (const [index, archive] of weeklyArchives.entries()) {
+      const item = exactObject(
+        archive,
+        WEEKLY_ARCHIVE_FIELDS,
+        `${path}.weekly_archives[${String(index)}]`,
+      );
+      exactObject(item.start_date, DATE_FIELDS, `${path}.weekly_archives[${String(index)}].start_date`);
+      exactObject(item.end_date, DATE_FIELDS, `${path}.weekly_archives[${String(index)}].end_date`);
+      const entries = requireArray(item.entries, `${path}.weekly_archives[${String(index)}].entries`);
+      for (const [entryIndex, entry] of entries.entries()) {
+        const logEntry = exactObject(
+          entry,
+          LOG_ENTRY_FIELDS,
+          `${path}.weekly_archives[${String(index)}].entries[${String(entryIndex)}]`,
+        );
+        exactObject(
+          logEntry.clock,
+          CLOCK_FIELDS,
+          `${path}.weekly_archives[${String(index)}].entries[${String(entryIndex)}].clock`,
+        );
+      }
+    }
+    const inventory = exactObject(state.inventory, INVENTORY_FIELDS, `${path}.inventory`);
+    requireObject(inventory.crafted_items, `${path}.inventory.crafted_items`);
+    exactObject(state.research, RESEARCH_FIELDS, `${path}.research`);
+    this.validateOptionalObject(state.expedition, EXPEDITION_FIELDS, `${path}.expedition`);
   }
 
   /** 校验一个可空对象的精确字段集合。 */
@@ -274,21 +396,7 @@ export class SaveStateValidator {
 
   /** 校验公历日期和配置化每日行动时段。 */
   private validateClock(state: GameState): void {
-    requireInteger(state.clock.year, "clock.year", 1);
-    requireInteger(state.clock.month, "clock.month", 1);
-    requireInteger(state.clock.day, "clock.day", 1);
-    requireInteger(state.clock.hour, "clock.hour", 0);
-    if (state.clock.month > 12) {
-      throw new SaveDataError("存档月份无效。");
-    }
-    const lastDay = new Date(Date.UTC(state.clock.year, state.clock.month, 0)).getUTCDate();
-    if (state.clock.day > lastDay) {
-      throw new SaveDataError("存档日期无效。");
-    }
-    const time = this.rules.time;
-    if (state.clock.hour < time.day_start_hour || state.clock.hour >= time.day_end_hour) {
-      throw new SaveDataError("存档小时不在行动时段内。");
-    }
+    this.validateClockValue(state.clock, "clock");
   }
 
   /** 校验战斗布尔终态和生命范围的一致性。 */
@@ -313,6 +421,326 @@ export class SaveStateValidator {
     if (battle.victory && battle.health !== 0) {
       throw new SaveDataError("战斗胜利时首领生命必须为零。");
     }
+  }
+
+  /** 校验当前通讯、历史周归档与稳定周序号。 */
+  private validateChronicle(state: GameState): void {
+    requireInteger(
+      this.rules.timeline.communication_log_max_entries,
+      "rules.timeline.communication_log_max_entries",
+      1,
+    );
+    requireInteger(
+      this.rules.timeline.weekly_archive_interval_days,
+      "rules.timeline.weekly_archive_interval_days",
+      1,
+    );
+    if (!Array.isArray(state.communication_log)) {
+      throw new SaveDataError("communication_log 必须是列表。");
+    }
+    if (state.communication_log.length > this.rules.timeline.communication_log_max_entries) {
+      throw new SaveDataError("当前通讯日志超过配置上限。");
+    }
+    this.validateLogEntries(
+      state.communication_log,
+      "communication_log",
+      state.survival_days,
+      state.turn_number,
+    );
+    if (!Array.isArray(state.weekly_archives)) {
+      throw new SaveDataError("weekly_archives 必须是列表。");
+    }
+    let previousWeek = 0;
+    for (const [index, archive] of state.weekly_archives.entries()) {
+      const path = `weekly_archives[${String(index)}]`;
+      requireInteger(archive.week_number, `${path}.week_number`, 1);
+      if (archive.week_number <= previousWeek) {
+        throw new SaveDataError("周归档序号必须严格递增。");
+      }
+      if (
+        archive.week_number * this.rules.timeline.weekly_archive_interval_days
+        > state.survival_days
+      ) {
+        throw new SaveDataError("周归档序号超过当前生存日。");
+      }
+      previousWeek = archive.week_number;
+      this.validateWeeklyArchive(archive, path, state);
+    }
+  }
+
+  /** 校验一份周归档的日期范围、摘要和通讯条目。 */
+  private validateWeeklyArchive(
+    archive: WeeklyArchiveState,
+    path: string,
+    state: GameState,
+  ): void {
+    this.validateDateValue(archive.start_date, `${path}.start_date`);
+    this.validateDateValue(archive.end_date, `${path}.end_date`);
+    const duration = this.dateOrdinal(archive.end_date) - this.dateOrdinal(archive.start_date);
+    if (duration !== this.rules.timeline.weekly_archive_interval_days - 1) {
+      throw new SaveDataError(`${path} 起止日期不是一个完整归档周期。`);
+    }
+    requireNonEmptyString(archive.summary, `${path}.summary`);
+    if (!Array.isArray(archive.entries)) {
+      throw new SaveDataError(`${path}.entries 必须是列表。`);
+    }
+    if (archive.entries.length > this.rules.timeline.communication_log_max_entries) {
+      throw new SaveDataError(`${path}.entries 超过配置上限。`);
+    }
+    this.validateLogEntries(
+      archive.entries,
+      `${path}.entries`,
+      state.survival_days,
+      state.turn_number,
+    );
+  }
+
+  /** 校验通讯条目的时钟、生存日、回合和非空文案。 */
+  private validateLogEntries(
+    entries: readonly CommunicationLogEntry[],
+    path: string,
+    maximumSurvivalDay: number,
+    maximumTurn: number,
+  ): void {
+    for (const [index, entry] of entries.entries()) {
+      const entryPath = `${path}[${String(index)}]`;
+      requireInteger(entry.survival_day, `${entryPath}.survival_day`, 0);
+      requireInteger(entry.turn_number, `${entryPath}.turn_number`, 0);
+      if (entry.survival_day > maximumSurvivalDay || entry.turn_number > maximumTurn) {
+        throw new SaveDataError(`${entryPath} 超过当前时间线。`);
+      }
+      this.validateClockValue(entry.clock, `${entryPath}.clock`);
+      requireNonEmptyString(entry.message, `${entryPath}.message`);
+    }
+  }
+
+  /** 校验制作物 ID、数量，以及武器和防具槽位的分类与持有数量。 */
+  private validateInventory(state: GameState): void {
+    const quantities = this.validateQuantityMap(
+      state.inventory.crafted_items,
+      "inventory.crafted_items",
+      0,
+    );
+    const craftedItems = new Map(
+      this.survivalSystems.warehouse.crafted_items.map((item) => [item.item_id, item]),
+    );
+    for (const itemId of Object.keys(quantities)) {
+      if (!craftedItems.has(itemId)) {
+        throw new SaveDataError(`制作物库存引用未知物品：${itemId}。`);
+      }
+    }
+    this.validateEquippedItem(
+      state.inventory.equipped_weapon_id,
+      "inventory.equipped_weapon_id",
+      "weapon",
+      craftedItems,
+      quantities,
+    );
+    this.validateEquippedItem(
+      state.inventory.equipped_armor_id,
+      "inventory.equipped_armor_id",
+      "armor",
+      craftedItems,
+      quantities,
+    );
+  }
+
+  /** 校验已完成研究 ID 的唯一性、配置引用和前置项目闭包。 */
+  private validateResearch(state: GameState): void {
+    requireUniqueStringList(
+      state.research.completed_project_ids,
+      "research.completed_project_ids",
+    );
+    const completedIds = new Set(state.research.completed_project_ids);
+    const projects = new Map(
+      this.survivalSystems.research.projects.map((project) => [project.project_id, project]),
+    );
+    for (const projectId of completedIds) {
+      const project = projects.get(projectId);
+      if (project === undefined) {
+        throw new SaveDataError(`研究状态引用未知项目：${projectId}。`);
+      }
+      if (project.required_project_ids.some((requiredId) => !completedIds.has(requiredId))) {
+        throw new SaveDataError(`研究项目 ${projectId} 缺少已完成的前置项目。`);
+      }
+    }
+  }
+
+  /** 校验远征城市、队伍上限、物资白名单、携带容量与步数不变量。 */
+  private validateExpedition(state: GameState): void {
+    const expedition = state.expedition;
+    if (expedition === null) return;
+    requireNonEmptyString(expedition.city_id, "expedition.city_id");
+    this.requireKnownCity(expedition.city_id, "expedition.city_id");
+    requireInteger(expedition.leader_player_index, "expedition.leader_player_index", 0);
+    if (expedition.leader_player_index >= state.players.length) {
+      throw new SaveDataError("远征所长索引越界。");
+    }
+    requireUniqueStringList(expedition.companion_ids, "expedition.companion_ids");
+    if (
+      expedition.companion_ids.length
+      > this.survivalSystems.expedition.maximum_companions
+    ) {
+      throw new SaveDataError("远征同行人数超过配置上限。");
+    }
+    for (const companionId of expedition.companion_ids) {
+      if (!this.companionIds.includes(companionId)) {
+        throw new SaveDataError(`远征队伍引用未知伙伴：${companionId}。`);
+      }
+    }
+    const carriedItems = this.validateQuantityMap(
+      expedition.carried_items,
+      "expedition.carried_items",
+      1,
+    );
+    const carriedEntries = Object.entries(carriedItems);
+    if (
+      carriedEntries.length
+      > this.survivalSystems.expedition.maximum_carried_item_types
+    ) {
+      throw new SaveDataError("远征携带物种类超过配置上限。");
+    }
+    const carryableItemIds = new Set([
+      ...this.survivalSystems.warehouse.resource_items,
+      ...this.survivalSystems.warehouse.crafted_items,
+    ].filter((item) => item.carryable).map((item) => item.item_id));
+    let carriedUnits = 0;
+    for (const [itemId, quantity] of carriedEntries) {
+      if (!carryableItemIds.has(itemId)) {
+        throw new SaveDataError(`远征携带物引用未知或不可携带物品：${itemId}。`);
+      }
+      carriedUnits += quantity;
+    }
+    if (carriedUnits > this.survivalSystems.expedition.maximum_carried_units) {
+      throw new SaveDataError("远征携带物数量超过配置容量。");
+    }
+    const loot = this.validateQuantityMap(expedition.loot, "expedition.loot", 1);
+    const lootItemIds = new Set(
+      this.survivalSystems.expedition.loot_targets.map((target) => target.item_id),
+    );
+    for (const itemId of Object.keys(loot)) {
+      if (!lootItemIds.has(itemId)) {
+        throw new SaveDataError(`远征战利品引用未知物品：${itemId}。`);
+      }
+    }
+    requireInteger(expedition.remaining_steps, "expedition.remaining_steps", 0);
+    requireInteger(
+      expedition.maximum_steps,
+      "expedition.maximum_steps",
+      this.survivalSystems.expedition.base_steps,
+    );
+    requireInteger(expedition.events_resolved, "expedition.events_resolved", 0);
+    if (expedition.remaining_steps > expedition.maximum_steps) {
+      throw new SaveDataError("远征剩余步数不能超过最大步数。");
+    }
+    if (
+      state.pending_exploration !== null
+      && state.pending_exploration.city_id !== expedition.city_id
+    ) {
+      throw new SaveDataError("远征城市与待结算探索城市不一致。");
+    }
+  }
+
+  /** 校验装备槽只引用对应分类且库存总量至少保留一件的制作物。 */
+  private validateEquippedItem(
+    itemId: string | null,
+    path: string,
+    expectedCategory: "weapon" | "armor",
+    items: ReadonlyMap<string, CraftedWarehouseItemConfig>,
+    quantities: Readonly<Record<string, number>>,
+  ): void {
+    requireNullableNonEmptyString(itemId, path);
+    if (itemId === null) return;
+    const item = items.get(itemId);
+    if (item === undefined || item.category !== expectedCategory) {
+      throw new SaveDataError(`${path} 引用了未知物品或错误装备分类。`);
+    }
+    if ((quantities[itemId] ?? 0) < 1) {
+      throw new SaveDataError(`${path} 引用的装备不在制作物库存中。`);
+    }
+  }
+
+  /** 要求城市 ID 存在于配置化远征城市成本表中。 */
+  private requireKnownCity(cityId: string, path: string): void {
+    if (!Object.hasOwn(this.survivalSystems.expedition.city_step_costs, cityId)) {
+      throw new SaveDataError(`${path} 引用未知城市：${cityId}。`);
+    }
+  }
+
+  /** 校验检查点元数据、建立周期与无递归快照。 */
+  private validateCheckpoint(state: GameState): void {
+    const checkpoint = state.checkpoint;
+    if (checkpoint === null) return;
+    requireInteger(
+      this.rules.timeline.checkpoint_interval_days,
+      "rules.timeline.checkpoint_interval_days",
+      1,
+    );
+    requireInteger(checkpoint.survival_day, "checkpoint.survival_day", 1);
+    requireInteger(checkpoint.created_turn, "checkpoint.created_turn", 0);
+    if (checkpoint.survival_day % this.rules.timeline.checkpoint_interval_days !== 0) {
+      throw new SaveDataError("检查点不在配置的生存日边界。");
+    }
+    if (checkpoint.survival_day > state.survival_days) {
+      throw new SaveDataError("检查点不能晚于当前生存日。");
+    }
+    if (
+      checkpoint.snapshot.survival_days !== checkpoint.survival_day
+      || checkpoint.snapshot.turn_number !== checkpoint.created_turn
+    ) {
+      throw new SaveDataError("检查点元数据与快照不一致。");
+    }
+    if ("checkpoint" in checkpoint.snapshot) {
+      throw new SaveDataError("检查点快照不能递归包含 checkpoint。");
+    }
+    const snapshotState: GameState = {
+      ...structuredClone(checkpoint.snapshot),
+      checkpoint: null,
+    };
+    this.validate(snapshotState);
+  }
+
+  /** 校验物品 ID 到满足指定下限的整数数量映射，并返回安全只读视图。 */
+  private validateQuantityMap(
+    values: unknown,
+    path: string,
+    minimum: number,
+  ): Readonly<Record<string, number>> {
+    const mapping = requireObject(values, path);
+    for (const [itemId, quantity] of Object.entries(mapping)) {
+      requireNonEmptyString(itemId, `${path} 的键`);
+      requireInteger(quantity, `${path}.${itemId}`, minimum);
+    }
+    return mapping as Record<string, number>;
+  }
+
+  /** 校验一个游戏时钟的公历日期与行动时段。 */
+  private validateClockValue(clock: GameClockState, path: string): void {
+    this.validateDateValue(clock, path);
+    requireInteger(clock.hour, `${path}.hour`, 0);
+    const time = this.rules.time;
+    if (clock.hour < time.day_start_hour || clock.hour >= time.day_end_hour) {
+      throw new SaveDataError(`${path}.hour 不在行动时段内。`);
+    }
+  }
+
+  /** 校验一个年、月、日组成的真实公历日期。 */
+  private validateDateValue(date: GameDateState, path: string): void {
+    requireInteger(date.year, `${path}.year`, 1);
+    requireInteger(date.month, `${path}.month`, 1);
+    requireInteger(date.day, `${path}.day`, 1);
+    if (date.month > 12) {
+      throw new SaveDataError(`${path}.month 无效。`);
+    }
+    const lastDay = new Date(Date.UTC(date.year, date.month, 0)).getUTCDate();
+    if (date.day > lastDay) {
+      throw new SaveDataError(`${path} 不是有效公历日期。`);
+    }
+  }
+
+  /** 将公历日期转换为可比较的 UTC 日序数。 */
+  private dateOrdinal(date: GameDateState): number {
+    return Math.floor(Date.UTC(date.year, date.month - 1, date.day) / 86_400_000);
   }
 
   /** 校验结局对象、交互清理和失败状态的一致性。 */
@@ -387,6 +815,15 @@ function requireNonEmptyString(value: unknown, path: string): asserts value is s
   if (value.trim() === "") {
     throw new SaveDataError(`${path} 必须是非空字符串。`);
   }
+}
+
+/** 要求值为 null 或去除空白后仍非空的字符串。 */
+function requireNullableNonEmptyString(
+  value: unknown,
+  path: string,
+): asserts value is string | null {
+  if (value === null) return;
+  requireNonEmptyString(value, path);
 }
 
 /** 要求值是布尔值。 */

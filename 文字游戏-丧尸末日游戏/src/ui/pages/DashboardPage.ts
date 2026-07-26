@@ -27,7 +27,7 @@ export interface DashboardActions {
  */
 export class DashboardPage implements PageView {
   public readonly root: LayaSpriteLike;
-  private readonly scroll: ScrollRegion | null;
+  private readonly scrolls: readonly ScrollRegion[];
 
   /**
    * 根据舞台断点创建手机或桌面指挥台。
@@ -51,7 +51,19 @@ export class DashboardPage implements PageView {
     );
     this.renderHeader(factory, config, layout, snapshot);
     if (layout.isMobile) {
-      this.scroll = this.renderMobile(
+      this.scrolls = [
+        this.renderMobile(
+          runtime,
+          factory,
+          config,
+          layout,
+          snapshot,
+          actions,
+        ),
+      ];
+      this.renderBottomNavigation(factory, config, layout, actions);
+    } else {
+      this.scrolls = this.renderDesktop(
         runtime,
         factory,
         config,
@@ -59,10 +71,6 @@ export class DashboardPage implements PageView {
         snapshot,
         actions,
       );
-      this.renderBottomNavigation(factory, config, layout, actions);
-    } else {
-      this.scroll = null;
-      this.renderDesktop(factory, config, layout, snapshot, actions);
     }
   }
 
@@ -70,7 +78,7 @@ export class DashboardPage implements PageView {
    * 释放指挥台滚动监听和显示树。
    */
   public destroy(): void {
-    this.scroll?.destroy();
+    this.scrolls.forEach((scroll) => { scroll.destroy(); });
     this.root.offAll();
     this.root.destroy(true);
   }
@@ -199,12 +207,13 @@ export class DashboardPage implements PageView {
    * 绘制桌面端状态、任务日志和行动三栏。
    */
   private renderDesktop(
+    runtime: LayaRuntimeLike,
     factory: UiFactory,
     config: GameUiConfig,
     layout: ResponsiveLayout,
     snapshot: GameUiSnapshot,
     actions: DashboardActions,
-  ): void {
+  ): readonly ScrollRegion[] {
     const leftWidth = config.layout.desktop.left_rail_width;
     const rightWidth = config.layout.desktop.right_rail_width;
     const centerWidth = Math.max(
@@ -240,29 +249,46 @@ export class DashboardPage implements PageView {
       width: rightWidth,
       height: layout.contentHeight,
     });
-    const leftInnerWidth = leftWidth - config.layout.desktop.panel_padding * 2;
+    const panelPadding = config.layout.desktop.panel_padding;
+    const leftInnerWidth = leftWidth - panelPadding * 2;
+    const railHeight = Math.max(
+      config.controls.minimum_touch_size,
+      layout.contentHeight - panelPadding * 2,
+    );
+    const leftScroll = new ScrollRegion(
+      runtime,
+      leftPanel,
+      "dashboard-desktop-status-scroll",
+      panelPadding,
+      panelPadding,
+      leftInnerWidth,
+      railHeight,
+      config.controls.scroll_step,
+      config.controls.drag_threshold,
+    );
     let leftCursor = this.renderMeters(
       factory,
       config,
       layout,
-      leftPanel,
+      leftScroll.content,
       snapshot,
-      config.layout.desktop.panel_padding,
-      config.layout.desktop.panel_padding,
+      0,
+      0,
       leftInnerWidth,
       config.layout.page.mobile_option_columns,
     );
     leftCursor += layout.sectionGap;
-    this.renderStats(
+    leftCursor = this.renderStats(
       factory,
       config,
-      leftPanel,
+      leftScroll.content,
       snapshot.resources,
-      config.layout.desktop.panel_padding,
+      0,
       leftCursor,
       leftInnerWidth,
       "dashboard-resource",
     );
+    leftScroll.setContentHeight(leftCursor + layout.sectionGap);
     const centerPadding = config.layout.desktop.panel_padding;
     const centerInnerWidth = centerWidth - centerPadding * 2;
     const missionBottom = this.renderMission(
@@ -289,18 +315,32 @@ export class DashboardPage implements PageView {
         layout.contentHeight - missionBottom - layout.sectionGap - centerPadding,
       ),
     );
-    this.renderActionGroups(
+    const rightInnerWidth = rightWidth - panelPadding * 2;
+    const rightScroll = new ScrollRegion(
+      runtime,
+      rightPanel,
+      "dashboard-desktop-actions-scroll",
+      panelPadding,
+      panelPadding,
+      rightInnerWidth,
+      railHeight,
+      config.controls.scroll_step,
+      config.controls.drag_threshold,
+    );
+    const actionBottom = this.renderActionGroups(
       factory,
       config,
       layout,
-      rightPanel,
+      rightScroll.content,
       snapshot.actionGroups,
-      config.layout.desktop.panel_padding,
-      config.layout.desktop.panel_padding,
-      rightWidth - config.layout.desktop.panel_padding * 2,
-      config.layout.page.mobile_option_columns,
+      0,
+      0,
+      rightInnerWidth,
+      config.layout.page.desktop_option_columns,
       actions,
     );
+    rightScroll.setContentHeight(actionBottom + layout.sectionGap);
+    return [leftScroll, rightScroll];
   }
 
   /**

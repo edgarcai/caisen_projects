@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "warehouse": {
+    "resource_items": [
+      {"item_id": "food", "name": "密封食物", "category": "consumable", "state_target": "player.food", "carryable": true, "description": "可供个人进食、集体供餐或远征携带。"},
+      {"item_id": "medical_supplies", "name": "医疗用品", "category": "consumable", "state_target": "player.medical_supplies", "carryable": true, "description": "用于治疗、研究和制作急救道具。"},
+      {"item_id": "antidotes", "name": "解毒剂", "category": "consumable", "state_target": "player.antidotes", "carryable": true, "description": "抑制感染并用于高级医疗制作。"},
+      {"item_id": "parts", "name": "通用零件", "category": "material", "state_target": "player.parts", "carryable": true, "description": "设施、研发和制作共用的基础材料。"},
+      {"item_id": "coins", "name": "旧金币", "category": "material", "state_target": "player.coins", "carryable": false, "description": "仍被部分幸存者聚落接受的交易货币。"},
+      {"item_id": "newspapers", "name": "旧报纸", "category": "archive", "state_target": "shelter.newspapers", "carryable": false, "description": "保存灾变前后的零散线索。"},
+      {"item_id": "books", "name": "旧书", "category": "archive", "state_target": "shelter.books", "carryable": false, "description": "可为研发提供可靠的技术资料。"},
+      {"item_id": "magazines", "name": "杂志", "category": "archive", "state_target": "shelter.magazines", "carryable": false, "description": "包含医疗、机械与城市路线资料。"},
+      {"item_id": "toys", "name": "儿童玩具", "category": "morale", "state_target": "shelter.toys", "carryable": false, "description": "在长夜里维持避难所的日常感。"},
+      {"item_id": "game_consoles", "name": "游戏机", "category": "morale", "state_target": "shelter.game_consoles", "carryable": false, "description": "需要稳定供电的珍贵娱乐设备。"}
+    ],
+    "crafted_items": [
+      {"item_id": "field_ration", "name": "行军口粮", "category": "consumable", "carryable": true, "description": "压缩封装的远征口粮，便于长距离行动。"},
+      {"item_id": "trauma_kit", "name": "创伤急救包", "category": "consumable", "carryable": true, "description": "把常用止血与抑制感染用品组合成套。"},
+      {"item_id": "signal_beacon", "name": "折叠信标", "category": "tool", "carryable": true, "description": "标记安全路线，为远征提供额外步数。"},
+      {"item_id": "reinforced_coat", "name": "加固防护服", "category": "armor", "carryable": false, "description": "可装备的轻型防具；装备后防御 +10，且不计入仓库可用数量。", "equipment_bonuses": {"defense": 10}},
+      {"item_id": "pipe_rifle", "name": "管式步枪", "category": "weapon", "carryable": false, "description": "可装备的远程武器；装备后攻击 +12，且不计入仓库可用数量。", "equipment_bonuses": {"attack": 12}}
+    ],
+    "category_labels": {
+      "consumable": "消耗品",
+      "material": "材料",
+      "archive": "档案",
+      "key_item": "关键物品",
+      "morale": "文娱",
+      "tool": "工具",
+      "armor": "防具",
+      "weapon": "武器"
+    },
+    "empty_text": "仓库暂时空空如也。",
+    "unknown_item_text": "未知仓库物品：{item_id}。",
+    "invalid_transfer_quantity_text": "仓库物品 {item_id} 的调拨数量无效。",
+    "invalid_equipment_text": "【{item_name}】不是可装备的武器或防具。",
+    "equipment_unavailable_text": "仓库中没有可装备的【{item_name}】。",
+    "equipped_text": "已装备【{item_name}】。"
+  },
+  "research": {
+    "projects": [
+      {
+        "project_id": "field_logistics",
+        "name": "野外后勤学",
+        "description": "重新设计补给封装与队伍行进节奏。",
+        "required_project_ids": [],
+        "turns_consumed": 3,
+        "costs": [
+          {"target": "player.parts", "operation": "subtract", "amount": 8},
+          {"target": "shelter.books", "operation": "subtract", "amount": 1}
+        ],
+        "unlock_recipe_ids": ["field_ration"],
+        "expedition_step_bonus": 2
+      },
+      {
+        "project_id": "trauma_response",
+        "name": "创伤响应流程",
+        "description": "把抢救步骤压缩到移动环境也能执行。",
+        "required_project_ids": ["field_logistics"],
+        "turns_consumed": 4,
+        "costs": [
+          {"target": "player.medical_supplies", "operation": "subtract", "amount": 6},
+          {"target": "shelter.magazines", "operation": "subtract", "amount": 1}
+        ],
+        "unlock_recipe_ids": ["trauma_kit", "reinforced_coat"],
+        "expedition_step_bonus": 1
+      },
+      {
+        "project_id": "signal_navigation",
+        "name": "回声导航",
+        "description": "用城市残存信号绘制会随尸群移动的安全走廊。",
+        "required_project_ids": ["field_logistics"],
+        "turns_consumed": 5,
+        "costs": [
+          {"target": "player.parts", "operation": "subtract", "amount": 12},
+          {"target": "shelter.newspapers", "operation": "subtract", "amount": 2}
+        ],
+        "unlock_recipe_ids": ["signal_beacon", "pipe_rifle"],
+        "expedition_step_bonus": 3
+      }
+    ],
+    "completed_text": "研发完成：【{project_name}】。",
+    "already_completed_text": "【{project_name}】已经完成，无需重复投入。",
+    "locked_text": "前置研发尚未完成。",
+    "insufficient_text": "研发材料不足。",
+    "unknown_text": "未知研发项目：{project_id}。"
+  },
+  "crafting": {
+    "recipes": [
+      {
+        "recipe_id": "field_ration",
+        "name": "制作行军口粮",
+        "description": "将普通食物压缩密封，适合远征携带。",
+        "required_project_id": "field_logistics",
+        "turns_consumed": 1,
+        "costs": [
+          {"target": "player.food", "operation": "subtract", "amount": 4},
+          {"target": "player.parts", "operation": "subtract", "amount": 1}
+        ],
+        "output_item_id": "field_ration",
+        "output_quantity": 1
+      },
+      {
+        "recipe_id": "trauma_kit",
+        "name": "制作创伤急救包",
+        "description": "组合药品与解毒剂，处理远征中的严重创伤。",
+        "required_project_id": "trauma_response",
+        "turns_consumed": 1,
+        "costs": [
+          {"target": "player.medical_supplies", "operation": "subtract", "amount": 5},
+          {"target": "player.antidotes", "operation": "subtract", "amount": 1}
+        ],
+        "output_item_id": "trauma_kit",
+        "output_quantity": 1
+      },
+      {
+        "recipe_id": "signal_beacon",
+        "name": "制作折叠信标",
+        "description": "使用零件与旧货币改造便携信号源。",
+        "required_project_id": "signal_navigation",
+        "turns_consumed": 1,
+        "costs": [
+          {"target": "player.parts", "operation": "subtract", "amount": 8},
+          {"target": "player.coins", "operation": "subtract", "amount": 6}
+        ],
+        "output_item_id": "signal_beacon",
+        "output_quantity": 1
+      },
+      {
+        "recipe_id": "reinforced_coat",
+        "name": "制作加固防护服",
+        "description": "以金属片和医疗织物加固轻型防护服。",
+        "required_project_id": "trauma_response",
+        "turns_consumed": 2,
+        "costs": [
+          {"target": "player.parts", "operation": "subtract", "amount": 14},
+          {"target": "player.medical_supplies", "operation": "subtract", "amount": 2}
+        ],
+        "output_item_id": "reinforced_coat",
+        "output_quantity": 1
+      },
+      {
+        "recipe_id": "pipe_rifle",
+        "name": "制作管式步枪",
+        "description": "用回收零件组装一把结构简单的远程武器。",
+        "required_project_id": "signal_navigation",
+        "turns_consumed": 2,
+        "costs": [
+          {"target": "player.parts", "operation": "subtract", "amount": 20},
+          {"target": "player.coins", "operation": "subtract", "amount": 10}
+        ],
+        "output_item_id": "pipe_rifle",
+        "output_quantity": 1
+      }
+    ],
+    "crafted_text": "制作完成：【{item_name}】×{quantity}。",
+    "locked_text": "对应研发尚未完成。",
+    "insufficient_text": "制作材料不足。",
+    "unknown_text": "未知制作配方：{recipe_id}。"
+  },
+  "expedition": {
+    "base_steps": 4,
+    "maximum_companions": 2,
+    "maximum_carried_item_types": 3,
+    "maximum_carried_units": 6,
+    "event_step_cost": 1,
+    "city_step_costs": {
+      "city_a": 0,
+      "city_b": 0,
+      "city_c": 0,
+      "city_d": 1,
+      "city_e": 1,
+      "city_f": 1,
+      "city_g": 2,
+      "city_h": 2
+    },
+    "companion_step_bonuses": [
+      {"companion_id": "haocai", "trait_name": "就地取材", "base_steps": 1, "trust_thresholds": [{"trust": 1, "steps": 1}, {"trust": 3, "steps": 2}]},
+      {"companion_id": "yangguan", "trait_name": "尸群盲区", "base_steps": 2, "trust_thresholds": [{"trust": 1, "steps": 1}, {"trust": 3, "steps": 2}]},
+      {"companion_id": "linlan", "trait_name": "战地分诊", "base_steps": 1, "trust_thresholds": [{"trust": 1, "steps": 1}, {"trust": 3, "steps": 1}]},
+      {"companion_id": "xiaoman", "trait_name": "频段扫描", "base_steps": 1, "trust_thresholds": [{"trust": 1, "steps": 1}, {"trust": 3, "steps": 2}]}
+    ],
+    "carried_item_step_bonuses": {
+      "field_ration": 1,
+      "trauma_kit": 1,
+      "signal_beacon": 3
+    },
+    "loot_targets": [
+      {"item_id": "food", "state_target": "player.food"},
+      {"item_id": "medical_supplies", "state_target": "player.medical_supplies"},
+      {"item_id": "antidotes", "state_target": "player.antidotes"},
+      {"item_id": "parts", "state_target": "player.parts"},
+      {"item_id": "coins", "state_target": "player.coins"},
+      {"item_id": "newspapers", "state_target": "shelter.newspapers"},
+      {"item_id": "books", "state_target": "shelter.books"},
+      {"item_id": "magazines", "state_target": "shelter.magazines"},
+      {"item_id": "toys", "state_target": "shelter.toys"},
+      {"item_id": "game_consoles", "state_target": "shelter.game_consoles"}
+    ],
+    "forced_return_keep_percent": 20,
+    "forced_return_health_range": [7, 45],
+    "prepared_text": "远征准备完成：最大步数{maximum_steps}，同行{companion_count}人，携带{carried_units}件物资。",
+    "step_text": "远征消耗{spent_steps}步，剩余{remaining_steps}/{maximum_steps}步。",
+    "safe_return_text": "远征队沿标记路线安全返回，战利品已经入库。",
+    "forced_return_text": "步数耗尽，队伍被尸群切断退路。仅保住{kept_percent}%远征物资，所长生命降至{health}。",
+    "no_active_text": "当前没有正在进行的远征。",
+    "selection_invalid_text": "远征队伍或携带物资不符合要求。"
+  },
+  "display": {
+    "cost_item_format": "{item_name}×{quantity}",
+    "cost_separator": "、",
+    "step_bonus_format": "远征步数 +{steps}"
+  }
+}

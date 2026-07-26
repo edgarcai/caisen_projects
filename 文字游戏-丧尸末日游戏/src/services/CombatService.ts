@@ -14,7 +14,11 @@ import {
   type BattleState,
   type GameState,
 } from "../domain/game-state";
-import type { RandomSource, RuleModifierProvider } from "../domain/ports";
+import type {
+  PlayerAttributeProvider,
+  RandomSource,
+  RuleModifierProvider,
+} from "../domain/ports";
 import type { CombatAction, CombatReport } from "../domain/reports";
 import type { GameContent } from "./GameContent";
 import type { StateOperations } from "./StateOperations";
@@ -25,6 +29,7 @@ export class CombatService {
   private readonly operations: StateOperations;
   private readonly random: RandomSource;
   private readonly modifiers: RuleModifierProvider;
+  private readonly attributes: PlayerAttributeProvider;
   private readonly actionById: ReadonlyMap<string, CombatActionConfig>;
 
   /** 注入剧情战斗配置、随机源与被动修正提供者。 */
@@ -33,11 +38,13 @@ export class CombatService {
     operations: StateOperations,
     random: RandomSource,
     modifiers: RuleModifierProvider,
+    attributes: PlayerAttributeProvider,
   ) {
     this.content = content;
     this.operations = operations;
     this.random = random;
     this.modifiers = modifiers;
+    this.attributes = attributes;
     this.actionById = new Map(
       content.story.combat.actions.map((action) => [action.action_id, action]),
     );
@@ -272,12 +279,12 @@ export class CombatService {
   /** 根据玩家属性、基地防御、首领防御和专注计算伤害。 */
   private playerDamage(state: GameState, action: CombatActionConfig): [number, boolean] {
     const battle = this.requireBattle(state);
-    const player = activePlayer(state);
     const boss = this.content.boss(battle.boss_id);
+    const attributes = this.attributes.effectiveAttributes(state);
     let damage = Math.max(
       this.numericRule("minimum_damage"),
-      Math.floor((player.attack * this.numericRule("player_attack_weight_percent")) / 100)
-        + Math.floor((player.defense * this.numericRule("player_defense_damage_weight_percent")) / 100)
+      Math.floor((attributes.attack * this.numericRule("player_attack_weight_percent")) / 100)
+        + Math.floor((attributes.defense * this.numericRule("player_defense_damage_weight_percent")) / 100)
         + Math.floor((state.shelter.defense_damage * this.numericRule("shelter_defense_damage_weight_percent")) / 100)
         - boss.defense,
     );
@@ -309,6 +316,7 @@ export class CombatService {
   ): string[] {
     const battle = this.requireBattle(state);
     const player = activePlayer(state);
+    const defense = this.attributes.effectiveAttribute(state, "defense");
     const phase = this.currentPhase(boss, battle);
     const specialPhase = phase !== null
       && battle.round_number % phase.special_every_rounds === 0
@@ -321,7 +329,7 @@ export class CombatService {
     const bossPercent = 100 + this.modifiers.passiveModifier(state, "rules.boss_damage_percent");
     bossPower = Math.floor((bossPower * Math.max(0, bossPercent)) / 100);
     const mitigation = Math.floor(
-      (player.defense
+      (defense
         * this.numericRule("player_defense_mitigation_percent")
         * action.defense_multiplier_percent) /
         10_000,

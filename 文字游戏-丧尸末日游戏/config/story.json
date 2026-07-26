@@ -1592,6 +1592,56 @@
       "hint": "无冕王或许不是需要被消灭的灾难源头。",
       "description": "顾长昼主动成为活体防火墙，将尸群困在晦城十八年的完整记录。",
       "evidence_value": 2
+    },
+    {
+      "discovery_id": "yangguan_blood_sample",
+      "name": "阳关血液样本",
+      "source_scene_id": "yangguans_day_forty_seven",
+      "source_choice_ids": ["study_yangguan", "restrain_yangguan", "exile_yangguan"],
+      "is_hidden": false,
+      "hint": "主线自动获得。",
+      "description": "保留高级神经活动的感染者血液，是追查 YG-07 菌株的关键样本。",
+      "evidence_value": 1
+    },
+    {
+      "discovery_id": "partial_yg07_record",
+      "name": "YG-07残缺病历",
+      "source_scene_id": "patient_zero_archive",
+      "source_choice_ids": ["raid_pharmacy"],
+      "is_hidden": false,
+      "hint": "医院档案终端里仍有未被覆盖的扇区。",
+      "description": "只恢复了部分菌株记录，足以证明阳关并非自然病变。",
+      "evidence_value": 1
+    },
+    {
+      "discovery_id": "lighthouse_command_fragment",
+      "name": "灯塔指令残片",
+      "source_scene_id": "chorus_matriarch",
+      "source_choice_ids": ["destroy_chorus", "retune_frequency", "yangguan_sync"],
+      "is_hidden": false,
+      "hint": "主线自动获得。",
+      "description": "鸣钟母体里流转的控制指令，指向灯塔避难所更深层的协议。",
+      "evidence_value": 1
+    },
+    {
+      "discovery_id": "physical_tower_key",
+      "name": "灯塔实体钥匙",
+      "source_scene_id": "haocais_old_key",
+      "source_choice_ids": ["demand_atonement", "remove_haocai_command"],
+      "is_hidden": false,
+      "hint": "迫使豪菜交出他保存多年的实体凭证。",
+      "description": "可打开灯塔底层维修通道，但不包含越过牧羊人协议的隐藏授权。",
+      "evidence_value": 1
+    },
+    {
+      "discovery_id": "crown_core",
+      "name": "无冕王核心",
+      "source_scene_id": "the_uncrowned_king",
+      "source_choice_ids": ["break_the_crown"],
+      "is_hidden": false,
+      "hint": "击碎无冕王的生物防线后获得。",
+      "description": "顾长昼胸腔中的群巢控制核心，凝聚着晦城感染网络的最高权限。",
+      "evidence_value": 2
     }
   ],
   "facilities": [

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="192" viewBox="0 0 1024 192">
+  <defs>
+    <linearGradient id="idle-fill" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0" stop-color="#253b43"/>
+      <stop offset="0.56" stop-color="#18282f"/>
+      <stop offset="1" stop-color="#101a1f"/>
+    </linearGradient>
+    <linearGradient id="idle-edge" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0" stop-color="#71909a"/>
+      <stop offset="0.72" stop-color="#45616a"/>
+      <stop offset="1" stop-color="#d57a36"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-30%" width="120%" height="170%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#020608" flood-opacity="0.72"/>
+    </filter>
+  </defs>
+  <path d="M74 12H1010L950 180H14Z" fill="#020608" opacity="0.7" filter="url(#shadow)"/>
+  <path d="M62 4H1016L950 172H4Z" fill="#20343c" stroke="#54737b" stroke-width="6"/>
+  <path d="M75 20H980L970 45H65Z" fill="#8aa1a8" opacity="0.10"/>
+  <path d="M20 153H948L943 166H15Z" fill="#020608" opacity="0.34"/>
+  <path d="M88 52H940M70 82H928M52 112H916" stroke="#8aa1a8" stroke-width="2" opacity="0.055"/>
+  <path d="M982 20L950 104L918 104L950 20Z" fill="#d57a36" opacity="0.78"/>
+  <path d="M947 113L932 151" stroke="#dfc36f" stroke-width="5" opacity="0.48"/>
+</svg>

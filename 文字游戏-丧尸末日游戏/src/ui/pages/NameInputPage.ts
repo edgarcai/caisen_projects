@@ -34,7 +34,20 @@ export function createNameInputPage(
   }
   const title = mode === "single"
     ? config.texts.start_single
-    : config.texts.start_multiplayer;
+    : mode === "story"
+      ? config.texts.start_story
+      : config.texts.start_multiplayer;
+  const inputs: LayaInputLike[] = [];
+
+  /** 读取并清理全部姓名输入值。 */
+  const readNames = (): readonly string[] =>
+    inputs.map((input) => input.text.trim());
+
+  /** 把输入值提交给 GameShell，校验由应用层完成。 */
+  const handleSubmit = (): void => {
+    onSubmit(readNames());
+  };
+
   const page = new PageScaffold(
     runtime,
     factory,
@@ -43,8 +56,22 @@ export function createNameInputPage(
     "page-name-input",
     title,
     onBack,
+    [
+      {
+        id: "back",
+        testId: "page-name-input-back",
+        label: config.texts.back,
+        onClick: onBack,
+      },
+      {
+        id: "submit",
+        testId: "player-name-submit",
+        label: config.texts.name_submit,
+        tone: "primary",
+        onClick: handleSubmit,
+      },
+    ],
   );
-  const inputs: LayaInputLike[] = [];
   const inputWidth = Math.min(page.contentWidth, config.layout.page.max_content_width);
   const inputHeight = config.controls.button_height;
   for (let index = 0; index < playerCount; index += 1) {
@@ -59,33 +86,9 @@ export function createNameInputPage(
     });
     inputs.push(input);
   }
-  const submitY =
+  const contentHeight =
     playerCount * (inputHeight + config.layout.page.option_gap) +
     layout.sectionGap;
-
-  /**
-   * 读取并清理全部姓名输入值。
-   */
-  const readNames = (): readonly string[] =>
-    inputs.map((input) => input.text.trim());
-
-  /**
-   * 把输入值提交给 GameShell，校验由应用层完成。
-   */
-  const handleSubmit = (): void => {
-    onSubmit(readNames());
-  };
-
-  factory.button(page.content, {
-    testId: "player-name-submit",
-    label: config.texts.name_submit,
-    x: 0,
-    y: submitY,
-    width: inputWidth,
-    height: config.controls.button_height,
-    tone: "primary",
-    onClick: handleSubmit,
-  });
-  page.scroll.setContentHeight(submitY + config.controls.button_height);
+  page.scroll.setContentHeight(contentHeight);
   return { page, readNames };
 }

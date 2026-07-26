@@ -1,15 +1,6 @@
 import type { SaveMigrationConfig } from "../domain/content";
 import { SaveDataError } from "../domain/errors";
-
-export type SaveDocument = Record<string, unknown>;
-
-export interface SaveMigrator {
-  readonly fromVersion: number;
-  readonly toVersion: number;
-
-  /** 把一个已校验源版本文档迁移到下一版本。 */
-  migrate(document: Readonly<SaveDocument>): SaveDocument;
-}
+import type { SaveDocument, SaveMigrator } from "./SaveMigration";
 
 /** 使用冻结的迁移默认值把旧版生存存档提升为 v2 剧情存档。 */
 export class V1ToV2SaveMigrator implements SaveMigrator {

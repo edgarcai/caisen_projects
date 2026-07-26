@@ -7,7 +7,6 @@ import type {
 import { formatTemplate } from "../domain/content";
 import { StateOperationError, StoryError } from "../domain/errors";
 import {
-  activePlayer,
   addKeyItem,
   addStoryFlag,
   isEnded,
@@ -16,6 +15,7 @@ import {
   type GameState,
   type StoryState,
 } from "../domain/game-state";
+import type { PlayerAttributeProvider } from "../domain/ports";
 import type {
   StoryChoice,
   StoryPrompt,
@@ -29,13 +29,19 @@ import type { StateOperations } from "./StateOperations";
 export class StoryService {
   private readonly content: GameContent;
   private readonly operations: StateOperations;
+  private readonly attributes: PlayerAttributeProvider;
   private readonly chapterById: ReadonlyMap<string, GameContent["story"]["chapters"][number]>;
   private readonly endingById: ReadonlyMap<string, EndingConfig>;
 
-  /** 注入统一内容与受白名单保护的状态操作器。 */
-  public constructor(content: GameContent, operations: StateOperations) {
+  /** 注入统一内容、状态操作器与有效战斗属性端口。 */
+  public constructor(
+    content: GameContent,
+    operations: StateOperations,
+    attributes: PlayerAttributeProvider,
+  ) {
     this.content = content;
     this.operations = operations;
+    this.attributes = attributes;
     this.chapterById = new Map(
       content.story.chapters.map((chapter) => [chapter.chapter_id, chapter]),
     );
@@ -428,8 +434,7 @@ export class StoryService {
   /** 读取剧情条件允许的数值或战斗力派生值。 */
   private readRequirementTarget(target: string, state: GameState): number {
     if (target === "active_player.combat_power") {
-      const player = activePlayer(state);
-      return player.attack + player.defense + player.agility;
+      return this.attributes.combatPower(state);
     }
     try {
       return this.operations.read(target, state);

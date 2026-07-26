@@ -1,8 +1,16 @@
 import type {
+  CheckpointState,
+  CommunicationLogEntry,
   CompanionState,
+  ExpeditionState,
+  GameDateState,
+  GameMode,
+  InventoryState,
   PlayerState,
+  ResearchState,
   ShelterState,
   StoryState,
+  WeeklyArchiveState,
 } from "./game-state";
 
 export type NumericAmount = number | readonly [number, number];
@@ -39,6 +47,17 @@ export interface RequirementConfig {
 export interface GameRuleConfig {
   companion_secret_unlock_trust: number;
   player_counts: Record<string, { minimum: number; maximum: number }>;
+  mode_survival_cost_percent: Record<GameMode, number>;
+  default_survival_action_type: string;
+  action_hunger_costs: Record<
+    string,
+    { player_hunger_gain: number; group_hunger_gain_per_person: number }
+  >;
+  timeline: {
+    weekly_archive_interval_days: number;
+    checkpoint_interval_days: number;
+    communication_log_max_entries: number;
+  };
   time: {
     start_year: number;
     start_month: number;
@@ -90,6 +109,13 @@ export interface GameConfigDocument {
   defaults: {
     player: Omit<PlayerState, "name">;
     shelter: ShelterState;
+    survival_days: number;
+    communication_log: CommunicationLogEntry[];
+    weekly_archives: WeeklyArchiveState[];
+    checkpoint: CheckpointState | null;
+    inventory: InventoryState;
+    research: ResearchState;
+    expedition: ExpeditionState | null;
   };
   rules: GameRuleConfig;
   cities: readonly CityConfig[];
@@ -345,6 +371,21 @@ export interface SaveMigrationConfig {
     ending: null;
   };
   legacy_failure: { ending_id: string; outcome: "failure" };
+}
+
+export interface V2ToV3SaveMigrationConfig {
+  schema_version: number;
+  from_version: number;
+  to_version: number;
+  campaign_start_date: GameDateState;
+  state_defaults: {
+    communication_log: CommunicationLogEntry[];
+    weekly_archives: WeeklyArchiveState[];
+    checkpoint: CheckpointState | null;
+    inventory: InventoryState;
+    research: ResearchState;
+    expedition: ExpeditionState | null;
+  };
 }
 
 /** 格式化 JSON 中与 Python ``str.format`` 兼容的简单占位符。 */

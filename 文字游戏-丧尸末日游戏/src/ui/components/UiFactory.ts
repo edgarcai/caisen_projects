@@ -7,6 +7,7 @@ import type {
 import type { UiMeterView, UiTone } from "../ports/GameUiPort";
 import type {
   LayaInputLike,
+  LayaImageLike,
   LayaNodeLike,
   LayaRuntimeLike,
   LayaSpriteLike,
@@ -45,7 +46,18 @@ export interface ButtonSpec {
   readonly icon?: string;
   readonly disabled?: boolean;
   readonly shape?: "rectangle" | "parallelogram";
+  readonly skin?: ButtonSkinSpec;
+  readonly fontSize?: number;
+  readonly wordWrap?: boolean;
   readonly onClick: () => void;
+}
+
+/** 按钮各交互状态可选的美术皮肤。 */
+export interface ButtonSkinSpec {
+  readonly idle: string;
+  readonly hover: string;
+  readonly pressed: string;
+  readonly disabled: string;
 }
 
 /**
@@ -60,6 +72,7 @@ export interface PanelSpec {
   readonly elevated?: boolean;
   readonly translucent?: boolean;
   readonly active?: boolean;
+  readonly skin?: string;
 }
 
 /**
@@ -132,6 +145,7 @@ export class UiFactory {
       borderColor,
       this.controls.focus_border_width,
     );
+    this.addSkinLayer(node, spec.skin);
     parent.addChild(node);
     return node;
   }
@@ -214,6 +228,7 @@ export class UiFactory {
     node.pos(spec.x, spec.y);
     node.size(spec.width, spec.height);
     node.mouseEnabled = spec.disabled !== true;
+    const skinLayer = this.createButtonSkinLayer(node, spec);
     const label = this.createButtonLabel(node, spec);
     let state: "idle" | "hover" | "pressed" = "idle";
     let pointerStartY = 0;
@@ -227,7 +242,12 @@ export class UiFactory {
       const fillColor = spec.disabled === true ? this.theme.background_soft : colors.fill;
       const textColor = spec.disabled === true ? this.theme.muted_text : colors.text;
       node.graphics.clear();
-      if (spec.shape === "parallelogram") {
+      const skin = this.resolveButtonSkin(spec, state);
+      if (skinLayer !== null && skin.length > 0) {
+        skinLayer.skin = skin;
+        skinLayer.visible = true;
+      } else if (spec.shape === "parallelogram") {
+        if (skinLayer !== null) skinLayer.visible = false;
         const slant = Math.min(this.controls.button_slant, spec.width);
         node.graphics.drawPoly(
           0,
@@ -238,6 +258,7 @@ export class UiFactory {
           this.controls.focus_border_width,
         );
       } else {
+        if (skinLayer !== null) skinLayer.visible = false;
         node.graphics.drawRect(
           0,
           0,
@@ -393,12 +414,67 @@ export class UiFactory {
           ? spec.width - this.controls.button_slant * 2
           : spec.width,
       height: spec.height,
-      fontSize: this.typography.control_size,
+      fontSize: spec.fontSize ?? this.typography.control_size,
       bold: true,
       align: "center",
       valign: "middle",
-      wordWrap: false,
+      wordWrap: spec.wordWrap ?? false,
     });
+  }
+
+  /** 为面板添加可选的拉伸皮肤层；空路径继续使用 token 绘制。 */
+  private addSkinLayer(parent: LayaNodeLike, skin?: string): void {
+    if (skin === undefined || skin.length === 0) {
+      return;
+    }
+    const image = new this.runtime.Image();
+    image.name = `${parent.name}-skin`;
+    image.skin = skin;
+    image.mouseEnabled = false;
+    image.size(parent.width, parent.height);
+    parent.addChild(image);
+  }
+
+  /** 仅在至少配置一个状态皮肤时创建按钮图片层。 */
+  private createButtonSkinLayer(
+    parent: LayaNodeLike,
+    spec: ButtonSpec,
+  ): LayaImageLike | null {
+    const skin = spec.skin;
+    if (
+      skin === undefined ||
+      [skin.idle, skin.hover, skin.pressed, skin.disabled].every(
+        (path) => path.length === 0,
+      )
+    ) {
+      return null;
+    }
+    const image = new this.runtime.Image();
+    image.name = `${spec.testId}-skin`;
+    image.mouseEnabled = false;
+    image.size(spec.width, spec.height);
+    parent.addChild(image);
+    return image;
+  }
+
+  /** 按禁用和交互状态选择配置化按钮皮肤。 */
+  private resolveButtonSkin(
+    spec: ButtonSpec,
+    state: "idle" | "hover" | "pressed",
+  ): string {
+    if (spec.skin === undefined) {
+      return "";
+    }
+    if (spec.disabled === true) {
+      return spec.skin.disabled;
+    }
+    if (state === "hover") {
+      return spec.skin.hover;
+    }
+    if (state === "pressed") {
+      return spec.skin.pressed;
+    }
+    return spec.skin.idle;
   }
 
   /**
