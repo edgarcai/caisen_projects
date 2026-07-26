@@ -6,8 +6,11 @@ import {
   syncGameEnvironmentDataset,
 } from "../../src/engine/layaBootstrap";
 import { isDisplayNodeHierarchyVisible } from "../../src/main";
-import { resolveResponsiveLayout } from "../../src/styles/ResponsiveLayout";
-import { resolveCoverArtwork } from "../../src/ui/pages/CoverPage";
+import {
+  resolveResponsiveLayout,
+  resolveResponsiveLayoutFromMetrics,
+} from "../../src/styles/ResponsiveLayout";
+import { resolveCoverArtwork } from "../../src/ui/models/CoverMenuModel";
 
 const webConfig = parseWebGameConfig(webConfigDocument);
 const zeroSafeArea = { top: 0, right: 0, bottom: 0, left: 0 } as const;
@@ -68,7 +71,7 @@ describe("引擎运行时回归", () => {
     });
   });
 
-  it("封面资源由实际布局策略唯一决定", () => {
+  it("封面资源按设备类别选择，紧凑桌面仍保留桌面 PNG", () => {
     const compactDesktop = resolveResponsiveLayout(
       webConfig.responsive.desktop_min_stage_width - 1,
       webConfig.engine.design_height,
@@ -81,12 +84,22 @@ describe("引擎运行时回归", () => {
       webConfig,
       zeroSafeArea,
     );
+    const mobile = resolveResponsiveLayoutFromMetrics({
+      stageWidth: webConfig.engine.mobile_design_width,
+      stageHeight: webConfig.engine.mobile_design_height,
+      isMobileDevice: true,
+      safeArea: zeroSafeArea,
+    }, webConfig);
 
     expect(compactDesktop.usesCompactUi).toBe(true);
     expect(resolveCoverArtwork(webConfig, compactDesktop)).toBe(
-      webConfig.assets.mobile_cover,
+      webConfig.assets.cover,
     );
     expect(desktop.usesCompactUi).toBe(false);
     expect(resolveCoverArtwork(webConfig, desktop)).toBe(webConfig.assets.cover);
+    expect(mobile.kind).toBe("mobile");
+    expect(resolveCoverArtwork(webConfig, mobile)).toBe(
+      webConfig.assets.mobile_cover,
+    );
   });
 });

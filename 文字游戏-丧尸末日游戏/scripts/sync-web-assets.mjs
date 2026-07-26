@@ -1,19 +1,44 @@
-import { copyFile, mkdir, readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { copyFile, mkdir, readFile, rm } from "node:fs/promises";
+import { dirname, relative, resolve } from "node:path";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const manifestPath = resolve(projectRoot, "web-assets.json");
+const publicRoot = resolve(projectRoot, "public");
 
 /**
  * 读取并验证 Web 资源同步清单。
- * @returns {Promise<{copies: Array<{source: string, target: string}>}>}
+ * @returns {Promise<{removals: string[], copies: Array<{source: string, target: string}>}>}
  */
 async function loadManifest() {
   const document = JSON.parse(await readFile(manifestPath, "utf8"));
   if (!Array.isArray(document.copies)) {
     throw new Error("web-assets.json 缺少 copies 数组");
   }
-  return document;
+  if (document.removals !== undefined && !Array.isArray(document.removals)) {
+    throw new Error("web-assets.json 的 removals 必须是数组");
+  }
+  return {
+    removals: document.removals ?? [],
+    copies: document.copies,
+  };
+}
+
+/**
+ * 删除清单声明的过时公开资源，避免生产包继续携带低分辨率副本。
+ * @param {string} target
+ * @returns {Promise<void>}
+ */
+async function removeStaleAsset(target) {
+  const targetPath = resolve(projectRoot, target);
+  const relativeToPublic = relative(publicRoot, targetPath);
+  if (
+    relativeToPublic === "" ||
+    relativeToPublic.startsWith("..") ||
+    resolve(publicRoot, relativeToPublic) !== targetPath
+  ) {
+    throw new Error(`拒绝删除 public 目录之外的资源：${target}`);
+  }
+  await rm(targetPath, { force: true });
 }
 
 /**
@@ -34,6 +59,7 @@ async function copyAsset(entry) {
  */
 async function syncAssets() {
   const manifest = await loadManifest();
+  await Promise.all(manifest.removals.map(removeStaleAsset));
   await Promise.all(manifest.copies.map(copyAsset));
 }
 

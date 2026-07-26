@@ -14,6 +14,11 @@ import type {
   SurvivalSystemsConfigDocument,
 } from "../domain/survival-systems";
 import type { GameContent } from "./GameContent";
+import type { CampaignProfileService } from "./CampaignProfileService";
+import type {
+  CityAccessDecision,
+  CityAccessService,
+} from "./CityAccessService";
 import type { InventoryService } from "./InventoryService";
 import type { ResearchCraftingService } from "./ResearchCraftingService";
 import type { StateOperations } from "./StateOperations";
@@ -24,15 +29,19 @@ export class ExpeditionService {
   private readonly content: GameContent;
   private readonly inventory: InventoryService;
   private readonly research: ResearchCraftingService;
+  private readonly cityAccess: CityAccessService;
+  private readonly campaignProfiles: CampaignProfileService;
   private readonly operations: StateOperations;
   private readonly random: RandomSource;
 
-  /** 注入内容、库存、研发、状态读写与随机源。 */
+  /** 注入内容、库存、研发、城市通行、开局档案、状态读写与随机源。 */
   public constructor(
     config: SurvivalSystemsConfigDocument,
     content: GameContent,
     inventory: InventoryService,
     research: ResearchCraftingService,
+    cityAccess: CityAccessService,
+    campaignProfiles: CampaignProfileService,
     operations: StateOperations,
     random: RandomSource,
   ) {
@@ -40,8 +49,17 @@ export class ExpeditionService {
     this.content = content;
     this.inventory = inventory;
     this.research = research;
+    this.cityAccess = cityAccess;
+    this.campaignProfiles = campaignProfiles;
     this.operations = operations;
     this.random = random;
+  }
+
+  /** 返回全部城市当前的拓扑、情报、路径与载具通行判定。 */
+  public cityOptions(state: GameState): readonly CityAccessDecision[] {
+    return this.content.game.cities.map((city) =>
+      this.cityAccess.evaluate(state, city.id),
+    );
   }
 
   /** 返回当前可加入远征的伙伴及其技能步数加成。 */
@@ -85,7 +103,14 @@ export class ExpeditionService {
     companionIds: readonly string[],
     carriedItems: Readonly<Record<string, number>>,
   ): SurvivalSystemResolution {
-    this.content.city(cityId);
+    const access = this.cityAccess.evaluate(state, cityId);
+    if (!access.accessible) {
+      return {
+        applied: false,
+        messages: [access.reason],
+        turnsConsumed: 0,
+      };
+    }
     if (state.expedition !== null) {
       return {
         applied: false,
@@ -102,15 +127,26 @@ export class ExpeditionService {
       };
     }
     const maximumSteps = this.maximumSteps(state, companionIds, carriedItems);
+    if (maximumSteps < access.travelStepCost) {
+      return {
+        applied: false,
+        messages: [this.content.text("expedition_travel_steps_insufficient", {
+          required: access.travelStepCost,
+          maximum: maximumSteps,
+        })],
+        turnsConsumed: 0,
+      };
+    }
     const working = cloneGameState(state);
     this.inventory.withdraw(working, carriedItems, leaderPlayerIndex);
     working.expedition = {
       city_id: cityId,
+      travel_step_cost: access.travelStepCost,
       leader_player_index: leaderPlayerIndex,
       companion_ids: [...companionIds],
       carried_items: { ...carriedItems },
       loot: {},
-      remaining_steps: maximumSteps,
+      remaining_steps: maximumSteps - access.travelStepCost,
       maximum_steps: maximumSteps,
       events_resolved: 0,
     };
@@ -119,6 +155,8 @@ export class ExpeditionService {
       applied: true,
       messages: [formatTemplate(this.config.expedition.prepared_text, {
         maximum_steps: maximumSteps,
+        travel_steps: access.travelStepCost,
+        remaining_steps: maximumSteps - access.travelStepCost,
         companion_count: companionIds.length,
         carried_units: Object.values(carriedItems).reduce(
           (sum, quantity) => sum + quantity,
@@ -268,6 +306,7 @@ export class ExpeditionService {
     ];
     return {
       cityId: expedition.city_id,
+      travelStepCost: expedition.travel_step_cost,
       leaderPlayerIndex: expedition.leader_player_index,
       remainingSteps: expedition.remaining_steps,
       maximumSteps: expedition.maximum_steps,
@@ -319,6 +358,7 @@ export class ExpeditionService {
     );
     return this.config.expedition.base_steps
       + this.research.expeditionStepBonus(state)
+      + this.campaignProfiles.expeditionStepBonus(state)
       + companionSteps
       + carriedSteps;
   }

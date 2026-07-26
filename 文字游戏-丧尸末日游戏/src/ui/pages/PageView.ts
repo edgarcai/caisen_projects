@@ -16,6 +16,8 @@ import type {
  */
 export interface PageView {
   readonly root: LayaSpriteLike;
+  /** 通知页面自己是否位于页面栈顶层，以清理瞬态交互。 */
+  setActive?(active: boolean): void;
   destroy(): void;
 }
 
@@ -61,6 +63,7 @@ export class PageScaffold implements PageView {
   public readonly scroll: ScrollRegion;
   public readonly content: LayaSpriteLike;
   public readonly contentWidth: number;
+  private readonly disposables: Array<() => void>;
 
   /**
    * 创建配置化二级页面骨架。
@@ -76,6 +79,7 @@ export class PageScaffold implements PageView {
     footerActions?: readonly PageActionSpec[],
   ) {
     this.root = factory.container(testId);
+    this.disposables = [];
     this.root.size(layout.stageWidth, layout.stageHeight);
     this.root.mouseEnabled = true;
     this.root.graphics.drawRect(
@@ -156,10 +160,18 @@ export class PageScaffold implements PageView {
     this.contentWidth = innerWidth;
   }
 
+  /** 注册随页面一起释放的悬停计时器或其他轻量资源。 */
+  public addDisposable(dispose: () => void): void {
+    this.disposables.push(dispose);
+  }
+
   /**
    * 释放滚动事件和页面显示树。
    */
   public destroy(): void {
+    for (const dispose of this.disposables.splice(0)) {
+      dispose();
+    }
     this.scroll.destroy();
     this.root.offAll();
     this.root.destroy(true);

@@ -16,6 +16,7 @@ const WAREHOUSE_CATEGORIES = new Set([
   "key_item",
   "morale",
   "tool",
+  "transport",
   "armor",
   "weapon",
 ]);

@@ -34,6 +34,7 @@ function activeExpedition(): UiExpeditionStatusView {
   return {
     cityId: "city_a",
     cityName: "a市",
+    travelStepCost: 1,
     remainingSteps: 3,
     maximumSteps: 5,
     eventsResolved: 1,

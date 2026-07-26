@@ -17,6 +17,10 @@
       {"item_id": "field_ration", "name": "行军口粮", "category": "consumable", "carryable": true, "description": "压缩封装的远征口粮，便于长距离行动。"},
       {"item_id": "trauma_kit", "name": "创伤急救包", "category": "consumable", "carryable": true, "description": "把常用止血与抑制感染用品组合成套。"},
       {"item_id": "signal_beacon", "name": "折叠信标", "category": "tool", "carryable": true, "description": "标记安全路线，为远征提供额外步数。"},
+      {"item_id": "route_map", "name": "区域安全路线图", "category": "tool", "carryable": false, "description": "由旧报纸和无线电记录拼合的远城通行路径。"},
+      {"item_id": "armored_car", "name": "加固越野车", "category": "transport", "carryable": false, "description": "适合陆地、河岸道路和沿海公路的远行载具。"},
+      {"item_id": "motorboat", "name": "浅水机动艇", "category": "transport", "carryable": false, "description": "可穿过河道、海湾并抵达岛屿码头。"},
+      {"item_id": "helicopter", "name": "轻型直升机", "category": "transport", "carryable": false, "description": "不受地貌限制，但研发与修复成本极高。"},
       {"item_id": "reinforced_coat", "name": "加固防护服", "category": "armor", "carryable": false, "description": "可装备的轻型防具；装备后防御 +10，且不计入仓库可用数量。", "equipment_bonuses": {"defense": 10}},
       {"item_id": "pipe_rifle", "name": "管式步枪", "category": "weapon", "carryable": false, "description": "可装备的远程武器；装备后攻击 +12，且不计入仓库可用数量。", "equipment_bonuses": {"attack": 12}}
     ],
@@ -27,6 +31,7 @@
       "key_item": "关键物品",
       "morale": "文娱",
       "tool": "工具",
+      "transport": "交通工具",
       "armor": "防具",
       "weapon": "武器"
     },
@@ -75,8 +80,36 @@
           {"target": "player.parts", "operation": "subtract", "amount": 12},
           {"target": "shelter.newspapers", "operation": "subtract", "amount": 2}
         ],
-        "unlock_recipe_ids": ["signal_beacon", "pipe_rifle"],
+        "unlock_recipe_ids": ["signal_beacon", "route_map", "pipe_rifle"],
         "expedition_step_bonus": 3
+      },
+      {
+        "project_id": "transport_recovery",
+        "name": "灾后载具复原",
+        "description": "整理路况、燃料与发动机资料，恢复陆路和水路交通能力。",
+        "required_project_ids": ["signal_navigation"],
+        "turns_consumed": 6,
+        "costs": [
+          {"target": "player.parts", "operation": "subtract", "amount": 22},
+          {"target": "shelter.books", "operation": "subtract", "amount": 2},
+          {"target": "shelter.magazines", "operation": "subtract", "amount": 2}
+        ],
+        "unlock_recipe_ids": ["armored_car", "motorboat"],
+        "expedition_step_bonus": 1
+      },
+      {
+        "project_id": "rotorcraft_recovery",
+        "name": "低空航线复原",
+        "description": "重建旋翼机维护流程，并标记尸鸟与高塔形成的低空禁区。",
+        "required_project_ids": ["transport_recovery", "trauma_response"],
+        "turns_consumed": 8,
+        "costs": [
+          {"target": "player.parts", "operation": "subtract", "amount": 36},
+          {"target": "shelter.books", "operation": "subtract", "amount": 3},
+          {"target": "shelter.magazines", "operation": "subtract", "amount": 3}
+        ],
+        "unlock_recipe_ids": ["helicopter"],
+        "expedition_step_bonus": 2
       }
     ],
     "completed_text": "研发完成：【{project_name}】。",
@@ -124,6 +157,60 @@
           {"target": "player.coins", "operation": "subtract", "amount": 6}
         ],
         "output_item_id": "signal_beacon",
+        "output_quantity": 1
+      },
+      {
+        "recipe_id": "route_map",
+        "name": "绘制区域安全路线图",
+        "description": "把广播方位、旧地图和尸群迁徙记录叠合成可执行路径。",
+        "required_project_id": "signal_navigation",
+        "turns_consumed": 2,
+        "costs": [
+          {"target": "player.parts", "operation": "subtract", "amount": 4},
+          {"target": "shelter.books", "operation": "subtract", "amount": 1},
+          {"target": "shelter.magazines", "operation": "subtract", "amount": 1}
+        ],
+        "output_item_id": "route_map",
+        "output_quantity": 1
+      },
+      {
+        "recipe_id": "armored_car",
+        "name": "修复加固越野车",
+        "description": "拼装发动机、轮胎和防撞框架，恢复跨城陆路能力。",
+        "required_project_id": "transport_recovery",
+        "turns_consumed": 4,
+        "costs": [
+          {"target": "player.parts", "operation": "subtract", "amount": 45},
+          {"target": "player.coins", "operation": "subtract", "amount": 20}
+        ],
+        "output_item_id": "armored_car",
+        "output_quantity": 1
+      },
+      {
+        "recipe_id": "motorboat",
+        "name": "修复浅水机动艇",
+        "description": "密封船壳并更换推进器，恢复河道、海湾和岛屿航线。",
+        "required_project_id": "transport_recovery",
+        "turns_consumed": 4,
+        "costs": [
+          {"target": "player.parts", "operation": "subtract", "amount": 38},
+          {"target": "player.coins", "operation": "subtract", "amount": 16}
+        ],
+        "output_item_id": "motorboat",
+        "output_quantity": 1
+      },
+      {
+        "recipe_id": "helicopter",
+        "name": "复原轻型直升机",
+        "description": "完成旋翼、航电与燃油系统检修，解锁全部远城地貌。",
+        "required_project_id": "rotorcraft_recovery",
+        "turns_consumed": 7,
+        "costs": [
+          {"target": "player.parts", "operation": "subtract", "amount": 75},
+          {"target": "player.coins", "operation": "subtract", "amount": 35},
+          {"target": "player.medical_supplies", "operation": "subtract", "amount": 5}
+        ],
+        "output_item_id": "helicopter",
         "output_quantity": 1
       },
       {
@@ -199,7 +286,7 @@
     ],
     "forced_return_keep_percent": 20,
     "forced_return_health_range": [7, 45],
-    "prepared_text": "远征准备完成：最大步数{maximum_steps}，同行{companion_count}人，携带{carried_units}件物资。",
+    "prepared_text": "远征准备完成：最大步数{maximum_steps}，路程消耗{travel_steps}步，剩余{remaining_steps}步；同行{companion_count}人，携带{carried_units}件物资。",
     "step_text": "远征消耗{spent_steps}步，剩余{remaining_steps}/{maximum_steps}步。",
     "safe_return_text": "远征队沿标记路线安全返回，战利品已经入库。",
     "forced_return_text": "步数耗尽，队伍被尸群切断退路。仅保住{kept_percent}%远征物资，所长生命降至{health}。",

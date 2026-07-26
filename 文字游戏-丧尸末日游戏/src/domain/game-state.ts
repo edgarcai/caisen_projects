@@ -2,6 +2,22 @@ import { DomainError } from "./errors";
 
 export type GameMode = "single" | "multiplayer" | "story";
 
+/** 一局游戏与所长姓名分离保存的开局档案。 */
+export interface CampaignProfileState {
+  difficulty_id: string;
+  origin_id: string;
+  trait_id: string;
+  home_city_id: string;
+}
+
+/** 新游戏创建时由界面一次性提交的完整配置。 */
+export interface NewGameSetup {
+  mode: GameMode;
+  playerNames: readonly string[];
+  saveSlotId: number;
+  profile: CampaignProfileState;
+}
+
 export interface PlayerState {
   name: string;
   health: number;
@@ -94,6 +110,7 @@ export interface ResearchState {
 
 export interface ExpeditionState {
   city_id: string;
+  travel_step_cost: number;
   leader_player_index: number;
   companion_ids: string[];
   carried_items: Record<string, number>;
@@ -128,6 +145,7 @@ export interface EndingState {
 
 export interface RestorableGameState {
   mode: GameMode;
+  campaign: CampaignProfileState;
   players: PlayerState[];
   active_player_index: number;
   shelter: ShelterState;

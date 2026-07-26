@@ -6,6 +6,7 @@ export type WarehouseItemCategory =
   | "key_item"
   | "morale"
   | "tool"
+  | "transport"
   | "armor"
   | "weapon";
 
@@ -206,6 +207,7 @@ export interface ExpeditionCarryItemView {
 /** 远征状态页需要的稳定摘要。 */
 export interface ExpeditionStatusView {
   readonly cityId: string;
+  readonly travelStepCost: number;
   readonly leaderPlayerIndex: number;
   readonly remainingSteps: number;
   readonly maximumSteps: number;

@@ -89,6 +89,9 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     expect(result.accepted).toBe(true);
     expect(result.notice?.tone).toBe("success");
     expect(snapshot.mode).toBe("single");
+    expect(snapshot.storyAccess).toBe("hidden");
+    expect(snapshot.storyPrompt).toBeNull();
+    expect(snapshot.mission).toBeNull();
     expect(snapshot.activePlayer).toMatchObject({ id: "player-0", name: "白菜" });
     expect(snapshot.players).toHaveLength(1);
     expect(snapshot.clock).toEqual({
@@ -99,8 +102,12 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     expect(snapshot.meters).toHaveLength(4);
     expect(snapshot.resources).toHaveLength(12);
     expect(snapshot.shelterStats).toHaveLength(8);
-    expect(snapshot.actionGroups).toHaveLength(4);
-    expect(snapshot.storyPrompt?.id).toBe("last_pot_of_porridge");
+    expect(snapshot.actionGroups.map((group) => group.id)).toEqual([
+      "core",
+      "supplies",
+      "development",
+    ]);
+    expect(snapshot.actionGroups.some((group) => group.id === "system")).toBe(false);
     expect(snapshot.cities).toHaveLength(8);
     expect(snapshot.managementCategories.map((category) => category.id)).toEqual([
       "support",
@@ -111,6 +118,27 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     ]);
     expect(snapshot.companions).toHaveLength(4);
     expect(adapter.canLoadGame()).toBe(false);
+  });
+
+  it("普通模式拒绝伪造剧情命令且不会修改领域状态", () => {
+    const { adapter, application } = buildH5Harness();
+    adapter.execute({
+      type: "start_game",
+      mode: "single",
+      playerNames: ["生存所长"],
+    });
+    const before = JSON.stringify(application.state);
+
+    const result = adapter.execute({
+      type: "story_choice",
+      choiceId: "give_up_share",
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.notice).toMatchObject({ tone: "danger" });
+    expect(result.notice?.message).toContain("仅能在剧情模式");
+    expect(JSON.stringify(application.state)).toBe(before);
+    expect(requireSnapshot(result.snapshot).storyPrompt).toBeNull();
   });
 
   it("双人行动轮换后可显式保存，并由新适配器恢复同一快照", () => {
@@ -191,7 +219,7 @@ describe("GameUiAdapter 快照与订阅契约", () => {
   it("只在首次观察到每个十日检查点时自动写入主存档", () => {
     const storage = new CountingMemoryStorage();
     const { adapter, application } = buildH5Harness({ storage });
-    adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
+    adapter.execute({ type: "start_game", mode: "story", playerNames: ["白菜"] });
     const state = requireState(application);
     const chronicle = new ChronicleService(application.content);
 

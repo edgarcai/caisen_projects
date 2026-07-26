@@ -50,7 +50,7 @@ export class ChronicleService {
       const weekNumber = Math.floor(state.survival_days / weeklyInterval);
       const endDate = this.dateOnly(completedClock);
       const entries = structuredClone(state.communication_log);
-      const summary = this.content.text("weekly_summary_format", {
+      const summary = this.content.text(this.weeklySummaryTextKey(state), {
         week_number: weekNumber,
         entry_count: entries.length,
         shelter_health: state.shelter.health,
@@ -77,6 +77,13 @@ export class ChronicleService {
     }
     this.record(state, notices);
     return notices;
+  }
+
+  /** 按配置化叙事能力选择剧情或纯生存周总结，避免普通模式泄露主线。 */
+  private weeklySummaryTextKey(state: GameState): string {
+    return this.content.game.mode_capabilities[state.mode].includes("narrative")
+      ? "weekly_summary_format"
+      : "weekly_summary_survival_format";
   }
 
   /** 从最新自动检查点恢复全部玩法状态，无检查点时返回 null。 */

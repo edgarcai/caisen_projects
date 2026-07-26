@@ -88,6 +88,7 @@ describe("领域时钟与新游戏", () => {
     const report = application.startNewGame([" 白菜 "], "single");
 
     expect(report.stateChanged).toBe(true);
+    expect(report.messages).not.toContain(application.content.text("story_started"));
     expect(requireState(application).players.map((player) => player.name)).toEqual(["白菜"]);
     expect(() => application.startNewGame(["同名", "同名"], "multiplayer"))
       .toThrow(GameApplicationError);
@@ -125,9 +126,25 @@ describe("领域时钟与新游戏", () => {
 });
 
 describe("剧情、探索与首领战", () => {
-  it("结算首个剧情选择并推进场景与世界回合", () => {
+  it("普通模式在应用层拒绝剧情命令且保持状态不变", () => {
     const application = buildApplication();
     application.startNewGame(["白菜"], "single");
+    const before = JSON.stringify(requireState(application));
+
+    expect(application.currentStoryPrompt()).toBeNull();
+    expect(application.storyStatus()).toBeNull();
+    expect(() => application.resolveStoryChoice(
+      "last_pot_of_porridge",
+      "give_up_share",
+    )).toThrow(application.content.text("mode_capability_unavailable", {
+      capability: "narrative",
+    }));
+    expect(JSON.stringify(requireState(application))).toBe(before);
+  });
+
+  it("结算首个剧情选择并推进场景与世界回合", () => {
+    const application = buildApplication();
+    application.startNewGame(["白菜"], "story");
     const prompt = application.currentStoryPrompt();
     if (prompt === null) throw new Error("首场剧情不存在。");
 
@@ -136,12 +153,12 @@ describe("剧情、探索与首领战", () => {
     expect(report.stateChanged).toBe(true);
     expect(requireState(application).story.current_scene_id).toBe("money_and_secrets");
     expect(requireState(application).turn_number).toBe(1);
-    expect(application.storyStatus().chapterTitle).toContain("饥饿会说话");
+    expect(application.storyStatus()?.chapterTitle).toContain("饥饿会说话");
   });
 
   it("锁定首领路线、进入战斗并在胜利后发放路线成果", () => {
     const application = buildApplication(new QueueRandomSource([100, 100, 4]));
-    application.startNewGame(["白菜"], "single");
+    application.startNewGame(["白菜"], "story");
     const state = requireState(application);
     state.story.current_scene_id = "rail_butcher";
     state.story.completed_scene_ids.push("doctor_in_the_rain");

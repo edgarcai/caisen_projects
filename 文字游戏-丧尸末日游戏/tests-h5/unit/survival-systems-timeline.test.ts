@@ -15,9 +15,10 @@ import {
 /** 创建已进入单人模式的隔离应用。 */
 function startedApplication(
   random: ScriptedRandomSource = new ScriptedRandomSource(),
+  mode: GameState["mode"] = "single",
 ): GameApplication {
   const application = buildH5Harness({ random }).application;
-  application.startNewGame(["白菜"], "single");
+  application.startNewGame(["白菜"], mode);
   return application;
 }
 
@@ -153,12 +154,14 @@ describe("研发、制作与仓库不变量", () => {
 
   it("装备加成不改写基础属性，但同时更新 UI 与剧情战斗力", () => {
     const harness = buildH5Harness();
-    harness.adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
+    harness.adapter.execute({ type: "start_game", mode: "story", playerNames: ["白菜"] });
     const state = requireState(harness.application);
     const player = requirePlayer(state);
     state.story.current_scene_id = "rail_butcher";
     state.story.completed_scene_ids.push("doctor_in_the_rain");
     player.attack = 5;
+    player.defense = 10;
+    player.agility = 5;
     state.inventory.crafted_items.pipe_rifle = 1;
     const beforeChoice = harness.application.currentStoryPrompt()?.choices.find(
       (choice) => choice.choiceId === "kill_lu_chen",
@@ -180,8 +183,15 @@ describe("研发、制作与仓库不变量", () => {
   });
 
   it("武器与防具的配置加成同时参与玩家伤害和首领反击结算", () => {
-    const baseline = startedApplication(new ScriptedRandomSource([100, 100, 100]));
+    const baseline = startedApplication(
+      new ScriptedRandomSource([100, 100, 100]),
+      "story",
+    );
     const baselineState = requireState(baseline);
+    const baselinePlayer = requirePlayer(baselineState);
+    baselinePlayer.attack = 20;
+    baselinePlayer.defense = 15;
+    baselinePlayer.agility = 5;
     baselineState.battle = {
       boss_id: "rail_butcher",
       boss_name: "铁轨屠夫·陆沉",
@@ -195,8 +205,15 @@ describe("研发、制作与仓库不变量", () => {
       retreated: false,
     };
 
-    const equipped = startedApplication(new ScriptedRandomSource([100, 100, 100]));
+    const equipped = startedApplication(
+      new ScriptedRandomSource([100, 100, 100]),
+      "story",
+    );
     const equippedState = requireState(equipped);
+    const equippedPlayer = requirePlayer(equippedState);
+    equippedPlayer.attack = 20;
+    equippedPlayer.defense = 15;
+    equippedPlayer.agility = 5;
     equippedState.inventory.crafted_items.pipe_rifle = 1;
     equippedState.inventory.crafted_items.reinforced_coat = 1;
     equipped.equipItem("pipe_rifle");
@@ -214,11 +231,13 @@ describe("研发、制作与仓库不变量", () => {
 });
 
 describe("配置化远征", () => {
-  it("基础、研发、伙伴信任与携带物共同增加步数，城市成本在首事件前扣除", () => {
+  it("基础、特性、研发、伙伴信任与携带物共同增加步数，路费和城市成本在首事件前扣除", () => {
     const application = startedApplication();
     const state = requireState(application);
     state.research.completed_project_ids.push("field_logistics");
     state.inventory.crafted_items.field_ration = 2;
+    state.inventory.crafted_items.route_map = 1;
+    state.shelter.newspapers = 5;
     const haocai = state.companions.find((companion) => (
       companion.companion_id === "haocai"
     ));
@@ -234,8 +253,9 @@ describe("配置化远征", () => {
     expect(report.stateChanged).toBe(true);
     expect(application.expeditionStatus()).toMatchObject({
       cityId: "city_d",
-      maximumSteps: 12,
-      remainingSteps: 10,
+      travelStepCost: 3,
+      maximumSteps: 14,
+      remainingSteps: 9,
       companionIds: ["haocai"],
       carriedItems: { field_ration: 2 },
     });
@@ -247,12 +267,21 @@ describe("配置化远征", () => {
     const safe = startedApplication();
     safe.prepareExpedition("city_a", [], {});
     const dangerous = startedApplication();
+    const dangerousState = requireState(dangerous);
+    dangerousState.shelter.newspapers = 10;
+    dangerousState.inventory.crafted_items.route_map = 1;
     dangerous.prepareExpedition("city_h", [], {});
 
-    expect(safe.expeditionStatus()?.maximumSteps).toBe(4);
-    expect(safe.expeditionStatus()?.remainingSteps).toBe(3);
-    expect(dangerous.expeditionStatus()?.maximumSteps).toBe(4);
-    expect(dangerous.expeditionStatus()?.remainingSteps).toBe(1);
+    expect(safe.expeditionStatus()).toMatchObject({
+      travelStepCost: 1,
+      maximumSteps: 6,
+      remainingSteps: 4,
+    });
+    expect(dangerous.expeditionStatus()).toMatchObject({
+      travelStepCost: 3,
+      maximumSteps: 6,
+      remainingSteps: 0,
+    });
   });
 
   it("继续远征锁定下一事件，安全返程保留战利品并清理上下文", () => {
@@ -260,6 +289,7 @@ describe("配置化远征", () => {
     const state = requireState(application);
     state.expedition = {
       city_id: "city_a",
+      travel_step_cost: 1,
       leader_player_index: 0,
       companion_ids: [],
       carried_items: {},
@@ -345,6 +375,7 @@ describe("配置化远征", () => {
     player.food = 100;
     state.expedition = {
       city_id: "city_h",
+      travel_step_cost: 3,
       leader_player_index: 0,
       companion_ids: [],
       carried_items: { food: 4 },
@@ -411,6 +442,7 @@ describe("生存系统存档校验", () => {
       mutate: (state: GameState): void => {
         state.expedition = {
           city_id: "unknown_city",
+          travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: [],
           carried_items: {},
@@ -426,6 +458,7 @@ describe("生存系统存档校验", () => {
       mutate: (state: GameState): void => {
         state.expedition = {
           city_id: "city_a",
+          travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: [],
           carried_items: {},
@@ -441,6 +474,7 @@ describe("生存系统存档校验", () => {
       mutate: (state: GameState): void => {
         state.expedition = {
           city_id: "city_a",
+          travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: [],
           carried_items: { food: 7 },
@@ -456,6 +490,7 @@ describe("生存系统存档校验", () => {
       mutate: (state: GameState): void => {
         state.expedition = {
           city_id: "city_a",
+          travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: [],
           carried_items: {
@@ -476,6 +511,7 @@ describe("生存系统存档校验", () => {
       mutate: (state: GameState): void => {
         state.expedition = {
           city_id: "city_a",
+          travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: [],
           carried_items: { coins: 1 },
@@ -491,6 +527,7 @@ describe("生存系统存档校验", () => {
       mutate: (state: GameState): void => {
         state.expedition = {
           city_id: "city_a",
+          travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: ["haocai", "yangguan", "linlan"],
           carried_items: {},
@@ -559,6 +596,8 @@ describe("v3 时间线与迁移", () => {
     expect(state.weekly_archives[0]?.entries.some((entry) => (
       entry.message === "第1日记录"
     ))).toBe(true);
+    expect(state.weekly_archives[0]?.summary).toContain("远征与经营");
+    expect(state.weekly_archives[0]?.summary).not.toContain("主线");
     expect(state.communication_log.some((entry) => entry.message === "第1日记录"))
       .toBe(false);
     expect(state.communication_log).toHaveLength(1);

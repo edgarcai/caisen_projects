@@ -3,10 +3,15 @@ import type { GameUiConfig } from "../../styles/GameTheme";
 import type { UiFactory } from "../components/UiFactory";
 import type { LayaRuntimeLike } from "../laya/LayaRuntime";
 import type { UiPreferences } from "../ports/UiSettingsPort";
-import type { UiDocumentView, UiPromptView } from "../ports/GameUiPort";
+import type {
+  UiDocumentView,
+  UiOptionView,
+  UiPromptView,
+} from "../ports/GameUiPort";
 import { createChoicePage } from "./ChoicePage";
 import { createConfirmPage } from "./ConfirmPage";
 import { createDocumentPage } from "./DocumentPage";
+import { createEscMenuPage } from "./EscMenuPage";
 import type { PageView } from "./PageView";
 
 /** 功能菜单可触发的页面级动作。 */
@@ -15,6 +20,14 @@ export interface FunctionMenuActions {
   readonly openSettings: () => void;
   readonly openRollback: () => void;
   readonly openExit: () => void;
+  readonly close: () => void;
+}
+
+/** 设置页把本地偏好与局内系统导航分离后的交互出口。 */
+export interface SettingsPageActions {
+  readonly toggleReducedMotion: () => void;
+  readonly openTutorial?: () => void;
+  readonly openReturnMenu?: () => void;
   readonly close: () => void;
 }
 
@@ -28,20 +41,9 @@ export function createFunctionMenuPage(
   actions: FunctionMenuActions,
 ): PageView {
   const prompt = buildFunctionMenuPrompt(config, canRollback);
-  return createChoicePage(runtime, factory, config, layout, {
-    testId: "page-function-menu",
-    title: config.texts.function_menu_title,
+  return createEscMenuPage(runtime, factory, config, layout, {
     prompt,
-    onBack: actions.close,
-    footerActions: [
-      {
-        id: "continue",
-        testId: "function-menu-continue",
-        label: config.texts.continue,
-        tone: "primary",
-        onClick: actions.close,
-      },
-    ],
+    onClose: actions.close,
     onSelect: (option): void => {
       if (option.id === "save") {
         actions.save();
@@ -98,39 +100,80 @@ export function buildFunctionMenuPrompt(
   };
 }
 
-/** 创建只管理本地体验偏好的设置覆盖页。 */
+/** 创建管理本地体验偏好，并在局内承载玩法与主菜单入口的设置页。 */
 export function createSettingsPage(
   runtime: LayaRuntimeLike,
   factory: UiFactory,
   config: GameUiConfig,
   layout: ResponsiveLayout,
   preferences: UiPreferences,
-  onToggleReducedMotion: () => void,
-  onBack: () => void,
+  actions: SettingsPageActions,
 ): PageView {
-  const prompt: UiPromptView = {
-    id: "settings",
-    title: config.texts.settings_title,
-    body: config.texts.settings_body,
-    options: [
-      {
-        id: "reduced-motion",
-        label: preferences.reducedMotion
-          ? config.texts.reduced_motion_on
-          : config.texts.reduced_motion_off,
-        description: config.texts.reduced_motion_description,
-        disabled: false,
-        tone: preferences.reducedMotion ? "success" : "default",
-      },
-    ],
-  };
+  const prompt = buildSettingsPrompt(
+    config,
+    preferences,
+    actions.openTutorial !== undefined,
+    actions.openReturnMenu !== undefined,
+  );
   return createChoicePage(runtime, factory, config, layout, {
     testId: "page-settings",
     title: config.texts.settings_title,
     prompt,
-    onBack,
-    onSelect: onToggleReducedMotion,
+    onBack: actions.close,
+    onSelect: (option): void => {
+      if (option.id === "reduced-motion") {
+        actions.toggleReducedMotion();
+      } else if (option.id === "tutorial") {
+        actions.openTutorial?.();
+      } else if (option.id === "return-menu") {
+        actions.openReturnMenu?.();
+      }
+    },
   });
+}
+
+/** 构建封面精简设置或局内完整系统设置的只读提示模型。 */
+export function buildSettingsPrompt(
+  config: GameUiConfig,
+  preferences: UiPreferences,
+  includeTutorial: boolean,
+  includeReturnMenu: boolean,
+): UiPromptView {
+  const options: UiOptionView[] = [
+    {
+      id: "reduced-motion",
+      label: preferences.reducedMotion
+        ? config.texts.reduced_motion_on
+        : config.texts.reduced_motion_off,
+      description: config.texts.reduced_motion_description,
+      disabled: false,
+      tone: preferences.reducedMotion ? "success" : "default",
+    },
+  ];
+  if (includeTutorial) {
+    options.push({
+      id: "tutorial",
+      label: config.texts.settings_tutorial,
+      description: config.texts.settings_tutorial_description,
+      disabled: false,
+      tone: "default",
+    });
+  }
+  if (includeReturnMenu) {
+    options.push({
+      id: "return-menu",
+      label: config.texts.settings_return_menu,
+      description: config.texts.settings_return_menu_description,
+      disabled: false,
+      tone: "danger",
+    });
+  }
+  return {
+    id: "settings",
+    title: config.texts.settings_title,
+    body: config.texts.settings_body,
+    options,
+  };
 }
 
 /** 创建回到最近检查点的二次确认页。 */

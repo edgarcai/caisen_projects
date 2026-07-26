@@ -1,6 +1,7 @@
 import type {
   GameMode,
   GameScreenId,
+  SaveSlotsPageMode,
   UiDocumentView,
 } from "../ports/GameUiPort";
 
@@ -9,6 +10,7 @@ import type {
  */
 export interface GameRouteContext {
   readonly mode?: GameMode;
+  readonly saveSlotsMode?: SaveSlotsPageMode;
   readonly categoryId?: string;
   readonly document?: UiDocumentView;
 }

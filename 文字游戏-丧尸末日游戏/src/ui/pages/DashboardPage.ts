@@ -127,7 +127,12 @@ export class DashboardPage implements PageView {
       : `${snapshot.clock.dateLabel}  ${snapshot.clock.timeLabel}`;
     const activePlayerText = snapshot.activePlayer === null
       ? ""
-      : `${snapshot.activePlayer.roleLabel} · ${snapshot.activePlayer.name}`;
+      : this.formatProfileField(
+          config,
+          config.texts.profile_name_label,
+          snapshot.activePlayer.name,
+        );
+    const campaignText = this.campaignProfileText(config, snapshot);
     factory.text(this.root, {
       testId: "dashboard-clock",
       text: clockText,
@@ -151,6 +156,20 @@ export class DashboardPage implements PageView {
       color: config.theme.text,
     });
     factory.text(this.root, {
+      testId: "dashboard-campaign-profile",
+      text: campaignText,
+      x: headerLeft,
+      y:
+        headerTop +
+        config.typography.section_title_size +
+        layout.sectionGap +
+        config.typography.body_line_height,
+      width: textWidth,
+      height: config.typography.body_line_height * 2,
+      fontSize: config.typography.caption_size,
+      color: config.theme.muted_text,
+    });
+    factory.text(this.root, {
       testId: "dashboard-turn",
       text: snapshot.clock?.turnLabel ?? "",
       x: headerLeft,
@@ -162,6 +181,55 @@ export class DashboardPage implements PageView {
       align: "right",
       valign: "middle",
     });
+  }
+
+  /** 把模式、难度、起源、特性与市区连接为独立档案摘要。 */
+  private campaignProfileText(
+    config: GameUiConfig,
+    snapshot: GameUiSnapshot,
+  ): string {
+    const profile = snapshot.campaignProfile;
+    if (profile === null) {
+      return "";
+    }
+    return [
+      this.formatProfileField(
+        config,
+        config.texts.profile_mode_label,
+        profile.modeLabel,
+      ),
+      this.formatProfileField(
+        config,
+        config.texts.profile_difficulty_label,
+        profile.difficultyLabel,
+      ),
+      this.formatProfileField(
+        config,
+        config.texts.profile_origin_label,
+        profile.originLabel,
+      ),
+      this.formatProfileField(
+        config,
+        config.texts.profile_trait_label,
+        profile.traitLabel,
+      ),
+      this.formatProfileField(
+        config,
+        config.texts.profile_city_label,
+        profile.homeCityLabel,
+      ),
+    ].join(config.texts.profile_field_separator);
+  }
+
+  /** 使用配置化模板格式化一个所长档案字段。 */
+  private formatProfileField(
+    config: GameUiConfig,
+    label: string,
+    value: string,
+  ): string {
+    return config.texts.profile_field_format
+      .replace("{label}", label)
+      .replace("{value}", value);
   }
 
   /**

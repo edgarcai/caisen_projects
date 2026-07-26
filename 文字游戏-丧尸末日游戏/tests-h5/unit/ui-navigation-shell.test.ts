@@ -17,12 +17,16 @@ import { PageStack } from "../../src/ui/navigation/PageStack";
 import {
   buildCoverMenuItems,
   resolveCoverArtwork,
+  resolveCoverChangelogGeometry,
   resolveCoverDescriptionGeometry,
+  resolveCoverExitGeometry,
   resolveCoverMenuItemGeometry,
-} from "../../src/ui/pages/CoverPage";
+  resolveCoverSettingsGeometry,
+} from "../../src/ui/models/CoverMenuModel";
 import { resolvePageScaffoldGeometry } from "../../src/ui/pages/PageView";
 import {
   buildFunctionMenuPrompt,
+  buildSettingsPrompt,
   createCreditsDocument,
 } from "../../src/ui/pages/SystemMenuPages";
 
@@ -205,7 +209,7 @@ describe("手机、紧凑与桌面响应式基础", () => {
   });
 });
 
-describe("六入口响应式封面契约", () => {
+describe("五入口响应式封面与独立退出契约", () => {
   /** 创建不产生副作用的封面回调夹具。 */
   function createActions() {
     return {
@@ -214,11 +218,12 @@ describe("六入口响应式封面契约", () => {
       startMultiplayer: vi.fn(),
       startStory: vi.fn(),
       showCredits: vi.fn(),
+      openSettings: vi.fn(),
       exitGame: vi.fn(),
     };
   }
 
-  it("包含六项精确顺序且退出永远最低", () => {
+  it("主菜单包含五项精确顺序，退出由独立系统键承载", () => {
     const items = buildCoverMenuItems(webConfig, false, createActions());
 
     expect(items.map((item) => item.label)).toEqual([
@@ -227,9 +232,8 @@ describe("六入口响应式封面契约", () => {
       "多人游戏",
       "剧情模式",
       "鸣谢",
-      "退出",
     ]);
-    expect(items.at(-1)?.id).toBe("exit");
+    expect(items.some((item) => item.id === "exit")).toBe(false);
     expect(items.find((item) => item.id === "load-game")?.disabled).toBe(true);
     expect(items.every((item) => item.description.length > 0)).toBe(true);
   });
@@ -248,18 +252,23 @@ describe("六入口响应式封面契约", () => {
     const itemCount = buildCoverMenuItems(webConfig, false, createActions()).length;
     const desktopFirst = resolveCoverMenuItemGeometry(webConfig, desktop, 0, itemCount);
     const desktopSecondRow = resolveCoverMenuItemGeometry(webConfig, desktop, 2, itemCount);
-    const desktopExit = resolveCoverMenuItemGeometry(webConfig, desktop, 5, itemCount);
+    const desktopLast = resolveCoverMenuItemGeometry(webConfig, desktop, 4, itemCount);
+    const desktopExit = resolveCoverExitGeometry(webConfig, desktop);
     const mobileFirst = resolveCoverMenuItemGeometry(webConfig, mobile, 0, itemCount);
     const mobileSecond = resolveCoverMenuItemGeometry(webConfig, mobile, 1, itemCount);
-    const mobileExit = resolveCoverMenuItemGeometry(webConfig, mobile, 5, itemCount);
+    const mobileLast = resolveCoverMenuItemGeometry(webConfig, mobile, 4, itemCount);
+    const mobileExit = resolveCoverExitGeometry(webConfig, mobile);
 
-    expect(webConfig.assets.skins.cover_button_idle).toContain(
-      "menu_button_idle.png",
-    );
+    expect(webConfig.assets.skins.cover_button_idle)
+      .toMatch(/menu_button_idle(?:_2k)?\.png$/u);
     expect(desktopFirst.shape).toBe("parallelogram");
     expect(desktopSecondRow.y).toBeGreaterThan(desktopFirst.y);
     expect(desktopSecondRow.x).toBeGreaterThan(desktopFirst.x);
-    expect(desktopExit.y).toBeGreaterThan(desktopSecondRow.y);
+    expect(desktopLast.y).toBeGreaterThan(desktopSecondRow.y);
+    expect(desktopExit.y).toBeLessThan(desktopLast.y);
+    expect(desktopExit.x + desktopExit.width).toBeLessThanOrEqual(
+      desktop.stageWidth - desktop.safeArea.right,
+    );
     expect(webConfig.layout.cover.desktop.description_height).toBeGreaterThanOrEqual(
       webConfig.layout.desktop.panel_padding * 2
         + webConfig.typography.body_line_height * 4,
@@ -268,7 +277,11 @@ describe("六入口响应式封面契约", () => {
     expect(mobileFirst.x).toBe((mobile.stageWidth - mobileFirst.width) / 2);
     expect(mobileSecond.x).toBe(mobileFirst.x);
     expect(mobileSecond.y).toBeGreaterThan(mobileFirst.y);
-    expect(mobileExit.y).toBeGreaterThan(mobileSecond.y);
+    expect(mobileLast.y).toBeGreaterThan(mobileSecond.y);
+    expect(mobileExit.y).toBeLessThan(mobileLast.y);
+    expect(mobileExit.x + mobileExit.width).toBeLessThanOrEqual(
+      mobile.stageWidth - mobile.safeArea.right,
+    );
     expect(resolveCoverArtwork(webConfig, desktop)).toBe(webConfig.assets.cover);
     expect(resolveCoverArtwork(webConfig, mobile)).toBe(
       webConfig.assets.mobile_cover,
@@ -284,17 +297,87 @@ describe("六入口响应式封面契约", () => {
     const itemCount = buildCoverMenuItems(webConfig, false, createActions()).length;
     const first = resolveCoverMenuItemGeometry(webConfig, landscape, 0, itemCount);
     const second = resolveCoverMenuItemGeometry(webConfig, landscape, 1, itemCount);
-    const exit = resolveCoverMenuItemGeometry(webConfig, landscape, 5, itemCount);
+    const last = resolveCoverMenuItemGeometry(webConfig, landscape, 4, itemCount);
+    const exit = resolveCoverExitGeometry(webConfig, landscape);
 
     expect(landscape.kind).toBe("mobile");
     expect(landscape.isLandscape).toBe(true);
     expect(first.shape).toBe("rectangle");
     expect(second.x).toBeGreaterThan(first.x);
     expect(second.y).toBe(first.y);
+    expect(last.y + last.height).toBeLessThanOrEqual(landscape.stageHeight);
     expect(exit.y + exit.height).toBeLessThanOrEqual(landscape.stageHeight);
   });
 
-  it("悬停满配置化 800ms 才发布简介，离开立即清空", () => {
+  it("手机竖屏与横屏的鸣谢均不与更新日志重叠", () => {
+    const layouts = [
+      resolveTestLayout(
+        webConfig.engine.mobile_design_width,
+        webConfig.engine.mobile_design_height,
+        true,
+      ),
+      resolveTestLayout(
+        webConfig.engine.mobile_design_height,
+        webConfig.engine.mobile_design_width,
+        true,
+      ),
+    ];
+    const itemCount = buildCoverMenuItems(webConfig, false, createActions()).length;
+
+    for (const layout of layouts) {
+      const credits = resolveCoverMenuItemGeometry(
+        webConfig,
+        layout,
+        itemCount - 1,
+        itemCount,
+      );
+      const changelog = resolveCoverChangelogGeometry(webConfig, layout);
+      const separated =
+        credits.x + credits.width <= changelog.x ||
+        changelog.x + changelog.width <= credits.x ||
+        credits.y + credits.height <= changelog.y ||
+        changelog.y + changelog.height <= credits.y;
+
+      expect(separated).toBe(true);
+    }
+  });
+
+  it("手机和电脑封面设置键满足触控下限并始终落在安全区内", () => {
+    const layouts = [
+      resolveTestLayout(1440, 900, false, {
+        top: 12,
+        right: 18,
+        bottom: 0,
+        left: 8,
+      }),
+      resolveTestLayout(600, 1067, true, {
+        top: 36,
+        right: 20,
+        bottom: 24,
+        left: 16,
+      }),
+    ];
+
+    for (const layout of layouts) {
+      const geometry = resolveCoverSettingsGeometry(webConfig, layout);
+      expect(geometry.width).toBeGreaterThanOrEqual(
+        webConfig.controls.minimum_touch_size,
+      );
+      expect(geometry.height).toBeGreaterThanOrEqual(
+        webConfig.controls.minimum_touch_size,
+      );
+      expect(geometry.x).toBeGreaterThanOrEqual(layout.safeArea.left);
+      expect(geometry.y).toBeGreaterThanOrEqual(layout.safeArea.top);
+      expect(geometry.x + geometry.width).toBeLessThanOrEqual(
+        layout.stageWidth - layout.safeArea.right,
+      );
+      expect(geometry.y + geometry.height).toBeLessThanOrEqual(
+        layout.stageHeight - layout.safeArea.bottom,
+      );
+    }
+  });
+
+  it("悬停满配置化延迟才发布简介，离开立即清空", () => {
     vi.useFakeTimers();
     const listener = vi.fn<(value: string | null) => void>();
     const intent = new DelayedHoverIntent(
@@ -338,6 +421,31 @@ describe("通用底部操作区与本地设置", () => {
       .toBe(true);
     expect(available.options.find((option) => option.id === "rollback")?.disabled)
       .toBe(false);
+  });
+
+  it("封面设置仅含体验偏好，局内设置承载玩法与返回主菜单", () => {
+    const cover = buildSettingsPrompt(
+      webConfig,
+      { reducedMotion: false },
+      false,
+      false,
+    );
+    const inGame = buildSettingsPrompt(
+      webConfig,
+      { reducedMotion: true },
+      true,
+      true,
+    );
+
+    expect(cover.options.map((option) => option.id)).toEqual([
+      "reduced-motion",
+    ]);
+    expect(inGame.options.map((option) => option.id)).toEqual([
+      "reduced-motion",
+      "tutorial",
+      "return-menu",
+    ]);
+    expect(inGame.options.at(-1)?.tone).toBe("danger");
   });
 
   it("双动作在固定页脚中等宽排列且不超过配置最大宽度", () => {

@@ -50,6 +50,10 @@ export interface ButtonSpec {
   readonly skin?: ButtonSkinSpec;
   readonly fontSize?: number;
   readonly wordWrap?: boolean;
+  readonly hoverableWhenDisabled?: boolean;
+  readonly onHoverStart?: () => void;
+  readonly onHoverMove?: () => void;
+  readonly onHoverEnd?: () => void;
   readonly onClick: () => void;
 }
 
@@ -228,7 +232,9 @@ export class UiFactory {
     const node = this.container(spec.testId);
     node.pos(spec.x, spec.y);
     node.size(spec.width, spec.height);
-    node.mouseEnabled = spec.disabled !== true;
+    const disabled = spec.disabled === true;
+    const acceptsDisabledHover = disabled && spec.hoverableWhenDisabled === true;
+    node.mouseEnabled = !disabled || acceptsDisabledHover;
     const skinLayer = this.createButtonSkinLayer(node, spec);
     const label = this.createButtonLabel(node, spec);
     let state: "idle" | "hover" | "pressed" = "idle";
@@ -240,8 +246,9 @@ export class UiFactory {
      */
     const renderButton = (): void => {
       const colors = this.resolveButtonColors(spec.tone ?? "default", state);
-      const fillColor = spec.disabled === true ? this.theme.background_soft : colors.fill;
-      const textColor = spec.disabled === true ? this.theme.muted_text : colors.text;
+      const fillColor = disabled ? this.theme.background_soft : colors.fill;
+      const textColor = disabled ? this.theme.muted_text : colors.text;
+      const borderColor = disabled ? this.theme.border : colors.border;
       node.graphics.clear();
       const skin = this.resolveButtonSkin(spec, state);
       if (skinLayer !== null && skin.length > 0) {
@@ -255,7 +262,7 @@ export class UiFactory {
           0,
           [slant, 0, spec.width, 0, spec.width - slant, spec.height, 0, spec.height],
           fillColor,
-          colors.border,
+          borderColor,
           this.controls.focus_border_width,
         );
       } else {
@@ -266,7 +273,7 @@ export class UiFactory {
           spec.width,
           spec.height,
           fillColor,
-          colors.border,
+          borderColor,
           this.controls.focus_border_width,
         );
       }
@@ -277,16 +284,29 @@ export class UiFactory {
      * 进入按钮时显示悬停状态。
      */
     const handleOver = (): void => {
-      state = "hover";
-      renderButton();
+      if (!disabled) {
+        state = "hover";
+        renderButton();
+      }
+      spec.onHoverStart?.();
+    };
+
+    /**
+     * 指针在按钮范围内移动时转发位置更新意图。
+     */
+    const handleMove = (): void => {
+      spec.onHoverMove?.();
     };
 
     /**
      * 离开按钮时恢复默认状态。
      */
     const handleOut = (): void => {
-      state = "idle";
-      renderButton();
+      if (!disabled) {
+        state = "idle";
+        renderButton();
+      }
+      spec.onHoverEnd?.();
     };
 
     /**
@@ -314,16 +334,21 @@ export class UiFactory {
      * 仅在未发生滚动拖动时提交点击，避免手机列表误触。
      */
     const handleClick = (): void => {
-      if (!dragged) {
+      if (!disabled && !dragged) {
         spec.onClick();
       }
       dragged = false;
     };
 
     renderButton();
-    if (spec.disabled !== true) {
+    if (!disabled || acceptsDisabledHover) {
       node.on(this.runtime.Event.MOUSE_OVER, node, handleOver);
       node.on(this.runtime.Event.MOUSE_OUT, node, handleOut);
+      if (spec.onHoverMove !== undefined) {
+        node.on(this.runtime.Event.MOUSE_MOVE, node, handleMove);
+      }
+    }
+    if (!disabled) {
       node.on(this.runtime.Event.MOUSE_DOWN, node, handleDown);
       node.on(this.runtime.Event.MOUSE_UP, node, handleUp);
       node.on(this.runtime.Event.CLICK, node, handleClick);
@@ -499,6 +524,12 @@ export class UiFactory {
     if (tone === "default") {
       const fill = state === "hover" ? this.theme.secondary_hover : this.theme.secondary;
       return { fill, text: this.theme.text, border: this.theme.border };
+    }
+    if (tone === "muted") {
+      const fill = state === "hover"
+        ? this.theme.panel_elevated
+        : this.theme.background_soft;
+      return { fill, text: this.theme.muted_text, border: this.theme.border };
     }
     const fill = resolveToneColor(this.theme, tone);
     return { fill, text: this.theme.text, border: this.theme.border_active };

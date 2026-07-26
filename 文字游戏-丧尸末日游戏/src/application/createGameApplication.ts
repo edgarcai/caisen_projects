@@ -2,6 +2,7 @@ import eventsDocument from "../../config/events.json";
 import gameDocument from "../../config/game_config.json";
 import v1ToV2MigrationDocument from "../../config/save_migrations/v1_to_v2.json";
 import v2ToV3MigrationDocument from "../../config/save_migrations/v2_to_v3.json";
+import v3ToV4MigrationDocument from "../../config/save_migrations/v3_to_v4.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import webDocument from "../../config/web_config.json";
@@ -13,6 +14,7 @@ import type {
   SaveMigrationConfig,
   StoryConfigDocument,
   V2ToV3SaveMigrationConfig,
+  V3ToV4SaveMigrationConfig,
 } from "../domain/content";
 import type { SurvivalSystemsConfigDocument } from "../domain/survival-systems";
 import type { RandomSource, SaveRepository, StorageLike } from "../domain/ports";
@@ -24,13 +26,17 @@ import {
   V1ToV2SaveMigrator,
   V2ToV3SaveMigrator,
 } from "../infrastructure";
+import { V3ToV4SaveMigrator } from "../infrastructure/V3ToV4SaveMigrator";
 import {
+  CampaignProfileService,
   ChronicleService,
+  CityAccessService,
   CombatService,
   EquipmentService,
   ExpeditionService,
   ExplorationService,
   GameContent,
+  GameModeCapabilityPolicy,
   GameRules,
   InventoryService,
   ResearchCraftingService,
@@ -43,6 +49,7 @@ import { GameApplication } from "./GameApplication";
 interface StorageDocument {
   key: string;
   schema_version: number;
+  save_slot_count: number;
   backup_slots: number;
 }
 
@@ -51,6 +58,7 @@ export interface CreateGameApplicationOptions {
   repository?: SaveRepository;
   storage?: StorageLike;
   storageKey?: string;
+  slotCount?: number;
   backupSlots?: number;
   now?: () => Date;
 }
@@ -64,16 +72,20 @@ export function createGameApplication(
   const events = eventsDocument as unknown as EventsConfigDocument;
   const v1ToV2Migration = v1ToV2MigrationDocument as unknown as SaveMigrationConfig;
   const v2ToV3Migration = v2ToV3MigrationDocument as unknown as V2ToV3SaveMigrationConfig;
-  const storageConfig = webDocument.storage as StorageDocument;
+  const v3ToV4Migration: V3ToV4SaveMigrationConfig = v3ToV4MigrationDocument;
+  const storageConfig = webDocument.storage as unknown as StorageDocument;
   const survivalSystems = validateSurvivalSystemsConfig(survivalSystemsDocument);
   const content = new GameContent(game, story, events);
   const random = options.randomSource ?? new BrowserRandomSource();
   const operations = new StateOperations(random);
+  const campaignProfiles = new CampaignProfileService(content, operations);
+  const modeCapabilities = new GameModeCapabilityPolicy(content);
+  const cityAccess = new CityAccessService(content, survivalSystems);
   const equipment = new EquipmentService(survivalSystems);
   const storyService = new StoryService(content, operations, equipment);
   const shelter = new ShelterService(content, operations, storyService, random);
   const chronicle = new ChronicleService(content);
-  const rules = new GameRules(content, shelter, chronicle);
+  const rules = new GameRules(content, shelter, chronicle, campaignProfiles);
   const exploration = new ExplorationService(content, operations, random);
   const inventory = new InventoryService(
     survivalSystems,
@@ -86,6 +98,8 @@ export function createGameApplication(
     content,
     inventory,
     researchCrafting,
+    cityAccess,
+    campaignProfiles,
     operations,
     random,
   );
@@ -98,6 +112,7 @@ export function createGameApplication(
     survivalSystems,
     v1ToV2Migration,
     v2ToV3Migration,
+    v3ToV4Migration,
   );
   return new GameApplication(
     content,
@@ -110,6 +125,8 @@ export function createGameApplication(
     equipment,
     researchCrafting,
     expedition,
+    campaignProfiles,
+    modeCapabilities,
     rules,
     repository,
     random,
@@ -125,22 +142,26 @@ function createRepository(
   survivalSystems: SurvivalSystemsConfigDocument,
   v1ToV2Migration: SaveMigrationConfig,
   v2ToV3Migration: V2ToV3SaveMigrationConfig,
+  v3ToV4Migration: V3ToV4SaveMigrationConfig,
 ): SaveRepository {
   const validator = new SaveStateValidator(
     game.rules,
     Object.keys(story.defaults.facility_levels),
     story.defaults.companions.map((companion) => companion.companion_id),
     survivalSystems,
+    game.campaign_profiles,
   );
   return new LocalStorageSaveRepository({
     storage: options.storage ?? browserStorageOrMemory(),
     storageKey: options.storageKey ?? storageConfig.key,
     schemaVersion: storageConfig.schema_version,
+    slotCount: options.slotCount ?? storageConfig.save_slot_count,
     backupSlots: options.backupSlots ?? storageConfig.backup_slots,
     validator,
     migrators: [
       new V1ToV2SaveMigrator(v1ToV2Migration),
       new V2ToV3SaveMigrator(v2ToV3Migration),
+      new V3ToV4SaveMigrator(v3ToV4Migration),
     ],
     now: options.now,
   });

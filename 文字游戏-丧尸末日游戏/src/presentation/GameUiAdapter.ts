@@ -3,6 +3,7 @@ import { formatTemplate } from "../domain/content";
 import { GameApplicationError } from "../domain/errors";
 import { activePlayer, isEnded, isVictory } from "../domain/game-state";
 import type {
+  CampaignProfileState,
   CompanionState,
   GameMode,
   GameState,
@@ -17,6 +18,9 @@ import type {
   GameUiSnapshot,
   UiActionGroupView,
   UiBattleView,
+  UiCampaignProfileOptionsView,
+  UiCampaignProfileSelection,
+  UiCampaignProfileView,
   UiCityView,
   UiCompanionView,
   UiCraftingRecipeView,
@@ -30,6 +34,8 @@ import type {
   UiOptionView,
   UiPromptView,
   UiResearchProjectView,
+  UiSaveSlotView,
+  UiStoryAccess,
   UiStatView,
   UiTone,
   UiPlayerView,
@@ -125,7 +131,10 @@ export class GameUiAdapter implements GameUiPort {
   /** 构建当前游戏状态对应的完整不可变快照。 */
   public getSnapshot(): GameUiSnapshot {
     const state = this.application.state;
-    const storyStatus = state === null ? null : this.application.storyStatus();
+    const storyAccess = this.resolveStoryAccess(state);
+    const storyStatus = storyAccess === "mode"
+      ? this.application.storyStatus()
+      : null;
     return {
       revision: this.revision,
       brand: {
@@ -133,7 +142,11 @@ export class GameUiAdapter implements GameUiPort {
         subtitle: this.presentation.interface.cover.subtitle,
       },
       playerCounts: this.playerCounts(),
+      campaignProfileOptions: this.campaignProfileOptions(),
+      campaignProfile: state === null ? null : this.campaignProfileView(state),
+      saveSlots: this.saveSlotViews(),
       mode: state?.mode ?? null,
+      storyAccess,
       ended: state === null ? false : isEnded(state),
       canRollback: state?.checkpoint !== null && state?.checkpoint !== undefined,
       activePlayer: state === null ? null : this.playerView(state, state.active_player_index),
@@ -154,7 +167,7 @@ export class GameUiAdapter implements GameUiPort {
           },
       logs: this.visibleLogs(),
       actionGroups: state === null ? [] : this.actionGroupViews(state),
-      storyPrompt: state === null ? null : this.storyPromptView(),
+      storyPrompt: storyAccess === "mode" ? this.storyPromptView() : null,
       cities: state === null ? [] : this.cityViews(state),
       explorationPrompt: state === null ? null : this.explorationPromptView(state),
       battle: state === null ? null : this.battleView(state),
@@ -169,7 +182,9 @@ export class GameUiAdapter implements GameUiPort {
       weeklyArchives: state === null ? [] : this.weeklyArchiveViews(),
       tutorial: {
         title: this.actionLabel("tutorial"),
-        body: this.application.content.game.game.tutorial,
+        body: state?.mode === "story"
+          ? this.application.content.game.game.tutorial
+          : this.application.content.game.game.tutorial_survival,
         tone: "primary",
       },
       ending: state?.ending === null || state?.ending === undefined
@@ -181,6 +196,16 @@ export class GameUiAdapter implements GameUiPort {
           },
       notice: this.notice,
     };
+  }
+
+  /**
+   * 集中投影剧情模式访问权，并仅为旧存档的剧情战斗或剧情结局保留恢复入口。
+   */
+  private resolveStoryAccess(state: GameState | null): UiStoryAccess {
+    if (state === null) {
+      return "hidden";
+    }
+    return state.mode === "story" ? "mode" : "hidden";
   }
 
   /** 订阅快照变更，并返回幂等的取消订阅函数。 */
@@ -226,9 +251,15 @@ export class GameUiAdapter implements GameUiPort {
     }
   }
 
-  /** 查询主档或备份是否存在。 */
-  public canLoadGame(): boolean {
-    return this.application.hasSave();
+  /** 查询指定栏位或全部栏位中是否至少有一个可完整恢复的存档。 */
+  public canLoadGame(slotId?: number): boolean {
+    const slots = this.application.saveSlots();
+    const candidates = slotId === undefined
+      ? slots
+      : slots.filter((slot) => slot.slotId === slotId);
+    return candidates.some(
+      (slot) => slot.status === "valid" || slot.status === "recoverable",
+    );
   }
 
   /** 执行一个已经过判别联合约束的命令。 */
@@ -237,21 +268,28 @@ export class GameUiAdapter implements GameUiPort {
   ): { readonly accepted: boolean; readonly report: ActionReport | null } {
     switch (command.type) {
       case "start_game": {
-        const report = this.application.startNewGame(command.playerNames, command.mode);
+        const report = this.application.startNewGame({
+          mode: command.mode,
+          playerNames: command.playerNames,
+          saveSlotId: command.saveSlotId ?? this.application.saveSlots()[0]?.slotId ?? 1,
+          profile: this.toDomainCampaignProfile(
+            command.profile ?? this.campaignProfileOptions().defaultSelection,
+          ),
+        });
         this.lastAutoSavedCheckpointDay = null;
         return { accepted: true, report };
       }
       case "load_game": {
-        if (!this.application.hasSave()) {
+        if (!this.application.hasSave(command.slotId)) {
           throw new GameApplicationError(this.application.content.text("no_save"));
         }
-        const report = this.application.loadGame();
+        const report = this.application.loadGame(command.slotId);
         this.lastAutoSavedCheckpointDay =
           this.application.state?.checkpoint?.survival_day ?? null;
         return { accepted: true, report };
       }
       case "save_game": {
-        const report = this.application.saveGame();
+        const report = this.application.saveGame(command.slotId);
         this.lastAutoSavedCheckpointDay =
           this.application.state?.checkpoint?.survival_day ?? null;
         return { accepted: true, report };
@@ -292,6 +330,11 @@ export class GameUiAdapter implements GameUiPort {
         return { accepted: report.stateChanged, report };
       }
       case "story_choice": {
+        if (this.application.state?.mode !== "story") {
+          throw new GameApplicationError(
+            this.application.content.text("story_mode_required"),
+          );
+        }
         const prompt = this.application.currentStoryPrompt();
         if (prompt === null) {
           throw new GameApplicationError(this.application.content.text("story_complete"));
@@ -417,6 +460,136 @@ export class GameUiAdapter implements GameUiPort {
     return { single, multiplayer, story };
   }
 
+  /** 把领域配置中的难度、起源、特性与城市转换为开局选择模型。 */
+  private campaignProfileOptions(): UiCampaignProfileOptionsView {
+    const game = this.application.content.game;
+    return {
+      difficulties: game.campaign_profiles.difficulties.map((item) => ({
+        id: item.id,
+        label: item.label,
+        description: item.description,
+      })),
+      origins: game.campaign_profiles.origins.map((item) => ({
+        id: item.id,
+        label: item.label,
+        description: item.description,
+      })),
+      traits: game.campaign_profiles.traits.map((item) => ({
+        id: item.id,
+        label: item.label,
+        description: item.description,
+      })),
+      cities: game.cities.map((city) => ({
+        id: city.id,
+        label: `${city.name} · ${city.district}`,
+        description: city.description,
+      })),
+      defaultSelection: {
+        difficultyId: game.campaign_profiles.migration_default.difficulty_id,
+        originId: game.campaign_profiles.migration_default.origin_id,
+        traitId: game.campaign_profiles.migration_default.trait_id,
+        homeCityId: game.campaign_profiles.migration_default.home_city_id,
+      },
+    };
+  }
+
+  /** 把当前聚合中的稳定 ID 解析为独立的中文开局档案。 */
+  private campaignProfileView(state: GameState): UiCampaignProfileView {
+    const profiles = this.application.content.game.campaign_profiles;
+    const city = this.application.content.city(state.campaign.home_city_id);
+    return {
+      modeLabel: this.presentation.mode_labels[state.mode],
+      difficultyLabel: this.requireCampaignLabel(
+        profiles.difficulties,
+        state.campaign.difficulty_id,
+      ),
+      originLabel: this.requireCampaignLabel(
+        profiles.origins,
+        state.campaign.origin_id,
+      ),
+      traitLabel: this.requireCampaignLabel(
+        profiles.traits,
+        state.campaign.trait_id,
+      ),
+      homeCityLabel: [city.name, city.district].join(
+        this.webConfig.texts.profile_field_separator,
+      ),
+      districtLabel: city.district,
+    };
+  }
+
+  /** 从配置化选项中按稳定 ID 读取标签。 */
+  private requireCampaignLabel(
+    options: readonly { readonly id: string; readonly label: string }[],
+    optionId: string,
+  ): string {
+    const option = options.find((candidate) => candidate.id === optionId);
+    if (option === undefined) {
+      throw new Error(this.application.content.text("invalid_campaign_profile"));
+    }
+    return option.label;
+  }
+
+  /** 将 UI 使用的驼峰字段转换为领域存档使用的稳定字段名。 */
+  private toDomainCampaignProfile(
+    selection: UiCampaignProfileSelection,
+  ): CampaignProfileState {
+    return {
+      difficulty_id: selection.difficultyId,
+      origin_id: selection.originId,
+      trait_id: selection.traitId,
+      home_city_id: selection.homeCityId,
+    };
+  }
+
+  /** 把基础设施槽位摘要格式化为六栏存档页面模型。 */
+  private saveSlotViews(): UiSaveSlotView[] {
+    return this.application.saveSlots().map((slot) => {
+      const statusLabel = this.webConfig.texts[`save_slot_status_${slot.status}`];
+      const title = formatTemplate(this.webConfig.texts.save_slot_title_format, {
+        slot: slot.slotId,
+        status: statusLabel,
+      });
+      if (slot.status === "empty" || slot.status === "corrupted") {
+        return {
+          slotId: slot.slotId,
+          status: slot.status,
+          title,
+          details: slot.status === "empty"
+            ? this.webConfig.texts.save_slot_empty_details
+            : this.webConfig.texts.save_slot_corrupted_details,
+          loadable: false,
+          writable: true,
+        };
+      }
+      const difficulty = this.application.content.game.campaign_profiles.difficulties.find(
+        (item) => item.id === slot.difficultyId,
+      )?.label ?? this.webConfig.texts.save_slot_unknown_value;
+      const city = slot.homeCityId === null
+        ? null
+        : this.application.content.game.cities.find((item) => item.id === slot.homeCityId);
+      return {
+        slotId: slot.slotId,
+        status: slot.status,
+        title,
+        details: formatTemplate(this.webConfig.texts.save_slot_details_format, {
+          mode: slot.mode === null
+            ? this.webConfig.texts.save_slot_unknown_value
+            : this.presentation.mode_labels[slot.mode],
+          names: slot.playerNames.join(this.webConfig.texts.save_slot_name_separator),
+          difficulty,
+          days: slot.survivalDays ?? this.webConfig.texts.save_slot_unknown_value,
+          city: city === undefined || city === null
+            ? this.webConfig.texts.save_slot_unknown_value
+            : `${city.name} · ${city.district}`,
+          saved_at: slot.savedAt ?? this.webConfig.texts.save_slot_unknown_value,
+        }),
+        loadable: true,
+        writable: true,
+      };
+    });
+  }
+
   /** 把一名所长转换为标题栏展示模型。 */
   private playerView(state: GameState, index: number): UiPlayerView {
     const player = state.players[index];
@@ -523,17 +696,27 @@ export class GameUiAdapter implements GameUiPort {
   /** 返回八座配置化城市；待事件存在时禁止免费重抽。 */
   private cityViews(state: GameState): UiCityView[] {
     const hasPending = state.pending_exploration !== null;
-    return this.application.content.game.cities.map((city) => {
-      const disabled = hasPending && state.pending_exploration?.city_id !== city.id;
+    return this.application.expeditionCities().map((access) => {
+      const pendingLocked = hasPending
+        && state.pending_exploration?.city_id !== access.city.id;
+      const disabled = pendingLocked || !access.accessible;
       return {
-        id: city.id,
-        label: city.name,
-        description: "",
+        id: access.city.id,
+        label: access.city.name,
+        description: `${access.accessSummary}\n${access.reason}`,
         disabled,
-        disabledReason: disabled
+        disabledReason: pendingLocked
           ? this.application.content.text("pending_event_locked")
-          : undefined,
-        tone: "primary",
+          : access.accessible ? undefined : access.reason,
+        tone: access.accessible ? "primary" : "default",
+        districtLabel: access.city.district,
+        terrainLabel: this.application.content.text(
+          `city_terrain_${access.city.terrain}`,
+        ),
+        relationLabel: this.application.content.text(
+          `city_relation_${access.relation}`,
+        ),
+        travelStepCost: access.travelStepCost,
       };
     });
   }
@@ -739,6 +922,7 @@ export class GameUiAdapter implements GameUiPort {
     return {
       cityId: status.cityId,
       cityName: this.application.content.city(status.cityId).name,
+      travelStepCost: status.travelStepCost,
       remainingSteps: status.remainingSteps,
       maximumSteps: status.maximumSteps,
       eventsResolved: status.eventsResolved,
@@ -799,7 +983,9 @@ export class GameUiAdapter implements GameUiPort {
     return this.webConfig.action_groups.map((group) => ({
       id: group.id,
       label: group.label,
-      actions: group.action_ids.map((actionId) => {
+      actions: group.action_ids
+        .filter((actionId) => this.actionVisibleInMode(actionId))
+        .map((actionId) => {
         const action = actions.get(actionId);
         if (action === undefined) {
           throw new Error(`行动分组引用未知行动：${actionId}`);
@@ -817,6 +1003,14 @@ export class GameUiAdapter implements GameUiPort {
         };
       }),
     }));
+  }
+
+  /** 按模式能力配置彻底隐藏普通模式中的剧情行动。 */
+  private actionVisibleInMode(actionId: string): boolean {
+    if (actionId !== "story") {
+      return true;
+    }
+    return this.application.supportsCapability("narrative");
   }
 
   /** 返回行动当前的领域阻塞原因。 */

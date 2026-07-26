@@ -232,7 +232,8 @@ describe("H5 经营、物品与失败命令流", () => {
     expect(snapshot.ended).toBe(true);
     expect(snapshot.ending).toMatchObject({ title: "长夜终局", tone: "danger" });
     expect(requireAction(snapshot, "explore").disabled).toBe(true);
-    expect(requireAction(snapshot, "save").disabled).toBe(false);
+    expect(snapshot.actionGroups.some((group) => group.id === "system")).toBe(false);
+    expect(harness.adapter.execute({ type: "save_game" }).accepted).toBe(true);
     expect(state.battle).toBeNull();
     expect(state.pending_exploration).toBeNull();
   });

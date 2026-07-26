@@ -1,4 +1,4 @@
-import type { GameRuleConfig } from "../domain/content";
+import type { CampaignProfilesConfig, GameRuleConfig } from "../domain/content";
 import { SaveDataError } from "../domain/errors";
 import type {
   BattleState,
@@ -49,6 +49,8 @@ const RESTORABLE_V3_STATE_FIELDS = [
   "expedition",
 ] as const;
 const V3_STATE_FIELDS = [...RESTORABLE_V3_STATE_FIELDS, "checkpoint"] as const;
+const RESTORABLE_V4_STATE_FIELDS = [...RESTORABLE_V3_STATE_FIELDS, "campaign"] as const;
+const V4_STATE_FIELDS = [...RESTORABLE_V4_STATE_FIELDS, "checkpoint"] as const;
 const PLAYER_FIELDS = [
   "name",
   "health",
@@ -119,7 +121,13 @@ const INVENTORY_FIELDS = [
   "equipped_armor_id",
 ] as const;
 const RESEARCH_FIELDS = ["completed_project_ids"] as const;
-const EXPEDITION_FIELDS = [
+const CAMPAIGN_FIELDS = [
+  "difficulty_id",
+  "origin_id",
+  "trait_id",
+  "home_city_id",
+] as const;
+const V3_EXPEDITION_FIELDS = [
   "city_id",
   "leader_player_index",
   "companion_ids",
@@ -129,6 +137,10 @@ const EXPEDITION_FIELDS = [
   "maximum_steps",
   "events_resolved",
 ] as const;
+const V4_EXPEDITION_FIELDS = [
+  ...V3_EXPEDITION_FIELDS,
+  "travel_step_cost",
+] as const;
 const COMPANION_STATUSES = new Set(["active", "locked", "exiled", "lost", "dead"]);
 
 /** 严格校验版本化存档的字段集合、数据类型与领域不变量。 */
@@ -137,18 +149,31 @@ export class SaveStateValidator {
   private readonly facilityIds: readonly string[];
   private readonly companionIds: readonly string[];
   private readonly survivalSystems: SurvivalSystemsConfigDocument;
+  private readonly campaignDifficultyIds: ReadonlySet<string>;
+  private readonly campaignOriginIds: ReadonlySet<string>;
+  private readonly campaignTraitIds: ReadonlySet<string>;
 
-  /** 注入生存规则、内容 ID 与仓库、研发、远征的版本化配置。 */
+  /** 注入生存规则、内容 ID、开局档案与生存系统的版本化配置。 */
   public constructor(
     rules: GameRuleConfig,
     facilityIds: readonly string[],
     companionIds: readonly string[],
     survivalSystems: SurvivalSystemsConfigDocument,
+    campaignProfiles: CampaignProfilesConfig,
   ) {
     this.rules = rules;
     this.facilityIds = [...facilityIds];
     this.companionIds = [...companionIds];
     this.survivalSystems = survivalSystems;
+    this.campaignDifficultyIds = new Set(
+      campaignProfiles.difficulties.map((difficulty) => difficulty.id),
+    );
+    this.campaignOriginIds = new Set(
+      campaignProfiles.origins.map((origin) => origin.id),
+    );
+    this.campaignTraitIds = new Set(
+      campaignProfiles.traits.map((trait) => trait.id),
+    );
   }
 
   /** 在迁移前验证旧 v1 生存状态的精确结构。 */
@@ -173,7 +198,7 @@ export class SaveStateValidator {
   /** 在构造领域对象前验证 v3 及检查点快照的精确结构。 */
   public validateRawV3(rawState: unknown): JsonObject {
     const state = exactObject(rawState, V3_STATE_FIELDS, "v3 game_state");
-    this.validateRawV3Base(state, "v3 game_state");
+    this.validateRawSurvivalBase(state, "v3 game_state", V3_EXPEDITION_FIELDS);
     if (state.checkpoint !== null) {
       const checkpoint = exactObject(state.checkpoint, CHECKPOINT_FIELDS, "v3 checkpoint");
       const snapshot = exactObject(
@@ -181,14 +206,34 @@ export class SaveStateValidator {
         RESTORABLE_V3_STATE_FIELDS,
         "v3 checkpoint.snapshot",
       );
-      this.validateRawV3Base(snapshot, "v3 checkpoint.snapshot");
+      this.validateRawSurvivalBase(
+        snapshot,
+        "v3 checkpoint.snapshot",
+        V3_EXPEDITION_FIELDS,
+      );
     }
     return state;
   }
 
-  /** 从已通过 v3 结构检查的数据创建副本并验证完整状态。 */
+  /** 在构造领域对象前验证 v4 及检查点快照的精确结构。 */
+  public validateRawV4(rawState: unknown): JsonObject {
+    const state = exactObject(rawState, V4_STATE_FIELDS, "v4 game_state");
+    this.validateRawV4Base(state, "v4 game_state");
+    if (state.checkpoint !== null) {
+      const checkpoint = exactObject(state.checkpoint, CHECKPOINT_FIELDS, "v4 checkpoint");
+      const snapshot = exactObject(
+        checkpoint.snapshot,
+        RESTORABLE_V4_STATE_FIELDS,
+        "v4 checkpoint.snapshot",
+      );
+      this.validateRawV4Base(snapshot, "v4 checkpoint.snapshot");
+    }
+    return state;
+  }
+
+  /** 从已通过 v4 结构检查的数据创建副本并验证完整状态。 */
   public parse(rawState: unknown): GameState {
-    const state = structuredClone(this.validateRawV3(rawState)) as unknown as GameState;
+    const state = structuredClone(this.validateRawV4(rawState)) as unknown as GameState;
     this.validate(state);
     return state;
   }
@@ -214,6 +259,7 @@ export class SaveStateValidator {
     }
     requireInteger(state.turn_number, "turn_number", 0);
     requireInteger(state.survival_days, "survival_days", 0);
+    this.validateCampaign(state);
     this.validatePlayers(state);
     this.validateShelter(state);
     this.validateStory(state);
@@ -268,8 +314,12 @@ export class SaveStateValidator {
     this.validateOptionalObject(state.ending, ENDING_FIELDS, `${version} ending`);
   }
 
-  /** 校验 v3 当前状态与可回档快照共用的新增容器。 */
-  private validateRawV3Base(state: JsonObject, path: string): void {
+  /** 校验 v3/v4 当前状态与可回档快照共用的生存容器。 */
+  private validateRawSurvivalBase(
+    state: JsonObject,
+    path: string,
+    expeditionFields: readonly string[],
+  ): void {
     this.validateGameplayContainers(state, path);
     const communicationLog = requireArray(state.communication_log, `${path}.communication_log`);
     for (const [index, entry] of communicationLog.entries()) {
@@ -306,7 +356,13 @@ export class SaveStateValidator {
     const inventory = exactObject(state.inventory, INVENTORY_FIELDS, `${path}.inventory`);
     requireObject(inventory.crafted_items, `${path}.inventory.crafted_items`);
     exactObject(state.research, RESEARCH_FIELDS, `${path}.research`);
-    this.validateOptionalObject(state.expedition, EXPEDITION_FIELDS, `${path}.expedition`);
+    this.validateOptionalObject(state.expedition, expeditionFields, `${path}.expedition`);
+  }
+
+  /** 校验 v4 可回档状态的新开局档案与远征路费容器。 */
+  private validateRawV4Base(state: JsonObject, path: string): void {
+    this.validateRawSurvivalBase(state, path, V4_EXPEDITION_FIELDS);
+    exactObject(state.campaign, CAMPAIGN_FIELDS, `${path}.campaign`);
   }
 
   /** 校验一个可空对象的精确字段集合。 */
@@ -316,6 +372,25 @@ export class SaveStateValidator {
     path: string,
   ): void {
     if (value !== null) exactObject(value, keys, path);
+  }
+
+  /** 校验开局难度、起源、特性与出生城市均引用已配置 ID。 */
+  private validateCampaign(state: GameState): void {
+    const campaign = state.campaign;
+    requireNonEmptyString(campaign.difficulty_id, "campaign.difficulty_id");
+    requireNonEmptyString(campaign.origin_id, "campaign.origin_id");
+    requireNonEmptyString(campaign.trait_id, "campaign.trait_id");
+    requireNonEmptyString(campaign.home_city_id, "campaign.home_city_id");
+    if (!this.campaignDifficultyIds.has(campaign.difficulty_id)) {
+      throw new SaveDataError(`开局档案引用未知难度：${campaign.difficulty_id}。`);
+    }
+    if (!this.campaignOriginIds.has(campaign.origin_id)) {
+      throw new SaveDataError(`开局档案引用未知起源：${campaign.origin_id}。`);
+    }
+    if (!this.campaignTraitIds.has(campaign.trait_id)) {
+      throw new SaveDataError(`开局档案引用未知特性：${campaign.trait_id}。`);
+    }
+    this.requireKnownCity(campaign.home_city_id, "campaign.home_city_id");
   }
 
   /** 校验玩家姓名、资源整数、唯一性和生命上限。 */
@@ -572,6 +647,11 @@ export class SaveStateValidator {
     if (expedition === null) return;
     requireNonEmptyString(expedition.city_id, "expedition.city_id");
     this.requireKnownCity(expedition.city_id, "expedition.city_id");
+    requireInteger(expedition.travel_step_cost, "expedition.travel_step_cost", 1);
+    const configuredTravelStepCosts = new Set(Object.values(this.rules.city_travel));
+    if (!configuredTravelStepCosts.has(expedition.travel_step_cost)) {
+      throw new SaveDataError("远征城市路费不在配置允许的范围内。");
+    }
     requireInteger(expedition.leader_player_index, "expedition.leader_player_index", 0);
     if (expedition.leader_player_index >= state.players.length) {
       throw new SaveDataError("远征所长索引越界。");

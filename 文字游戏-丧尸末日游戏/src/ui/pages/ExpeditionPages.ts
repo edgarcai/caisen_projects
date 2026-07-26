@@ -1,5 +1,6 @@
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
 import type { GameUiConfig } from "../../styles/GameTheme";
+import { PointerTooltip } from "../components/PointerTooltip";
 import type { UiFactory } from "../components/UiFactory";
 import { formatUiTemplate } from "../formatting/formatUiTemplate";
 import type { LayaRuntimeLike } from "../laya/LayaRuntime";
@@ -73,6 +74,13 @@ export function createExpeditionPreparePage(
       },
     ],
   );
+  const tooltip = createExpeditionTooltip(
+    runtime,
+    factory,
+    config,
+    layout,
+    page,
+  );
   let currentY = renderIntro(factory, config, layout, page);
   currentY = renderCitySection(
     factory,
@@ -82,6 +90,7 @@ export function createExpeditionPreparePage(
     cities,
     draft,
     actions,
+    tooltip,
     currentY,
   );
   currentY = renderCompanionSection(
@@ -135,6 +144,7 @@ function renderCitySection(
   cities: readonly UiCityView[],
   draft: ExpeditionDraft,
   actions: ExpeditionPrepareActions,
+  tooltip: PointerTooltip | null,
   startY: number,
 ): number {
   const titleBottom = renderSectionTitle(
@@ -149,15 +159,20 @@ function renderCitySection(
     id: city.id,
     label: formatUiTemplate(config.texts.expedition_city_format, {
       name: city.label,
+      district: city.districtLabel,
+      relation: city.relationLabel,
+      terrain: city.terrainLabel,
+      steps: city.travelStepCost,
       status: draft.cityId === city.id
         ? config.texts.expedition_selected
         : config.texts.expedition_unselected,
     }),
+    description: city.description,
     selected: draft.cityId === city.id,
     disabled: city.disabled,
     onClick: (): void => { actions.selectCity(city.id); },
   }));
-  return renderSelectionGrid(
+  const gridBottom = renderSelectionGrid(
     factory,
     config,
     layout,
@@ -165,7 +180,18 @@ function renderCitySection(
     "page-expedition-city",
     labels,
     titleBottom + layout.sectionGap,
+    tooltip,
   );
+  return layout.kind === "mobile"
+    ? renderMobileCityIntelligence(
+        factory,
+        config,
+        layout,
+        page,
+        cities,
+        gridBottom,
+      )
+    : gridBottom;
 }
 
 /** 绘制可复选的同行伙伴区域。 */
@@ -289,6 +315,7 @@ interface SelectionGridItem {
   readonly label: string;
   readonly selected: boolean;
   readonly disabled: boolean;
+  readonly description?: string;
   readonly onClick: () => void;
 }
 
@@ -301,6 +328,7 @@ function renderSelectionGrid(
   testIdPrefix: string,
   items: readonly SelectionGridItem[],
   startY: number,
+  tooltip: PointerTooltip | null = null,
 ): number {
   const columns = Math.max(1, layout.optionColumns);
   const gap = config.layout.page.option_gap;
@@ -309,7 +337,7 @@ function renderSelectionGrid(
   items.forEach((item, index) => {
     const column = index % columns;
     const row = Math.floor(index / columns);
-    factory.button(page.content, {
+    const button = factory.button(page.content, {
       testId: `${testIdPrefix}-${item.id}`,
       label: item.label,
       x: column * (width + gap),
@@ -318,13 +346,81 @@ function renderSelectionGrid(
       height,
       tone: item.selected ? "primary" : "default",
       disabled: item.disabled,
+      hoverableWhenDisabled: tooltip !== null && item.disabled,
       fontSize: config.typography.caption_size,
       wordWrap: true,
       onClick: item.onClick,
     });
+    if (tooltip !== null && item.description !== undefined) {
+      tooltip.bind(
+        button,
+        { title: item.label, description: item.description },
+        item.disabled,
+      );
+    }
   });
   const rows = Math.ceil(items.length / columns);
   return startY + rows * (height + gap) + layout.sectionGap;
+}
+
+/** 为手机端绘制与桌面悬停层等价的完整城市情报。 */
+function renderMobileCityIntelligence(
+  factory: UiFactory,
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  page: PageScaffold,
+  cities: readonly UiCityView[],
+  startY: number,
+): number {
+  const intelligence = cities.map((city) =>
+    config.texts.option_intelligence_format
+      .replace("{label}", city.label)
+      .replace("{details}", city.description))
+    .join(config.texts.option_intelligence_separator);
+  const body = factory.autoText(page.content, {
+    testId: "page-expedition-city-intelligence",
+    text: `${config.texts.option_intelligence_title}\n${intelligence}`,
+    x: 0,
+    y: startY,
+    width: page.contentWidth,
+    fontSize: config.typography.caption_size,
+    color: config.theme.muted_text,
+  });
+  return startY + body.height + layout.sectionGap;
+}
+
+/** 为电脑远征选项创建配置化延迟、跟随指针的简介层。 */
+function createExpeditionTooltip(
+  runtime: LayaRuntimeLike,
+  factory: UiFactory,
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  page: PageScaffold,
+): PointerTooltip | null {
+  if (layout.kind === "mobile") return null;
+  const tooltip = new PointerTooltip(runtime, factory, page.root, {
+    testId: "page-expedition-tooltip",
+    delayMs: config.motion.cover_menu_description_delay_ms,
+    width: config.controls.tooltip_width,
+    padding: config.controls.tooltip_padding,
+    offset: {
+      x: config.controls.tooltip_offset_x,
+      y: config.controls.tooltip_offset_y,
+    },
+    bounds: {
+      left: layout.safeArea.left,
+      top: layout.safeArea.top,
+      right: layout.stageWidth - layout.safeArea.right,
+      bottom: layout.stageHeight - layout.safeArea.bottom,
+    },
+    titleFontSize: config.typography.section_title_size,
+    titleLineHeight: config.typography.body_line_height,
+    descriptionFontSize: config.typography.body_size,
+    descriptionLineHeight: config.typography.body_line_height,
+    contentGap: config.controls.button_gap,
+  });
+  page.addDisposable((): void => { tooltip.destroy(); });
+  return tooltip;
 }
 
 /** 创建能继续深入、安全返程或暂时返回指挥台的远征状态页。 */

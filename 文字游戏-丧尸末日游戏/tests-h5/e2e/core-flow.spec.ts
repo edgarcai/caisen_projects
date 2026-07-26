@@ -7,6 +7,15 @@ interface E2eWebConfig {
     readonly resize_debounce_ms: number;
     readonly keyboard_resize_settle_ms: number;
   };
+  readonly motion: {
+    readonly cover_menu_description_delay_ms: number;
+  };
+  readonly storage: {
+    readonly save_slot_count: number;
+  };
+  readonly texts: {
+    readonly profile_name_label: string;
+  };
   readonly quality_assurance: {
     readonly minimum_touch_css_px: number;
     readonly keyboard_simulated_height_px: number;
@@ -40,6 +49,8 @@ interface DebugNodeBounds {
   readonly stageHeight: number;
 }
 
+type CssNodeBounds = Omit<DebugNodeBounds, "stageWidth" | "stageHeight">;
+
 interface BrowserGameDebugHandle {
   getCurrentScreen(): string;
   getNodeBounds(nodeName: string): DebugNodeBounds | null;
@@ -47,6 +58,36 @@ interface BrowserGameDebugHandle {
     readonly mode: "single" | "multiplayer" | "story" | null;
     readonly activePlayer: { readonly name: string } | null;
     readonly clock: { readonly turnLabel: string } | null;
+    readonly campaignProfileOptions: {
+      readonly difficulties: readonly DebugCampaignOption[];
+      readonly origins: readonly DebugCampaignOption[];
+      readonly traits: readonly DebugCampaignOption[];
+      readonly cities: readonly DebugCampaignOption[];
+      readonly defaultSelection: {
+        readonly difficultyId: string;
+        readonly originId: string;
+        readonly traitId: string;
+        readonly homeCityId: string;
+      };
+    };
+    readonly campaignProfile: {
+      readonly difficultyLabel: string;
+      readonly originLabel: string;
+      readonly traitLabel: string;
+      readonly homeCityLabel: string;
+      readonly districtLabel: string;
+    } | null;
+    readonly saveSlots: readonly {
+      readonly slotId: number;
+      readonly status: "empty" | "valid" | "recoverable" | "corrupted";
+      readonly loadable: boolean;
+      readonly writable: boolean;
+    }[];
+    readonly cities: readonly {
+      readonly id: string;
+      readonly disabled: boolean;
+      readonly description: string;
+    }[];
     readonly storyPrompt: { readonly id: string } | null;
     readonly explorationPrompt: {
       readonly id: string;
@@ -57,6 +98,13 @@ interface BrowserGameDebugHandle {
       readonly remainingSteps: number;
     } | null;
   };
+}
+
+/** 浏览器快照中的单个开局档案选项。 */
+interface DebugCampaignOption {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
 }
 
 type GameLayoutKind = "mobile" | "compact" | "desktop";
@@ -137,7 +185,7 @@ async function readLayaNodeBounds(
 async function readCssNodeBounds(
   page: Page,
   nodeName: string,
-): Promise<Omit<DebugNodeBounds, "stageWidth" | "stageHeight"> | null> {
+): Promise<CssNodeBounds | null> {
   return page.evaluate((requestedName) => {
     const canvas = document.querySelector<HTMLCanvasElement>("#layaCanvas");
     const bounds = window.__SHELTER_GAME__?.getNodeBounds(requestedName) ?? null;
@@ -156,6 +204,88 @@ async function readCssNodeBounds(
   }, nodeName);
 }
 
+/** 判断普通目标是否完整可见，超高目标则判断可点击中心是否可见。 */
+function isScrollableTargetReady(
+  target: CssNodeBounds,
+  viewport: CssNodeBounds,
+): boolean {
+  const viewportBottom = viewport.y + viewport.height;
+  if (target.height > viewport.height) {
+    const targetCenter = target.y + target.height / 2;
+    return targetCenter >= viewport.y && targetCenter <= viewportBottom;
+  }
+  const targetBottom = target.y + target.height;
+  return target.y >= viewport.y && targetBottom <= viewportBottom;
+}
+
+/** 按设备能力在 Canvas 上执行鼠标或原生 TouchEvent 拖动。 */
+async function dragLayaCanvas(
+  page: Page,
+  start: { readonly x: number; readonly y: number },
+  end: { readonly x: number; readonly y: number },
+): Promise<void> {
+  const hasTouch = await page.evaluate(() => navigator.maxTouchPoints > 0);
+  if (!hasTouch) {
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(end.x, end.y, {
+      steps: qualityConfig.scroll_drag_steps,
+    });
+    await page.mouse.up();
+    return;
+  }
+  await page.evaluate(({ startPoint, endPoint, steps }) => {
+    const canvas = document.querySelector<HTMLCanvasElement>("#layaCanvas");
+    if (canvas === null) {
+      throw new Error("页面缺少 Laya Canvas，无法执行触控滚动");
+    }
+
+    /** 创建供 Laya 输入管理器消费的单指触点。 */
+    const createTouch = (x: number, y: number): Touch => new Touch({
+      identifier: 0,
+      target: canvas,
+      clientX: x,
+      clientY: y,
+      pageX: x,
+      pageY: y,
+      screenX: x,
+      screenY: y,
+    });
+
+    /** 向真实 Canvas 派发一段可取消的单指触摸事件。 */
+    const dispatchTouch = (
+      type: "touchstart" | "touchmove" | "touchend",
+      x: number,
+      y: number,
+    ): void => {
+      const touch = createTouch(x, y);
+      const activeTouches = type === "touchend" ? [] : [touch];
+      canvas.dispatchEvent(new TouchEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        touches: activeTouches,
+        targetTouches: activeTouches,
+        changedTouches: [touch],
+      }));
+    };
+
+    dispatchTouch("touchstart", startPoint.x, startPoint.y);
+    for (let step = 1; step <= steps; step += 1) {
+      const progress = step / steps;
+      dispatchTouch(
+        "touchmove",
+        startPoint.x + (endPoint.x - startPoint.x) * progress,
+        startPoint.y + (endPoint.y - startPoint.y) * progress,
+      );
+    }
+    dispatchTouch("touchend", endPoint.x, endPoint.y);
+  }, {
+    startPoint: start,
+    endPoint: end,
+    steps: qualityConfig.scroll_drag_steps,
+  });
+}
+
 /** 在 Canvas 内拖动指定滚动视口，直到目标节点完整进入可视区域。 */
 async function scrollLayaNodeIntoView(
   page: Page,
@@ -164,7 +294,7 @@ async function scrollLayaNodeIntoView(
 ): Promise<void> {
   for (
     let attempt = 0;
-    attempt < qualityConfig.scroll_max_attempts;
+    attempt <= qualityConfig.scroll_max_attempts;
     attempt += 1
   ) {
     const target = await readCssNodeBounds(page, nodeName);
@@ -174,21 +304,25 @@ async function scrollLayaNodeIntoView(
     }
     const targetBottom = target.y + target.height;
     const viewportBottom = viewport.y + viewport.height;
-    if (target.y >= viewport.y && targetBottom <= viewportBottom) {
+    if (isScrollableTargetReady(target, viewport)) {
       return;
+    }
+    if (attempt === qualityConfig.scroll_max_attempts) {
+      break;
     }
     const dragDistance = viewport.height * qualityConfig.scroll_drag_ratio;
     const centerX = viewport.x + viewport.width / 2;
     const centerY = viewport.y + viewport.height / 2;
-    const targetBelow = targetBottom > viewportBottom;
+    const targetBelow = target.height > viewport.height
+      ? target.y + target.height / 2 > viewportBottom
+      : targetBottom > viewportBottom;
     const startY = centerY + (targetBelow ? dragDistance : -dragDistance) / 2;
     const endY = centerY - (targetBelow ? dragDistance : -dragDistance) / 2;
-    await page.mouse.move(centerX, startY);
-    await page.mouse.down();
-    await page.mouse.move(centerX, endY, {
-      steps: qualityConfig.scroll_drag_steps,
-    });
-    await page.mouse.up();
+    await dragLayaCanvas(
+      page,
+      { x: centerX, y: startY },
+      { x: centerX, y: endY },
+    );
     await page.waitForTimeout(qualityConfig.scroll_settle_ms);
   }
   throw new Error(`目标节点在配置化滚动次数内仍不可见：${nodeName}`);
@@ -227,21 +361,47 @@ async function hoverLayaNode(page: Page, nodeName: string): Promise<void> {
   await page.mouse.move(position.x, position.y);
 }
 
-/** 按指定入口打开新游戏，并验证通讯过场后停留在指挥台。 */
+/** 验证自动更新日志位于封面之上，再关闭并返回封面。 */
+async function closeAutomaticUpdateLog(page: Page): Promise<void> {
+  await waitForScreen(page, "update_log");
+  expect(await readLayaNodeBounds(page, "page-update-log")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "page-update-log-content")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "page-menu")).not.toBeNull();
+  await clickLayaNode(page, "page-update-log-close");
+  await waitForScreen(page, "menu");
+}
+
+/** 打开指定模式的完整开局档案页。 */
+async function openNewGameSetup(
+  page: Page,
+  mode: TestGameMode,
+): Promise<void> {
+  const menuNode = mode === "story" ? "menu-story" : "menu-new-game";
+  await clickLayaNode(page, menuNode);
+  await waitForScreen(page, "name_input");
+  expect(await readLayaNodeBounds(page, "page-new-game-setup")).not.toBeNull();
+}
+
+/** 填写独立所长姓名，并主动结束原生文本输入焦点。 */
+async function fillCommanderName(page: Page, playerName: string): Promise<void> {
+  await clickLayaNode(page, "player-name-1");
+  const input = page.getByPlaceholder(
+    webConfigDocument.texts.profile_name_label,
+    { exact: true },
+  );
+  await expect(input).toBeVisible();
+  await input.fill(playerName);
+  await input.blur();
+}
+
+/** 按指定入口提交默认档案，并验证通讯过场后停留在指挥台。 */
 async function startGame(
   page: Page,
   mode: TestGameMode,
   playerName: string,
 ): Promise<void> {
-  const menuNode = mode === "story" ? "menu-story" : "menu-new-game";
-  const placeholder = mode === "story" ? "剧情模式 1" : "新的游戏 1";
-  await clickLayaNode(page, menuNode);
-  await waitForScreen(page, "name_input");
-  await clickLayaNode(page, "player-name-1");
-  const input = page.getByPlaceholder(placeholder, { exact: true });
-  await expect(input).toBeVisible();
-  await input.fill(playerName);
-  await input.press("Enter");
+  await openNewGameSetup(page, mode);
+  await fillCommanderName(page, playerName);
   await clickLayaNode(page, "player-name-submit");
   await waitForScreen(page, "connection");
   expect(await readLayaNodeBounds(page, "page-connection-title")).not.toBeNull();
@@ -268,6 +428,35 @@ function explorationEntryNode(layout: GameLayoutKind): string {
   return layout === "desktop" ? "dashboard-action-explore" : "bottom-nav-explore";
 }
 
+/** 读取当前默认项之后的循环选项，供 UI 点击结果断言复用。 */
+function nextCampaignOption(
+  options: readonly DebugCampaignOption[],
+  selectedId: string,
+): DebugCampaignOption {
+  const selectedIndex = options.findIndex((option) => option.id === selectedId);
+  if (selectedIndex < 0 || options.length === 0) {
+    throw new Error(`开局档案默认项不存在：${selectedId}`);
+  }
+  const next = options[(selectedIndex + 1) % options.length];
+  if (next === undefined) {
+    throw new Error(`开局档案选项无法循环：${selectedId}`);
+  }
+  return next;
+}
+
+/** 验证配置化数量的全部存档槽都已渲染。 */
+async function expectAllSaveSlots(page: Page): Promise<void> {
+  for (
+    let slotId = 1;
+    slotId <= webConfigDocument.storage.save_slot_count;
+    slotId += 1
+  ) {
+    expect(
+      await readLayaNodeBounds(page, `page-save-slots-slot-${String(slotId)}`),
+    ).not.toBeNull();
+  }
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
@@ -275,7 +464,83 @@ test.beforeEach(async ({ page }) => {
   });
   await page.reload();
   await expect(page.locator("#boot-status")).toBeHidden();
-  await waitForScreen(page, "menu");
+  await waitForScreen(page, "update_log");
+});
+
+test("完整新游戏档案页循环配置后进入普通模式", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
+  if (await readGameLayout(page) === "desktop") {
+    await hoverLayaNode(page, "menu-new-game");
+    await expect.poll(async () =>
+      readLayaNodeBounds(page, "menu-description"),
+    ).not.toBeNull();
+  }
+  await openNewGameSetup(page, "single");
+  expect(await readLayaNodeBounds(page, "menu-description")).toBeNull();
+  const setupNodes = [
+    "player-name-1",
+    "profile-mode",
+    "profile-difficulty",
+    "profile-origin",
+    "profile-trait",
+    "profile-city",
+    "profile-slot",
+    "page-new-game-setup-back",
+    "player-name-submit",
+  ];
+  for (const nodeName of setupNodes) {
+    expect(await readLayaNodeBounds(page, nodeName)).not.toBeNull();
+  }
+
+  const options = (await readDebugSnapshot(page)).campaignProfileOptions;
+  const expectedDifficulty = nextCampaignOption(
+    options.difficulties,
+    options.defaultSelection.difficultyId,
+  );
+  const expectedOrigin = nextCampaignOption(
+    options.origins,
+    options.defaultSelection.originId,
+  );
+  const expectedTrait = nextCampaignOption(
+    options.traits,
+    options.defaultSelection.traitId,
+  );
+  const expectedCity = nextCampaignOption(
+    options.cities,
+    options.defaultSelection.homeCityId,
+  );
+  await fillCommanderName(page, "档案所长");
+  for (const nodeName of [
+    "profile-difficulty",
+    "profile-origin",
+    "profile-trait",
+    "profile-city",
+    "profile-slot",
+  ]) {
+    await clickScrollableLayaNode(
+      page,
+      nodeName,
+      "page-new-game-setup-scroll",
+    );
+  }
+  await clickLayaNode(page, "player-name-submit");
+  await waitForScreen(page, "connection");
+  await waitForScreen(page, "dashboard");
+
+  const snapshot = await readDebugSnapshot(page);
+  expect(snapshot.mode).toBe("single");
+  expect(snapshot.activePlayer?.name).toBe("档案所长");
+  expect(snapshot.campaignProfile).toMatchObject({
+    difficultyLabel: expectedDifficulty.label,
+    originLabel: expectedOrigin.label,
+    traitLabel: expectedTrait.label,
+  });
+  expect(snapshot.campaignProfile?.homeCityLabel).toBe(expectedCity.label);
+  expect(expectedCity.label).toContain(
+    snapshot.campaignProfile?.districtLabel ?? "",
+  );
+  expect(await readLayaNodeBounds(page, "dashboard-campaign-profile")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "dashboard-mission")).toBeNull();
 });
 
 test("剧情模式从封面到首个剧情结果使用真实 Canvas 完成闭环", async ({ page }) => {
@@ -284,6 +549,7 @@ test("剧情模式从封面到首个剧情结果使用真实 Canvas 完成闭环
     runtimeErrors.push(error.message);
   });
 
+  await closeAutomaticUpdateLog(page);
   await startStoryGame(page, "测试所长");
   const startedSnapshot = await readDebugSnapshot(page);
   expect(startedSnapshot.activePlayer?.name).toBe("测试所长");
@@ -309,6 +575,7 @@ test("剧情模式从封面到首个剧情结果使用真实 Canvas 完成闭环
 });
 
 test("普通模式隐藏剧情任务并可从标题栏设置返回指挥台", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
   await startSingleGame(page, "生存所长");
 
   const snapshot = await readDebugSnapshot(page);
@@ -336,7 +603,8 @@ test("普通模式隐藏剧情任务并可从标题栏设置返回指挥台", as
   expect(await readLayaNodeBounds(page, "dashboard-settings")).not.toBeNull();
 });
 
-test("ESC 显式存档可在刷新后从封面恢复", async ({ page }) => {
+test("ESC 六栏存档可写入指定栏位并刷新后按槽读档", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
   await startSingleGame(page, "守夜人");
   await page.keyboard.press("Escape");
   await waitForScreen(page, "function_menu");
@@ -345,31 +613,71 @@ test("ESC 显式存档可在刷新后从封面恢复", async ({ page }) => {
     "page-function-menu-option-save",
     "page-function-menu-scroll",
   );
+  await waitForScreen(page, "save_slots");
+  await expectAllSaveSlots(page);
+  const targetSlotId = webConfigDocument.storage.save_slot_count;
+  await clickScrollableLayaNode(
+    page,
+    `page-save-slots-slot-${String(targetSlotId)}`,
+    "page-save-slots-scroll",
+  );
   await waitForScreen(page, "message");
+  const savedSlot = (await readDebugSnapshot(page)).saveSlots.find(
+    (slot) => slot.slotId === targetSlotId,
+  );
+  expect(savedSlot).toMatchObject({
+    status: "valid",
+    loadable: true,
+    writable: true,
+  });
 
   await page.reload();
   await expect(page.locator("#boot-status")).toBeHidden();
-  await waitForScreen(page, "menu");
+  await closeAutomaticUpdateLog(page);
   await clickLayaNode(page, "menu-load-game");
+  await waitForScreen(page, "save_slots");
+  await expectAllSaveSlots(page);
+  const emptySlot = (await readDebugSnapshot(page)).saveSlots.find(
+    (slot) => slot.status === "empty",
+  );
+  if (emptySlot === undefined) {
+    throw new Error("六栏存档测试缺少空槽。");
+  }
+  await clickScrollableLayaNode(
+    page,
+    `page-save-slots-slot-${String(emptySlot.slotId)}`,
+    "page-save-slots-scroll",
+  );
+  await expect.poll(async () => page.evaluate(() =>
+    document.body.dataset.gameScreen ?? null,
+  )).toBe("save_slots");
+  await clickScrollableLayaNode(
+    page,
+    `page-save-slots-slot-${String(targetSlotId)}`,
+    "page-save-slots-scroll",
+  );
   await waitForScreen(page, "connection");
   await waitForScreen(page, "dashboard");
 
   expect((await readDebugSnapshot(page)).activePlayer?.name).toBe("守夜人");
 });
 
-test("六项封面入口、鸣谢空页与剧情模式姓名页可达", async ({
+test("启动更新日志关闭后展示五个主入口和独立退出键", async ({
   page,
 }) => {
+  await closeAutomaticUpdateLog(page);
   const menuNodes = [
     "menu-new-game",
     "menu-load-game",
     "menu-multiplayer",
     "menu-story",
     "menu-credits",
-    "menu-exit",
   ];
   for (const nodeName of menuNodes) {
     expect(await readLayaNodeBounds(page, nodeName)).not.toBeNull();
+  }
+  for (const utilityNode of ["menu-settings", "menu-exit", "menu-update-log"]) {
+    expect(await readLayaNodeBounds(page, utilityNode)).not.toBeNull();
   }
 
   if (await readGameLayout(page) === "desktop") {
@@ -382,44 +690,48 @@ test("六项封面入口、鸣谢空页与剧情模式姓名页可达", async ({
     expect(await readLayaNodeBounds(page, "menu-description")).toBeNull();
   }
 
+  await clickLayaNode(page, "menu-load-game");
+  await expect.poll(async () => page.evaluate(() =>
+    document.body.dataset.gameScreen ?? null,
+  )).toBe("menu");
+  await clickLayaNode(page, "menu-update-log");
+  await waitForScreen(page, "update_log");
+  await clickLayaNode(page, "page-update-log-close");
+  await waitForScreen(page, "menu");
   await clickLayaNode(page, "menu-credits");
   await waitForScreen(page, "credits");
   await clickLayaNode(page, "page-credits-close");
   await waitForScreen(page, "menu");
-  await clickLayaNode(page, "menu-story");
+  await clickLayaNode(page, "menu-multiplayer");
   await waitForScreen(page, "name_input");
-  await clickLayaNode(page, "player-name-1");
-  await expect(page.getByPlaceholder("剧情模式 1", { exact: true })).toBeVisible();
-  await clickLayaNode(page, "page-name-input-back");
+  expect(await readLayaNodeBounds(page, "player-name-1")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "player-name-2")).not.toBeNull();
+  await clickLayaNode(page, "page-new-game-setup-back");
+  await waitForScreen(page, "menu");
+  await clickLayaNode(page, "menu-exit");
+  await waitForScreen(page, "exit_confirm");
+  expect(await readLayaNodeBounds(page, "page-exit-confirm")).not.toBeNull();
+  await clickLayaNode(page, "page-exit-confirm-cancel");
   await waitForScreen(page, "menu");
 });
 
-test("Escape 功能菜单逐层覆盖并保留指挥台显示树", async ({ page }) => {
+test("Escape 功能菜单叠加在二级页上并逐层返回", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
   await startSingleGame(page, "值夜所长");
-
-  await page.keyboard.press("Escape");
-  await waitForScreen(page, "function_menu");
-  expect(await readLayaNodeBounds(page, "dashboard-settings")).not.toBeNull();
-
-  await clickScrollableLayaNode(
-    page,
-    "page-function-menu-option-settings",
-    "page-function-menu-scroll",
-  );
-  await waitForScreen(page, "settings");
-  await clickScrollableLayaNode(
-    page,
-    "page-settings-option-reduced-motion",
-    "page-settings-scroll",
-  );
+  await clickLayaNode(page, "dashboard-settings");
   await waitForScreen(page, "settings");
   await page.keyboard.press("Escape");
   await waitForScreen(page, "function_menu");
+  expect(await readLayaNodeBounds(page, "page-settings")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "function-menu-continue")).not.toBeNull();
   await page.keyboard.press("Escape");
+  await waitForScreen(page, "settings");
+  await clickLayaNode(page, "page-settings-back");
   await waitForScreen(page, "dashboard");
 });
 
 test("远征从整备、事件到安全返程完成闭环", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
   await startSingleGame(page, "远征所长");
   const exploreNode = explorationEntryNode(await readGameLayout(page));
   await clickLayaNode(page, exploreNode);
@@ -442,7 +754,43 @@ test("远征从整备、事件到安全返程完成闭环", async ({ page }) => 
   expect((await readDebugSnapshot(page)).expeditionStatus).toBeNull();
 });
 
+test("桌面禁用城市仍可悬停查看简介且点击不会出发", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
+  test.skip(
+    await readGameLayout(page) === "mobile",
+    "手机端使用常驻城市情报，不验证鼠标悬停层",
+  );
+  await startSingleGame(page, "情报所长");
+  await clickLayaNode(page, explorationEntryNode(await readGameLayout(page)));
+  await waitForScreen(page, "expedition_prepare");
+  const disabledCity = (await readDebugSnapshot(page)).cities.find(
+    (city) => city.disabled,
+  );
+  if (disabledCity === undefined) {
+    throw new Error("当前城市拓扑缺少禁用城市。");
+  }
+  const cityNode = `page-expedition-city-${disabledCity.id}`;
+  await scrollLayaNodeIntoView(page, cityNode, "page-expedition-prepare-scroll");
+  expect(await readLayaNodeBounds(page, "page-expedition-tooltip")).toBeNull();
+  await hoverLayaNode(page, cityNode);
+  await expect.poll(async () =>
+    readLayaNodeBounds(page, "page-expedition-tooltip"),
+  ).not.toBeNull();
+  const tooltipBounds = await readLayaNodeBounds(page, "page-expedition-tooltip");
+  expect(tooltipBounds?.x).toBeGreaterThanOrEqual(0);
+  expect(tooltipBounds?.y).toBeGreaterThanOrEqual(0);
+  expect((tooltipBounds?.x ?? 0) + (tooltipBounds?.width ?? 0)).toBeLessThanOrEqual(
+    tooltipBounds?.stageWidth ?? 0,
+  );
+  await clickLayaNode(page, cityNode);
+  await expect.poll(async () => page.evaluate(() =>
+    document.body.dataset.gameScreen ?? null,
+  )).toBe("expedition_prepare");
+  expect((await readDebugSnapshot(page)).expeditionStatus).toBeNull();
+});
+
 test("真实手机能力使用移动布局且关键入口满足触控尺寸", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
   const device = await page.evaluate(() => document.body.dataset.gameDevice);
   test.skip(device !== "mobile", "仅在配置化移动设备项目中验证物理触控尺寸");
 
@@ -459,7 +807,7 @@ test("真实手机能力使用移动布局且关键入口满足触控尺寸", as
   expect(exitButton?.height).toBeGreaterThanOrEqual(
     qualityConfig.minimum_touch_css_px,
   );
-  expect(exitButton?.y).toBeGreaterThan(firstButton?.y ?? 0);
+  expect(exitButton?.y).toBeLessThan(firstButton?.y ?? 0);
 
   await startSingleGame(page, "触控所长");
   const settingsButton = await readCssNodeBounds(page, "dashboard-settings");
@@ -475,6 +823,7 @@ test("真实手机能力使用移动布局且关键入口满足触控尺寸", as
 test("700x900 桌面视口使用 compact 指挥台与底部导航", async ({
   page,
 }, testInfo) => {
+  await closeAutomaticUpdateLog(page);
   test.skip(testInfo.project.name !== "desktop_compact", "仅验证配置化 700x900 紧凑桌面");
 
   expect(await page.evaluate(() => document.body.dataset.gameDevice)).toBe("desktop");
@@ -490,13 +839,17 @@ test("700x900 桌面视口使用 compact 指挥台与底部导航", async ({
 });
 
 test("手机软键盘尺寸变化不会清空姓名或夺走输入焦点", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
   const device = await page.evaluate(() => document.body.dataset.gameDevice);
   test.skip(device !== "mobile", "仅在配置化移动设备项目中验证软键盘链路");
 
   await clickLayaNode(page, "menu-new-game");
   await waitForScreen(page, "name_input");
   await clickLayaNode(page, "player-name-1");
-  const input = page.getByPlaceholder("新的游戏 1", { exact: true });
+  const input = page.getByPlaceholder(
+    webConfigDocument.texts.profile_name_label,
+    { exact: true },
+  );
   await input.fill("手机守夜人");
   await input.focus();
   const initialViewport = page.viewportSize();

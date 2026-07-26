@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "from_version": 3,
+  "to_version": 4,
+  "state_defaults": {
+    "campaign": {
+      "difficulty_id": "survivor",
+      "origin_id": "old_city_patrol",
+      "trait_id": "meticulous",
+      "home_city_id": "city_a"
+    },
+    "expedition_travel_step_cost": 1
+  }
+}

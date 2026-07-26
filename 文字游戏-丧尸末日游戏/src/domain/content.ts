@@ -1,4 +1,5 @@
 import type {
+  CampaignProfileState,
   CheckpointState,
   CommunicationLogEntry,
   CompanionState,
@@ -48,6 +49,11 @@ export interface GameRuleConfig {
   companion_secret_unlock_trust: number;
   player_counts: Record<string, { minimum: number; maximum: number }>;
   mode_survival_cost_percent: Record<GameMode, number>;
+  city_travel: {
+    home_step_cost: number;
+    neighbor_step_cost: number;
+    remote_step_cost: number;
+  };
   default_survival_action_type: string;
   action_hunger_costs: Record<
     string,
@@ -94,16 +100,65 @@ export interface GameRuleConfig {
   };
 }
 
+/** 可在新游戏中选择的难度及其生存损耗倍率。 */
+export interface CampaignDifficultyConfig {
+  id: string;
+  label: string;
+  description: string;
+  survival_cost_percent: number;
+  starting_effects: readonly NumericEffectConfig[];
+}
+
+/** 可在新游戏中选择的所长起源。 */
+export interface CampaignOriginConfig {
+  id: string;
+  label: string;
+  description: string;
+  starting_effects: readonly NumericEffectConfig[];
+}
+
+/** 可在新游戏中选择的性格特性及远征步数收益。 */
+export interface CampaignTraitConfig {
+  id: string;
+  label: string;
+  description: string;
+  expedition_step_bonus: number;
+  starting_effects: readonly NumericEffectConfig[];
+}
+
+/** 配置化开局档案选项集合。 */
+export interface CampaignProfilesConfig {
+  difficulties: readonly CampaignDifficultyConfig[];
+  origins: readonly CampaignOriginConfig[];
+  traits: readonly CampaignTraitConfig[];
+  migration_default: CampaignProfileState;
+}
+
+/** 城市所处地貌，决定可用于远行的交通工具。 */
+export type CityTerrain = "land" | "river" | "coastal" | "island";
+
 export interface CityConfig {
   id: string;
   name: string;
+  district: string;
+  description: string;
+  terrain: CityTerrain;
+  neighbor_ids: readonly string[];
+  intelligence_newspapers_required: number;
+  path_item_ids: readonly string[];
+  transport_item_ids: readonly string[];
   event_ids: readonly string[];
 }
 
 export interface GameConfigDocument {
   schema_version: number;
   save_schema_version: number;
-  game: { title: string; story: string; tutorial: string };
+  game: {
+    title: string;
+    story: string;
+    tutorial: string;
+    tutorial_survival: string;
+  };
   menu: Record<string, string>;
   mode_labels: Record<string, string>;
   defaults: {
@@ -117,6 +172,8 @@ export interface GameConfigDocument {
     research: ResearchState;
     expedition: ExpeditionState | null;
   };
+  campaign_profiles: CampaignProfilesConfig;
+  mode_capabilities: Record<GameMode, readonly string[]>;
   rules: GameRuleConfig;
   cities: readonly CityConfig[];
   actions: readonly { id: string; label: string; style: string; icon: string }[];
@@ -385,6 +442,17 @@ export interface V2ToV3SaveMigrationConfig {
     inventory: InventoryState;
     research: ResearchState;
     expedition: ExpeditionState | null;
+  };
+}
+
+/** v3 存档补齐开局档案与远征路费后的迁移配置。 */
+export interface V3ToV4SaveMigrationConfig {
+  schema_version: number;
+  from_version: number;
+  to_version: number;
+  state_defaults: {
+    campaign: CampaignProfileState;
+    expedition_travel_step_cost: number;
   };
 }
 

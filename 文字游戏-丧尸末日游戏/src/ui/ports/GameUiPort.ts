@@ -4,6 +4,8 @@
 export type GameScreenId =
   | "menu"
   | "name_input"
+  | "save_slots"
+  | "update_log"
   | "connection"
   | "dashboard"
   | "story"
@@ -35,10 +37,24 @@ export type GameScreenId =
  */
 export type GameMode = "single" | "multiplayer" | "story";
 
+/** 存档栏位页当前执行的稳定读写语义。 */
+export type SaveSlotsPageMode = "load" | "save";
+
+/**
+ * 当前快照对剧情功能的访问级别。
+ */
+export type UiStoryAccess = "hidden" | "mode" | "legacy_resume";
+
 /**
  * 通用提示的语义颜色，不携带具体视觉值。
  */
-export type UiTone = "default" | "primary" | "success" | "warning" | "danger";
+export type UiTone =
+  | "default"
+  | "muted"
+  | "primary"
+  | "success"
+  | "warning"
+  | "danger";
 
 /**
  * 允许端口同步或异步返回结果，避免 UI 绑定具体基础设施。
@@ -96,6 +112,50 @@ export interface UiPlayerView {
   readonly roleLabel: string;
 }
 
+/** 开局配置中一个可选择项。 */
+export interface UiCampaignOptionView {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+}
+
+/** 姓名之外独立保存的模式、难度、起源、特性与出生城市选择。 */
+export interface UiCampaignProfileSelection {
+  readonly difficultyId: string;
+  readonly originId: string;
+  readonly traitId: string;
+  readonly homeCityId: string;
+}
+
+/** 新游戏页面可使用的全部配置化开局选项。 */
+export interface UiCampaignProfileOptionsView {
+  readonly difficulties: readonly UiCampaignOptionView[];
+  readonly origins: readonly UiCampaignOptionView[];
+  readonly traits: readonly UiCampaignOptionView[];
+  readonly cities: readonly UiCampaignOptionView[];
+  readonly defaultSelection: UiCampaignProfileSelection;
+}
+
+/** 局内抬头独立展示的完整开局档案。 */
+export interface UiCampaignProfileView {
+  readonly modeLabel: string;
+  readonly difficultyLabel: string;
+  readonly originLabel: string;
+  readonly traitLabel: string;
+  readonly homeCityLabel: string;
+  readonly districtLabel: string;
+}
+
+/** 六栏存档页中的一栏摘要。 */
+export interface UiSaveSlotView {
+  readonly slotId: number;
+  readonly status: "empty" | "valid" | "recoverable" | "corrupted";
+  readonly title: string;
+  readonly details: string;
+  readonly loadable: boolean;
+  readonly writable: boolean;
+}
+
 /**
  * 封面展示的配置化作品名称。
  */
@@ -138,6 +198,10 @@ export interface UiPromptView {
  */
 export interface UiCityView extends UiOptionView {
   readonly dangerLabel?: string;
+  readonly districtLabel: string;
+  readonly terrainLabel: string;
+  readonly relationLabel: string;
+  readonly travelStepCost: number;
 }
 
 /**
@@ -242,6 +306,7 @@ export interface UiExpeditionCarryItemView {
 export interface UiExpeditionStatusView {
   readonly cityId: string;
   readonly cityName: string;
+  readonly travelStepCost: number;
   readonly remainingSteps: number;
   readonly maximumSteps: number;
   readonly eventsResolved: number;
@@ -298,7 +363,11 @@ export interface GameUiSnapshot {
   readonly revision: number;
   readonly brand: UiBrandView;
   readonly playerCounts: Readonly<Record<GameMode, number>>;
+  readonly campaignProfileOptions: UiCampaignProfileOptionsView;
+  readonly campaignProfile: UiCampaignProfileView | null;
+  readonly saveSlots: readonly UiSaveSlotView[];
   readonly mode: GameMode | null;
+  readonly storyAccess: UiStoryAccess;
   readonly ended: boolean;
   readonly canRollback: boolean;
   readonly activePlayer: UiPlayerView | null;
@@ -336,9 +405,11 @@ export type GameUiCommand =
       readonly type: "start_game";
       readonly mode: GameMode;
       readonly playerNames: readonly string[];
+      readonly saveSlotId?: number;
+      readonly profile?: UiCampaignProfileSelection;
     }
-  | { readonly type: "load_game" }
-  | { readonly type: "save_game" }
+  | { readonly type: "load_game"; readonly slotId?: number }
+  | { readonly type: "save_game"; readonly slotId?: number }
   | { readonly type: "rollback_checkpoint" }
   | { readonly type: "research_complete"; readonly projectId: string }
   | { readonly type: "craft_item"; readonly recipeId: string }
@@ -404,5 +475,5 @@ export interface GameUiPort {
   /**
    * 查询当前浏览器是否存在可读取的存档。
    */
-  canLoadGame(): MaybePromise<boolean>;
+  canLoadGame(slotId?: number): MaybePromise<boolean>;
 }

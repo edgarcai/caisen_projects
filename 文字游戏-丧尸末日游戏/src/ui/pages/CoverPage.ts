@@ -1,181 +1,32 @@
-import type {
-  CoverMenuLayoutTokens,
-  GameUiConfig,
-} from "../../styles/GameTheme";
+import type { GameUiConfig } from "../../styles/GameTheme";
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
-import { DelayedHoverIntent } from "../interactions/DelayedHoverIntent";
+import { PointerTooltip } from "../components/PointerTooltip";
 import type { UiFactory } from "../components/UiFactory";
 import type {
   LayaRuntimeLike,
   LayaSpriteLike,
-  LayaTextLike,
 } from "../laya/LayaRuntime";
 import type { UiBrandView } from "../ports/GameUiPort";
+import {
+  buildCoverMenuItems,
+  resolveCoverArtwork,
+  resolveCoverChangelogGeometry,
+  resolveCoverExitGeometry,
+  resolveCoverHorizontalPosition,
+  resolveCoverMenuItemGeometry,
+  resolveCoverMenuLayout,
+  resolveCoverSettingsGeometry,
+} from "../models/CoverMenuModel";
+import type {
+  CoverMenuItem,
+  CoverPageActions,
+} from "../models/CoverMenuModel";
 import type { PageView } from "./PageView";
 
-/** 封面菜单悬停后对外发布的简介模型。 */
-export interface CoverMenuDescription {
-  readonly id: string;
-  readonly label: string;
-  readonly description: string;
-}
-
-/** 封面六入口的回调集合。 */
-export interface CoverPageActions {
-  readonly startSingle: () => void;
-  readonly loadGame: () => void;
-  readonly startMultiplayer: () => void;
-  readonly startStory: () => void;
-  readonly showCredits: () => void;
-  readonly exitGame: () => void;
-  readonly onDescriptionChange?: (
-    description: CoverMenuDescription | null,
-  ) => void;
-}
-
-/** 封面菜单渲染所需的不可变项目。 */
-export interface CoverMenuItem extends CoverMenuDescription {
-  readonly disabled: boolean;
-  readonly action: () => void;
-}
-
-/** 封面单个菜单按钮的纯布局结果。 */
-export interface CoverMenuItemGeometry {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-  readonly shape: "rectangle" | "parallelogram";
-}
-
-/** 桌面封面悬停简介面板的纯几何结果。 */
-export interface CoverDescriptionGeometry {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-}
-
-/** 根据当前响应式布局选择桌面 PNG 或轻量手机封面。 */
-export function resolveCoverArtwork(
-  config: GameUiConfig,
-  layout: ResponsiveLayout,
-): string {
-  return layout.usesCompactUi ? config.assets.mobile_cover : config.assets.cover;
-}
-
-/**
- * 按固定顺序构造六个封面入口，确保退出永远位于最低优先级位置。
- */
-export function buildCoverMenuItems(
-  config: GameUiConfig,
-  canLoadGame: boolean,
-  actions: CoverPageActions,
-): readonly CoverMenuItem[] {
-  return [
-    {
-      id: "new-game",
-      label: config.texts.start_single,
-      description: config.texts.start_single_description,
-      disabled: false,
-      action: actions.startSingle,
-    },
-    {
-      id: "load-game",
-      label: config.texts.start_load,
-      description: config.texts.start_load_description,
-      disabled: !canLoadGame,
-      action: actions.loadGame,
-    },
-    {
-      id: "multiplayer",
-      label: config.texts.start_multiplayer,
-      description: config.texts.start_multiplayer_description,
-      disabled: false,
-      action: actions.startMultiplayer,
-    },
-    {
-      id: "story",
-      label: config.texts.start_story,
-      description: config.texts.start_story_description,
-      disabled: false,
-      action: actions.startStory,
-    },
-    {
-      id: "credits",
-      label: config.texts.credits,
-      description: config.texts.credits_description,
-      disabled: false,
-      action: actions.showCredits,
-    },
-    {
-      id: "exit",
-      label: config.texts.exit,
-      description: config.texts.exit_description,
-      disabled: false,
-      action: actions.exitGame,
-    },
-  ];
-}
-
-/**
- * 根据桌面或手机菜单 token 计算按钮坐标，避免页面散落断点常量。
- */
-export function resolveCoverMenuItemGeometry(
-  config: GameUiConfig,
-  layout: ResponsiveLayout,
-  index: number,
-  itemCount: number,
-): CoverMenuItemGeometry {
-  const menuLayout = resolveCoverMenuLayout(config, layout);
-  const columns = Math.max(1, Math.floor(menuLayout.menu_columns));
-  const column = index % columns;
-  const row = Math.floor(index / columns);
-  const gridWidth = menuLayout.menu_width * columns
-    + menuLayout.menu_column_gap * (columns - 1);
-  const alignedLeft = resolveCoverHorizontalPosition(
-    menuLayout,
-    layout,
-    gridWidth,
-  );
-  const menuTop = resolveCoverMenuTop(
-    menuLayout,
-    layout,
-    config.controls.button_height,
-    Math.ceil(itemCount / columns),
-  );
-  return {
-    x:
-      alignedLeft +
-      column * (menuLayout.menu_width + menuLayout.menu_column_gap) +
-      row * menuLayout.menu_row_step_x,
-    y: menuTop + row * (config.controls.button_height + menuLayout.menu_row_gap),
-    width: menuLayout.menu_width,
-    height: config.controls.button_height,
-    shape: layout.usesCompactUi ? "rectangle" : "parallelogram",
-  };
-}
-
-/**
- * 根据配置化桌面封面标尺计算悬停简介面板几何。
- */
-export function resolveCoverDescriptionGeometry(
-  config: GameUiConfig,
-  layout: ResponsiveLayout,
-): CoverDescriptionGeometry {
-  const menuLayout = resolveCoverMenuLayout(config, layout);
-  return {
-    x: layout.safeArea.left + menuLayout.description_left,
-    y: layout.safeArea.top + menuLayout.description_top,
-    width: menuLayout.description_width,
-    height: menuLayout.description_height,
-  };
-}
-
-/** 只展示双行标题和六个配置化入口的封面页面。 */
+/** 展示双行标题、五个主入口和独立系统键的封面页面。 */
 export class CoverPage implements PageView {
   public readonly root: LayaSpriteLike;
-  private readonly hoverIntent: DelayedHoverIntent<CoverMenuDescription> | null;
+  private readonly tooltip: PointerTooltip | null;
 
   /** 创建带末日封面、响应式菜单和延迟简介的页面。 */
   public constructor(
@@ -199,11 +50,11 @@ export class CoverPage implements PageView {
     this.renderArtwork(runtime, factory, config, layout);
     this.renderScrim(factory, config, layout);
     this.renderBrand(factory, config, layout, brand);
-    this.hoverIntent = layout.usesCompactUi
+    this.renderUtilities(factory, config, layout, actions);
+    this.tooltip = layout.kind === "mobile"
       ? null
-      : this.createDescriptionIntent(factory, config, layout, actions);
+      : this.createPointerTooltip(runtime, factory, config, layout);
     this.renderMenu(
-      runtime,
       factory,
       config,
       layout,
@@ -211,11 +62,50 @@ export class CoverPage implements PageView {
     );
   }
 
+  /** 在安全区绘制设置、右上退出与右下灰色更新日志入口。 */
+  private renderUtilities(
+    factory: UiFactory,
+    config: GameUiConfig,
+    layout: ResponsiveLayout,
+    actions: CoverPageActions,
+  ): void {
+    factory.button(this.root, {
+      testId: "menu-settings",
+      label: config.texts.settings,
+      ...resolveCoverSettingsGeometry(config, layout),
+      tone: "default",
+      onClick: actions.openSettings,
+    });
+    factory.button(this.root, {
+      testId: "menu-exit",
+      label: config.texts.exit,
+      ...resolveCoverExitGeometry(config, layout),
+      tone: "danger",
+      shape: layout.kind === "mobile" ? "rectangle" : "parallelogram",
+      onClick: actions.exitGame,
+    });
+    factory.button(this.root, {
+      testId: "menu-update-log",
+      label: config.texts.update_log,
+      ...resolveCoverChangelogGeometry(config, layout),
+      tone: "muted",
+      fontSize: config.typography.caption_size,
+      onClick: actions.showUpdateLog ?? (() => undefined),
+    });
+  }
+
   /** 释放悬停计时器和封面显示树。 */
   public destroy(): void {
-    this.hoverIntent?.destroy();
+    this.tooltip?.destroy();
     this.root.offAll();
     this.root.destroy(true);
+  }
+
+  /** 页面被二级层覆盖时立即清理悬停简介与待触发计时器。 */
+  public setActive(active: boolean): void {
+    if (!active) {
+      this.tooltip?.leave();
+    }
   }
 
   /** 加载并按原始比例居中裁切正式封面。 */
@@ -313,9 +203,8 @@ export class CoverPage implements PageView {
     });
   }
 
-  /** 按响应式网格绘制六个入口，桌面使用 PNG 平行四边形皮肤。 */
+  /** 按响应式网格绘制五个入口，桌面使用 PNG 平行四边形皮肤。 */
   private renderMenu(
-    runtime: LayaRuntimeLike,
     factory: UiFactory,
     config: GameUiConfig,
     layout: ResponsiveLayout,
@@ -340,84 +229,47 @@ export class CoverPage implements PageView {
         ...geometry,
         tone: "primary",
         disabled: item.disabled,
-        skin: layout.usesCompactUi ? undefined : desktopSkin,
+        skin: layout.kind === "mobile" ? undefined : desktopSkin,
         onClick: item.action,
       });
-      if (this.hoverIntent !== null) {
-        button.mouseEnabled = true;
-        button.on(runtime.Event.MOUSE_OVER, button, (): void => {
-          this.hoverIntent?.enter(item);
-        });
-        button.on(runtime.Event.MOUSE_OUT, button, (): void => {
-          this.hoverIntent?.leave();
-        });
+      if (this.tooltip !== null) {
+        this.tooltip.bind(
+          button,
+          { title: item.label, description: item.description },
+          item.disabled,
+        );
       }
     });
   }
 
-  /** 创建桌面端延迟简介面板和状态发布接口。 */
-  private createDescriptionIntent(
+  /** 创建桌面端延迟 0.3 秒并跟随鼠标的简介浮层。 */
+  private createPointerTooltip(
+    runtime: LayaRuntimeLike,
     factory: UiFactory,
     config: GameUiConfig,
     layout: ResponsiveLayout,
-    actions: CoverPageActions,
-  ): DelayedHoverIntent<CoverMenuDescription> {
-    const menuLayout = resolveCoverMenuLayout(config, layout);
-    const geometry = resolveCoverDescriptionGeometry(config, layout);
-    const panel = factory.panel(this.root, {
+  ): PointerTooltip {
+    return new PointerTooltip(runtime, factory, this.root, {
       testId: "menu-description",
-      ...geometry,
-      translucent: true,
+      delayMs: config.motion.cover_menu_description_delay_ms,
+      width: config.controls.tooltip_width,
+      padding: config.controls.tooltip_padding,
+      offset: {
+        x: config.controls.tooltip_offset_x,
+        y: config.controls.tooltip_offset_y,
+      },
+      bounds: {
+        left: layout.safeArea.left,
+        top: layout.safeArea.top,
+        right: layout.stageWidth - layout.safeArea.right,
+        bottom: layout.stageHeight - layout.safeArea.bottom,
+      },
+      titleFontSize: config.typography.section_title_size,
+      titleLineHeight: config.typography.body_line_height,
+      descriptionFontSize: config.typography.body_size,
+      descriptionLineHeight: config.typography.body_line_height,
+      contentGap: config.controls.button_gap,
     });
-    panel.visible = false;
-    const title = factory.text(panel, {
-      testId: "menu-description-title",
-      text: "",
-      x: layout.panelPadding,
-      y: layout.panelPadding,
-      width: menuLayout.description_width - layout.panelPadding * 2,
-      height: config.typography.body_line_height,
-      fontSize: config.typography.section_title_size,
-      color: config.theme.accent,
-      bold: true,
-    });
-    const body = factory.text(panel, {
-      testId: "menu-description-body",
-      text: "",
-      x: layout.panelPadding,
-      y: layout.panelPadding + config.typography.body_line_height,
-      width: menuLayout.description_width - layout.panelPadding * 2,
-      height:
-        menuLayout.description_height -
-        layout.panelPadding * 2 -
-        config.typography.body_line_height,
-      fontSize: config.typography.body_size,
-    });
-
-    /** 同步简介文字、可见状态和可选外部监听器。 */
-    const updateDescription = (
-      description: CoverMenuDescription | null,
-    ): void => {
-      this.updateDescriptionPanel(panel, title, body, description);
-      actions.onDescriptionChange?.(description);
-    };
-
-    return new DelayedHoverIntent(
-      config.motion.cover_menu_description_delay_ms,
-      updateDescription,
-    );
-  }
-
-  /** 更新简介面板而不重新创建 Laya 节点。 */
-  private updateDescriptionPanel(
-    panel: LayaSpriteLike,
-    title: LayaTextLike,
-    body: LayaTextLike,
-    description: CoverMenuDescription | null,
-  ): void {
-    panel.visible = description !== null;
-    title.text = description?.label ?? "";
-    body.text = description?.description ?? "";
   }
 
   /** 绘制左侧实色到透明的配置化渐隐层。 */
@@ -454,54 +306,6 @@ export class CoverPage implements PageView {
     }
     this.root.addChild(scrim);
   }
-}
-
-/** 返回当前断点对应的封面菜单 token。 */
-function resolveCoverMenuLayout(
-  config: GameUiConfig,
-  layout: ResponsiveLayout,
-): CoverMenuLayoutTokens {
-  if (layout.usesCompactUi && layout.isLandscape) {
-    return config.layout.cover.mobile_landscape;
-  }
-  return layout.usesCompactUi
-    ? config.layout.cover.mobile
-    : config.layout.cover.desktop;
-}
-
-/** 按配置将封面标题与菜单锚定到安全区内的左侧、中央或右侧。 */
-function resolveCoverHorizontalPosition(
-  menuLayout: CoverMenuLayoutTokens,
-  layout: ResponsiveLayout,
-  contentWidth: number,
-): number {
-  const safeWidth = layout.stageWidth - layout.safeArea.left - layout.safeArea.right;
-  if (menuLayout.horizontal_alignment === "center") {
-    return layout.safeArea.left + (safeWidth - contentWidth) / 2;
-  }
-  if (menuLayout.horizontal_alignment === "right") {
-    return layout.stageWidth - layout.safeArea.right - menuLayout.content_left - contentWidth;
-  }
-  return layout.safeArea.left + menuLayout.content_left;
-}
-
-/** 按配置把菜单整体锚定到舞台顶部、中部或底部。 */
-function resolveCoverMenuTop(
-  menuLayout: CoverMenuLayoutTokens,
-  layout: ResponsiveLayout,
-  itemHeight: number,
-  rowCount: number,
-): number {
-  const menuHeight = rowCount * itemHeight
-    + Math.max(0, rowCount - 1) * menuLayout.menu_row_gap;
-  const safeHeight = layout.stageHeight - layout.safeArea.top - layout.safeArea.bottom;
-  if (menuLayout.vertical_alignment === "bottom") {
-    return layout.stageHeight - layout.safeArea.bottom - menuLayout.menu_bottom - menuHeight;
-  }
-  if (menuLayout.vertical_alignment === "middle") {
-    return layout.safeArea.top + (safeHeight - menuHeight) / 2;
-  }
-  return layout.safeArea.top + menuLayout.menu_top;
 }
 
 /** 按比例缩放十六进制主题色的 Alpha 通道。 */

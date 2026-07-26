@@ -47,6 +47,10 @@ function loadWebTestConfig(): WebTestConfig {
 const webConfig = loadWebTestConfig();
 const quality = webConfig.quality_assurance;
 const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
+const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL?.trim();
+const baseUrl = externalBaseUrl === undefined || externalBaseUrl.length === 0
+  ? quality.base_url
+  : externalBaseUrl;
 
 /** 将每个配置化 QA 视口转换为明确的桌面或真实移动能力项目。 */
 function buildViewportProject(viewport: QualityViewport) {
@@ -75,7 +79,7 @@ export default defineConfig({
     timeout: quality.action_timeout_ms,
   },
   use: {
-    baseURL: quality.base_url,
+    baseURL: baseUrl,
     actionTimeout: quality.action_timeout_ms,
     navigationTimeout: quality.navigation_timeout_ms,
     screenshot: "only-on-failure",
@@ -83,10 +87,12 @@ export default defineConfig({
     ...(browserChannel === undefined ? {} : { channel: browserChannel }),
   },
   projects: webConfig.responsive.quality_viewports.map(buildViewportProject),
-  webServer: {
-    command: quality.web_server_command,
-    url: quality.base_url,
-    reuseExistingServer: true,
-    timeout: quality.server_timeout_ms,
-  },
+  webServer: externalBaseUrl === undefined || externalBaseUrl.length === 0
+    ? {
+        command: quality.web_server_command,
+        url: quality.base_url,
+        reuseExistingServer: true,
+        timeout: quality.server_timeout_ms,
+      }
+    : undefined,
 });

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="192" viewBox="0 0 1024 192">
+  <defs>
+    <filter id="disabled-shadow" x="-10%" y="-30%" width="120%" height="170%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#020608" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <path d="M74 12H1010L950 180H14Z" fill="#020608" opacity="0.5" filter="url(#disabled-shadow)"/>
+  <path d="M62 4H1016L950 172H4Z" fill="#142229" stroke="#304148" stroke-width="6"/>
+  <path d="M75 20H980L970 45H65Z" fill="#7e9095" opacity="0.05"/>
+  <path d="M20 153H948L943 166H15Z" fill="#020608" opacity="0.28"/>
+  <path d="M88 52H940M70 82H928M52 112H916" stroke="#7e9095" stroke-width="2" opacity="0.035"/>
+  <path d="M982 20L950 104L918 104L950 20Z" fill="#52666c" opacity="0.42"/>
+  <path d="M947 113L932 151" stroke="#8b815e" stroke-width="5" opacity="0.28"/>
+</svg>

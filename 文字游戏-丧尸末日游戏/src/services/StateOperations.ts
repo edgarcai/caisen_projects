@@ -158,16 +158,17 @@ export class StateOperations {
   public applyEffects(
     effects: readonly NumericEffectConfig[],
     state: GameState,
+    playerIndex: number = state.active_player_index,
   ): Record<string, number> {
     const tokens: Record<string, number> = {};
     for (const effect of effects) {
       let amount = this.rollAmount(effect.amount);
-      const current = this.read(effect.target, state);
+      const current = this.read(effect.target, state, playerIndex);
       if (effect.operation === "subtract" && effect.limit_to_available === true) {
         amount = Math.min(amount, current);
       }
       const nextValue = this.applyOperation(current, effect.operation, amount);
-      this.write(effect.target, nextValue, state);
+      this.write(effect.target, nextValue, state, playerIndex);
       if (effect.token !== undefined) {
         tokens[effect.token] = amount;
       }

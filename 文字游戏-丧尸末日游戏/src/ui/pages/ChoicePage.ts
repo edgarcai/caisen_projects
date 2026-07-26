@@ -2,6 +2,7 @@ import type { GameUiConfig } from "../../styles/GameTheme";
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
 import type { UiOptionView, UiPromptView } from "../ports/GameUiPort";
 import type { UiFactory } from "../components/UiFactory";
+import { PointerTooltip } from "../components/PointerTooltip";
 import type { PageActionSpec } from "../components/PageActionBar";
 import type { LayaRuntimeLike } from "../laya/LayaRuntime";
 import { PageScaffold } from "./PageView";
@@ -51,13 +52,39 @@ export function createChoicePage(
   const bodyY = heading.height + layout.sectionGap;
   const body = factory.autoText(page.content, {
     testId: `${spec.testId}-prompt-body`,
-    text: buildChoiceBody(config, spec.prompt),
+    text: buildChoiceBody(config, spec.prompt, layout.usesCompactUi),
     x: 0,
     y: bodyY,
     width: page.contentWidth,
     fontSize: config.typography.body_size,
   });
   const optionsY = bodyY + body.height + layout.sectionGap;
+  const tooltip = layout.usesCompactUi
+    ? null
+    : new PointerTooltip(runtime, factory, page.root, {
+        testId: `${spec.testId}-tooltip`,
+        delayMs: config.motion.cover_menu_description_delay_ms,
+        width: config.controls.tooltip_width,
+        padding: config.controls.tooltip_padding,
+        offset: {
+          x: config.controls.tooltip_offset_x,
+          y: config.controls.tooltip_offset_y,
+        },
+        bounds: {
+          left: layout.safeArea.left,
+          top: layout.safeArea.top,
+          right: layout.stageWidth - layout.safeArea.right,
+          bottom: layout.stageHeight - layout.safeArea.bottom,
+        },
+        titleFontSize: config.typography.section_title_size,
+        titleLineHeight: config.typography.body_line_height,
+        descriptionFontSize: config.typography.body_size,
+        descriptionLineHeight: config.typography.body_line_height,
+        contentGap: config.controls.button_gap,
+      });
+  if (tooltip !== null) {
+    page.addDisposable((): void => { tooltip.destroy(); });
+  }
   const contentHeight = renderOptions(
     factory,
     config,
@@ -65,6 +92,7 @@ export function createChoicePage(
     page,
     spec,
     optionsY,
+    tooltip,
   );
   page.scroll.setContentHeight(contentHeight);
   return page;
@@ -80,6 +108,7 @@ function renderOptions(
   page: PageScaffold,
   spec: ChoicePageSpec,
   startY: number,
+  tooltip: PointerTooltip | null,
 ): number {
   const columns = Math.max(1, layout.optionColumns);
   const gap = config.layout.page.option_gap;
@@ -89,7 +118,7 @@ function renderOptions(
   spec.prompt.options.forEach((option, index) => {
     const column = index % columns;
     const row = Math.floor(index / columns);
-    factory.button(page.content, {
+    const button = factory.button(page.content, {
       testId: `${spec.testId}-option-${option.id}`,
       label: option.label,
       x: column * (buttonWidth + gap),
@@ -100,6 +129,14 @@ function renderOptions(
       disabled: option.disabled,
       onClick: (): void => { spec.onSelect(option); },
     });
+    const details = option.disabledReason ?? option.description;
+    if (tooltip !== null && details.length > 0) {
+      tooltip.bind(
+        button,
+        { title: option.label, description: details },
+        option.disabled,
+      );
+    }
   });
   const rows = Math.ceil(spec.prompt.options.length / columns);
   return startY + rows * (buttonHeight + gap);
@@ -108,7 +145,14 @@ function renderOptions(
 /**
  * 把成本、效果和锁定原因放入可滚动正文，按钮仅保留主标签。
  */
-function buildChoiceBody(config: GameUiConfig, prompt: UiPromptView): string {
+function buildChoiceBody(
+  config: GameUiConfig,
+  prompt: UiPromptView,
+  includeOptionIntelligence: boolean,
+): string {
+  if (!includeOptionIntelligence) {
+    return prompt.body;
+  }
   const intelligence = prompt.options
     .map((option) => ({
       label: option.label,

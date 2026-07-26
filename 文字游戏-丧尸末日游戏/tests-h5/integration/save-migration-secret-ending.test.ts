@@ -17,7 +17,7 @@ function requireSnapshot(snapshot: GameUiSnapshot | undefined): GameUiSnapshot {
 /** 将测试状态放到满足秘密结局入口和群巢记忆支线的最终场景。 */
 function prepareLinkedHiveSecretEnding(): ReturnType<typeof buildH5Harness> {
   const harness = buildH5Harness();
-  harness.adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
+  harness.adapter.execute({ type: "start_game", mode: "story", playerNames: ["白菜"] });
   const state = requireState(harness.application);
   state.story.current_scene_id = "the_last_broadcast";
   state.story.chapter_id = "chapter_4_after_embers";
@@ -48,7 +48,7 @@ function prepareLinkedHiveSecretEnding(): ReturnType<typeof buildH5Harness> {
 }
 
 describe("H5 v1 存档迁移", () => {
-  it("通过适配器读取 v1 双人存档并经显式保存安全写回 v3", () => {
+  it("通过适配器读取 v1 双人存档并经显式保存安全写回 v4", () => {
     const source = buildH5Harness();
     source.application.startNewGame(["旧所长甲", "旧所长乙"], "multiplayer");
     const sourceState = requireState(source.application);
@@ -79,7 +79,8 @@ describe("H5 v1 存档迁移", () => {
     expect(snapshot.activePlayer?.name).toBe("旧所长乙");
     expect(snapshot.clock?.turnLabel).toBe("第 9 回合");
     expect(requireState(reader.application).story.flags).toContain("legacy_save");
-    expect(snapshot.storyPrompt?.id).toBe("last_pot_of_porridge");
+    expect(snapshot.storyAccess).toBe("hidden");
+    expect(snapshot.storyPrompt).toBeNull();
 
     const legacySerialized = storage.getItem(H5_TEST_STORAGE_KEY);
     if (legacySerialized === null) throw new Error("迁移前主槽不存在。");
@@ -92,8 +93,9 @@ describe("H5 v1 存档迁移", () => {
       schema_version: number;
       game_state: Record<string, unknown>;
     };
-    expect(envelope.schema_version).toBe(3);
+    expect(envelope.schema_version).toBe(4);
     expect(envelope.game_state).toHaveProperty("story");
+    expect(envelope.game_state).toHaveProperty("campaign");
     expect(envelope.game_state).not.toHaveProperty("ended");
     expect(envelope.game_state).not.toHaveProperty("ending_message");
   });
@@ -141,7 +143,7 @@ describe("H5 秘密结局", () => {
       ["the_last_broadcast", "broadcast_reversal"],
     ] as const;
     const harness = buildH5Harness();
-    harness.adapter.execute({ type: "start_game", mode: "single", playerNames: ["路线所长"] });
+    harness.adapter.execute({ type: "start_game", mode: "story", playerNames: ["路线所长"] });
     const state = requireState(harness.application);
     requirePlayer(state).attack = 1_000;
     let victories = 0;

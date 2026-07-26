@@ -92,7 +92,10 @@ class GameApplication:
         )
         if mode == "multiplayer":
             opening = self.config.text(
-                "multiplayer_started", player_names="、".join(clean_names)
+                "multiplayer_started",
+                player_names=self.config.text("multiplayer_name_separator").join(
+                    clean_names
+                ),
             )
         else:
             opening = self.config.text("new_game_started", player_name=clean_names[0])

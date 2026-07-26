@@ -1,0 +1,347 @@
+import { describe, expect, it } from "vitest";
+import survivalSystemsDocument from "../../config/survival_systems.json";
+import type { GameApplication } from "../../src/application";
+import { validateSurvivalSystemsConfig } from "../../src/config/survivalSystemsValidator";
+import type { CityConfig } from "../../src/domain/content";
+import type { GameMode } from "../../src/domain/game-state";
+import {
+  CityAccessService,
+  GameContent,
+  type CityTravelRelation,
+} from "../../src/services";
+import {
+  buildH5Harness,
+  requirePlayer,
+  requireState,
+} from "../helpers/H5TestHarness";
+
+/** 自定义开局测试仅需覆盖的档案字段。 */
+interface StartOptions {
+  readonly mode?: GameMode;
+  readonly difficultyId?: string;
+  readonly homeCityId?: string;
+}
+
+/** 使用真实配置和隔离存储创建指定模式、难度与出生城市的游戏。 */
+function startConfiguredGame(options: StartOptions = {}): GameApplication {
+  const application = buildH5Harness().application;
+  const profile = application.content.game.campaign_profiles.migration_default;
+  const mode = options.mode ?? "single";
+  const firstSlot = application.saveSlots()[0];
+  if (firstSlot === undefined) {
+    throw new Error("测试要求至少配置一个存档槽位。");
+  }
+  application.startNewGame({
+    mode,
+    playerNames: mode === "multiplayer" ? ["甲", "乙"] : ["所长"],
+    saveSlotId: firstSlot.slotId,
+    profile: {
+      ...structuredClone(profile),
+      difficulty_id: options.difficultyId ?? profile.difficulty_id,
+      home_city_id: options.homeCityId ?? profile.home_city_id,
+    },
+  });
+  return application;
+}
+
+/** 按双向邻接拓扑计算两座城市之间的预期关系。 */
+function expectedRelation(
+  homeCity: CityConfig,
+  destination: CityConfig,
+): CityTravelRelation {
+  if (homeCity.id === destination.id) {
+    return "home";
+  }
+  return homeCity.neighbor_ids.includes(destination.id)
+    || destination.neighbor_ids.includes(homeCity.id)
+    ? "neighbor"
+    : "remote";
+}
+
+/** 从游戏规则读取指定城市关系的配置化出发路费。 */
+function configuredTravelCost(
+  application: GameApplication,
+  relation: CityTravelRelation,
+): number {
+  const travel = application.content.game.rules.city_travel;
+  if (relation === "home") return travel.home_step_cost;
+  if (relation === "neighbor") return travel.neighbor_step_cost;
+  return travel.remote_step_cost;
+}
+
+describe("游戏模式能力隔离", () => {
+  it("单人和多人仅保留生存能力，剧情模式独占叙事与首领战", () => {
+    const matrix = [
+      { mode: "single", narrative: false, bossCombat: false },
+      { mode: "multiplayer", narrative: false, bossCombat: false },
+      { mode: "story", narrative: true, bossCombat: true },
+    ] as const;
+
+    for (const row of matrix) {
+      const application = startConfiguredGame({ mode: row.mode });
+      expect(application.supportsCapability("narrative")).toBe(row.narrative);
+      expect(application.supportsCapability("boss_combat")).toBe(row.bossCombat);
+      expect(application.currentStoryPrompt() !== null).toBe(row.narrative);
+      expect(application.storyStatus() !== null).toBe(row.narrative);
+      if (!row.bossCombat) {
+        expect(() => application.performCombatAction("attack")).toThrow(
+          application.content.text("mode_capability_unavailable", {
+            capability: "boss_combat",
+          }),
+        );
+      }
+    }
+  });
+
+  it("多人开局通讯使用内容配置中的姓名分隔符", () => {
+    const application = buildH5Harness().application;
+    const separatorKey = "multiplayer_name_separator";
+    const originalSeparator = application.content.game.texts[separatorKey];
+    if (originalSeparator === undefined) {
+      throw new Error("测试要求配置多人姓名分隔符。");
+    }
+    application.content.game.texts[separatorKey] = " / ";
+    try {
+      const firstSlot = application.saveSlots()[0];
+      if (firstSlot === undefined) {
+        throw new Error("测试要求至少配置一个存档槽位。");
+      }
+
+      const report = application.startNewGame({
+        mode: "multiplayer",
+        playerNames: ["甲", "乙"],
+        saveSlotId: firstSlot.slotId,
+        profile: structuredClone(
+          application.content.game.campaign_profiles.migration_default,
+        ),
+      });
+
+      expect(report.messages[0]).toContain("甲 / 乙");
+    } finally {
+      application.content.game.texts[separatorKey] = originalSeparator;
+    }
+  });
+});
+
+describe("城市拓扑与通行矩阵", () => {
+  it("八座出生城市均按双向邻接解析所在、附近和远处关系及路费", () => {
+    const cities = startConfiguredGame().content.game.cities;
+
+    for (const homeCity of cities) {
+      const application = startConfiguredGame({ homeCityId: homeCity.id });
+      const decisions = new Map(
+        application.expeditionCities().map((decision) => [decision.city.id, decision]),
+      );
+      for (const destination of cities) {
+        const relation = expectedRelation(homeCity, destination);
+        const decision = decisions.get(destination.id);
+        expect(decision, `${homeCity.id} → ${destination.id}`).toMatchObject({
+          relation,
+          travelStepCost: configuredTravelCost(application, relation),
+        });
+        if (relation !== "remote") {
+          expect(decision?.accessible, `${homeCity.id} → ${destination.id}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("远城同时要求足量情报和路线，满足后 D 至 H 市统一开放", () => {
+    const application = startConfiguredGame({ homeCityId: "city_a" });
+    const state = requireState(application);
+    const initial = new Map(
+      application.expeditionCities().map((decision) => [decision.city.id, decision]),
+    );
+
+    expect(initial.get("city_a")?.accessible).toBe(true);
+    expect(initial.get("city_b")?.accessible).toBe(true);
+    expect(initial.get("city_c")?.accessible).toBe(true);
+    for (const cityId of ["city_d", "city_e", "city_f", "city_g", "city_h"]) {
+      expect(initial.get(cityId)?.accessible, cityId).toBe(false);
+    }
+
+    state.shelter.newspapers = 10;
+    expect(application.expeditionCities().find(
+      (decision) => decision.city.id === "city_h",
+    )?.accessible).toBe(false);
+
+    state.inventory.crafted_items.route_map = 1;
+    const unlocked = new Map(
+      application.expeditionCities().map((decision) => [decision.city.id, decision]),
+    );
+    for (const cityId of ["city_d", "city_e", "city_f", "city_g", "city_h"]) {
+      expect(unlocked.get(cityId)?.accessible, cityId).toBe(true);
+    }
+  });
+
+  it("非 A 出生时可用情报加路线图或载具重新开放远处 A 市", () => {
+    const routeApplication = startConfiguredGame({ homeCityId: "city_d" });
+    const routeState = requireState(routeApplication);
+    const cityA = routeApplication.content.game.cities.find(
+      (city) => city.id === "city_a",
+    );
+    if (cityA === undefined) {
+      throw new Error("测试要求配置 A 市。");
+    }
+    const initial = routeApplication.expeditionCities().find(
+      (decision) => decision.city.id === "city_a",
+    );
+    expect(initial).toMatchObject({
+      relation: "remote",
+      travelStepCost: routeApplication.content.game.rules.city_travel.remote_step_cost,
+      accessible: false,
+    });
+
+    routeState.shelter.newspapers = cityA.intelligence_newspapers_required;
+    expect(routeApplication.expeditionCities().find(
+      (decision) => decision.city.id === "city_a",
+    )?.accessible).toBe(false);
+    routeState.inventory.crafted_items.route_map = 1;
+    expect(routeApplication.expeditionCities().find(
+      (decision) => decision.city.id === "city_a",
+    )?.accessible).toBe(true);
+
+    const transportApplication = startConfiguredGame({ homeCityId: "city_d" });
+    const transportState = requireState(transportApplication);
+    transportState.shelter.newspapers = cityA.intelligence_newspapers_required;
+    transportState.inventory.crafted_items.armored_car = 1;
+    expect(transportApplication.expeditionCities().find(
+      (decision) => decision.city.id === "city_a",
+    )).toMatchObject({ relation: "remote", accessible: true });
+  });
+
+  it("陆路载具不能替代岛城海路，但摩托艇可以开放 H 市", () => {
+    const application = startConfiguredGame({ homeCityId: "city_a" });
+    const state = requireState(application);
+    state.shelter.newspapers = 10;
+    state.inventory.crafted_items.armored_car = 1;
+
+    const landTransport = new Map(
+      application.expeditionCities().map((decision) => [decision.city.id, decision]),
+    );
+    expect(landTransport.get("city_d")?.accessible).toBe(true);
+    expect(landTransport.get("city_g")?.accessible).toBe(true);
+    expect(landTransport.get("city_h")?.accessible).toBe(false);
+
+    state.inventory.crafted_items.motorboat = 1;
+    expect(application.expeditionCities().find(
+      (decision) => decision.city.id === "city_h",
+    )?.accessible).toBe(true);
+  });
+
+  it("远城锁定原因使用内容配置中的通行道具分隔符", () => {
+    const application = startConfiguredGame({ homeCityId: "city_a" });
+    const state = requireState(application);
+    state.shelter.newspapers = 10;
+    const game = structuredClone(application.content.game);
+    game.texts.city_access_item_separator = " / ";
+    const access = new CityAccessService(
+      new GameContent(game, application.content.story, application.content.events),
+      validateSurvivalSystemsConfig(survivalSystemsDocument),
+    );
+
+    const decision = access.evaluate(state, "city_h");
+
+    expect(decision.accessible).toBe(false);
+    expect(decision.reason).toContain(
+      "区域安全路线图 / 浅水机动艇 / 轻型直升机",
+    );
+  });
+});
+
+describe("开局难度生存倍率", () => {
+  it("三档难度按配置百分比缩放同一工作行动的个人饥饿增量", () => {
+    const template = startConfiguredGame();
+    const difficulties = template.content.game.campaign_profiles.difficulties;
+    const baseHunger = template.content.game.rules
+      .action_hunger_costs.job?.player_hunger_gain;
+    const modePercent = template.content.game.rules.mode_survival_cost_percent.single;
+    const job = template.content.story.jobs.find(
+      (candidate) => candidate.job_id === "sort_salvage",
+    );
+    if (baseHunger === undefined) {
+      throw new Error("测试要求工作行动配置个人饥饿成本。");
+    }
+    if (job === undefined) {
+      throw new Error("测试要求配置整理废料工作。");
+    }
+    const turnsConsumed = Math.ceil(
+      job.duration_hours / template.content.game.rules.time.hours_per_action,
+    );
+
+    for (const difficulty of difficulties) {
+      const application = startConfiguredGame({ difficultyId: difficulty.id });
+      const player = requirePlayer(requireState(application));
+      const hungerBefore = player.hunger;
+
+      const report = application.performManagement("job", "sort_salvage");
+
+      const scaledPercent = Math.floor(
+        (modePercent * difficulty.survival_cost_percent) / 100,
+      );
+      const rawExpected = Math.floor((baseHunger * scaledPercent) / 100);
+      const expectedHunger = baseHunger > 0 && scaledPercent > 0
+        ? Math.max(1, rawExpected)
+        : 0;
+      expect(report.stateChanged, difficulty.id).toBe(true);
+      expect(
+        requirePlayer(requireState(application)).hunger - hungerBefore,
+        difficulty.id,
+      ).toBe(expectedHunger * turnsConsumed);
+    }
+  });
+});
+
+describe("远征路费与首事件步数", () => {
+  it("所在、邻近和远处城市分别扣除配置路费，并额外扣除首事件成本", () => {
+    const scenarios = [
+      { cityId: "city_a", relation: "home" },
+      { cityId: "city_b", relation: "neighbor" },
+      { cityId: "city_d", relation: "remote" },
+    ] as const;
+    const cityStepCosts: Readonly<Record<string, number>> =
+      survivalSystemsDocument.expedition.city_step_costs;
+
+    for (const scenario of scenarios) {
+      const application = startConfiguredGame({ homeCityId: "city_a" });
+      const state = requireState(application);
+      if (scenario.relation === "remote") {
+        state.shelter.newspapers = 10;
+        state.inventory.crafted_items.route_map = 1;
+      }
+      const report = application.prepareExpedition(scenario.cityId, [], {});
+      const status = application.expeditionStatus();
+      if (status === null) {
+        throw new Error(`远征 ${scenario.cityId} 未创建状态。`);
+      }
+      const trait = application.content.game.campaign_profiles.traits.find(
+        (candidate) => candidate.id === state.campaign.trait_id,
+      );
+      if (trait === undefined) {
+        throw new Error("当前开局特性未在配置中声明。");
+      }
+      const travelCost = configuredTravelCost(application, scenario.relation);
+      const cityStepCost = cityStepCosts[scenario.cityId];
+      if (cityStepCost === undefined) {
+        throw new Error(`城市 ${scenario.cityId} 缺少事件步数配置。`);
+      }
+      const expectedMaximum =
+        survivalSystemsDocument.expedition.base_steps + trait.expedition_step_bonus;
+      const expectedRemaining =
+        expectedMaximum -
+        travelCost -
+        survivalSystemsDocument.expedition.event_step_cost -
+        cityStepCost;
+
+      expect(report.stateChanged, scenario.cityId).toBe(true);
+      expect(status, scenario.cityId).toMatchObject({
+        cityId: scenario.cityId,
+        travelStepCost: travelCost,
+        maximumSteps: expectedMaximum,
+        remainingSteps: expectedRemaining,
+        eventsResolved: 0,
+      });
+      expect(state.pending_exploration, scenario.cityId).not.toBeNull();
+    }
+  });
+});

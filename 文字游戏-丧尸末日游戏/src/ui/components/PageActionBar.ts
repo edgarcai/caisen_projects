@@ -1,7 +1,11 @@
 import type { GameUiConfig } from "../../styles/GameTheme";
 import type { LayaNodeLike, LayaSpriteLike } from "../laya/LayaRuntime";
 import type { UiTone } from "../ports/GameUiPort";
-import type { UiFactory } from "./UiFactory";
+import type {
+  ButtonSkinSpec,
+  ButtonSpec,
+  UiFactory,
+} from "./UiFactory";
 
 /** 底部操作区中的单个命令。 */
 export interface PageActionSpec {
@@ -10,6 +14,8 @@ export interface PageActionSpec {
   readonly label: string;
   readonly tone?: UiTone;
   readonly disabled?: boolean;
+  readonly shape?: ButtonSpec["shape"];
+  readonly skin?: ButtonSkinSpec;
   readonly onClick: () => void;
 }
 
@@ -103,6 +109,8 @@ export function createPageActionBar(
       height: geometry.buttonHeight,
       tone: action.tone,
       disabled: action.disabled,
+      shape: action.shape,
+      skin: action.skin,
       onClick: action.onClick,
     });
   });

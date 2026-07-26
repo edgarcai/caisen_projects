@@ -7,24 +7,26 @@
   "game": {
     "title": "避难所：余烬纪元",
     "story": "2166年，行动敏捷、成群出没的感染者令世界各地接连沦陷。人类重新启用废弃防空洞，才保住最后的火种。你是B-17避难所的所长：粮食即将耗尽，一段来自凌晨三点十七分的广播却警告你‘粮食会咬人’。从最后一锅粥到白塔顶端，你将与伙伴穿越四章、十三个连续场景，面对三名首领，并决定幸存者、感染者与整座晦城的未来。",
-    "tutorial": "欢迎来到B-17避难所，所长。活下去只是基础；你选择怎样活下去，才会决定所有人的结局。\n\n【生存与时间】只有探索、战斗、设施建设、工作和修复等高消耗行动会增加饥饿；剧情阅读、交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【远征步数】探索前先选择城市、同行伙伴与携带物。伙伴词条、信任、研发成果和特定物资会提高最大步数；危险城市每次事件消耗更多步数。尚有步数时可继续深入或安全返程；步数不足会被尸群强制逼退，只保住20%本次战利品，所长生命会降到7至45。\n\n【仓库、研发与制作】仓库统一显示资源和制作物，已装备的武器、防具不计入可用库存。研究台消耗资料与材料解锁技术，制作工坊据此生产远征物资、武器和防具。失败的研发或制作不会扣除任何材料。\n\n【四章主线】点击‘剧情任务’推进十三个连续场景。选择可能要求属性、资源、设施、伙伴状态或关键物品；锁定选择不会扣资源或消耗回合。主线包含《饥饿会说话》《尸群在唱谁的名字》《人比末日更会撒谎》《余烬之后是什么》四章。\n\n【三场Boss】铁轨屠夫、鸣钟母体与无冕王都有多条处理路线。战斗可执行攻击、防御、专注、使用医疗用品和撤退。单个战斗回合不会推进世界时间；整场胜利结算或成功撤退才消耗一次世界行动。\n\n【避难所管理】供餐、修复、设施、工作、交易和招募统一收在避难所管理中。设施提供即时效果或长期增益；工作产生收益与风险；交易不推进时间；资源不足时不会偷偷消耗回合。\n\n【伙伴、线索与结局】豪菜、阳关、林岚和小满拥有独立信任与状态。隐藏账本、病历、频率、名单和维护密钥会开启非暴力路线。最终结果会综合人性、证据、信任、线索、避难所状态及三场Boss的处理方式。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录，随后清空开始新一周。系统每十个生存日建立检查点并自动保存一次；ESC功能菜单仍可随时手动存档、设置、回档或退出。已经抽取的探索事件不能通过保存或读取免费重抽，旧v1、v2存档会安全迁移为v3状态。"
+    "tutorial_survival": "欢迎来到B-17避难所，所长。普通求生模式专注于资源、人员与远征经营，不包含主线剧情任务。\n\n【生存与时间】探索、设施建设、工作和修复等高消耗行动会增加饥饿；交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【城市与远征】所长出生城市出发消耗1步，邻近城市消耗2步。远处城市必须先从旧报纸中收集足够情报，再持有路线图或符合地貌的车辆、船只、直升机。伙伴词条、特性、研发成果和携带物会提高最大步数；步数不足会被尸群强制逼退，只保住20%物资，所长生命降至7至45。\n\n【避难所与人物档案】人物档案和避难所信息在所有模式保留。供餐、修复、设施、工作、交易、招募、仓库、研发、制作与历史记录都可从指挥台进入。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录。系统每十个生存日建立检查点并自动保存；ESC功能菜单可以选择六个栏位存档、设置、回档、返回主菜单或退出。",
+    "tutorial": "欢迎来到B-17避难所，所长。活下去只是基础；你选择怎样活下去，才会决定所有人的结局。\n\n【生存与时间】只有探索、战斗、设施建设、工作和修复等高消耗行动会增加饥饿；剧情阅读、交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【远征步数】探索前先选择城市、同行伙伴与携带物。伙伴词条、信任、研发成果和特定物资会提高最大步数；危险城市每次事件消耗更多步数。尚有步数时可继续深入或安全返程；步数不足会被尸群强制逼退，只保住20%本次战利品，所长生命会降到7至45。\n\n【仓库、研发与制作】仓库统一显示资源和制作物，已装备的武器、防具不计入可用库存。研究台消耗资料与材料解锁技术，制作工坊据此生产远征物资、武器和防具。失败的研发或制作不会扣除任何材料。\n\n【四章主线】点击‘剧情任务’推进十三个连续场景。选择可能要求属性、资源、设施、伙伴状态或关键物品；锁定选择不会扣资源或消耗回合。主线包含《饥饿会说话》《尸群在唱谁的名字》《人比末日更会撒谎》《余烬之后是什么》四章。\n\n【三场Boss】铁轨屠夫、鸣钟母体与无冕王都有多条处理路线。战斗可执行攻击、防御、专注、使用医疗用品和撤退。单个战斗回合不会推进世界时间；整场胜利结算或成功撤退才消耗一次世界行动。\n\n【避难所管理】供餐、修复、设施、工作、交易和招募统一收在避难所管理中。设施提供即时效果或长期增益；工作产生收益与风险；交易不推进时间；资源不足时不会偷偷消耗回合。\n\n【伙伴、线索与结局】豪菜、阳关、林岚和小满拥有独立信任与状态。隐藏账本、病历、频率、名单和维护密钥会开启非暴力路线。最终结果会综合人性、证据、信任、线索、避难所状态及三场Boss的处理方式。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录，随后清空开始新一周。系统每十个生存日建立检查点并自动保存一次；ESC功能菜单仍可随时手动存档、设置、回档或退出。已经抽取的探索事件不能通过保存或读取免费重抽，旧v1、v2、v3存档会安全迁移为v4状态。"
   },
   "paths": {
     "events": "config/events.json",
     "story": "config/story.json",
     "save_migration_v1_to_v2": "config/save_migrations/v1_to_v2.json",
     "save_migration_v2_to_v3": "config/save_migrations/v2_to_v3.json",
+    "save_migration_v3_to_v4": "config/save_migrations/v3_to_v4.json",
     "save": "saves/savegame.json",
-    "concept_art": "assets/menu_concept.png",
-    "cover_art": "assets/cover_art.png"
+    "concept_art": "assets/menu_concept_2k.png",
+    "cover_art": "assets/cover_art_2k.png"
   },
   "window": {
     "width": 1280,
     "height": 760,
     "minimum_width": 1080,
     "minimum_height": 760,
-    "image_width": 1280,
-    "image_height": 720,
+    "image_width": 2048,
+    "image_height": 1152,
     "dialog_width": 760,
     "dialog_height": 620,
     "dialog_wrap_length": 680
@@ -330,7 +332,7 @@
     "shelter_management_title": "避难所管理",
     "companion_title": "伙伴档案",
     "confirm_return_title": "返回主菜单",
-    "confirm_return_message": "当前进度已自动保存在本机。确定返回主菜单吗？",
+    "confirm_return_message": "返回主菜单不会额外保存。请确认已经手动存档，或已抵达最近一次十日检查点。",
     "error_title": "无法继续",
     "info_title": "避难所通讯",
     "save_title": "保存游戏",
@@ -340,6 +342,108 @@
     "single": "单人求生",
     "multiplayer": "本地双人合作",
     "story": "剧情沉浸"
+  },
+  "campaign_profiles": {
+    "difficulties": [
+      {
+        "id": "watchkeeper",
+        "label": "守望",
+        "description": "物资更充足，生存损耗降低，适合熟悉城市与避难所系统。",
+        "survival_cost_percent": 80,
+        "starting_effects": [
+          {"target": "player.food", "operation": "add", "amount": 8},
+          {"target": "shelter.health", "operation": "add", "amount": 40}
+        ]
+      },
+      {
+        "id": "survivor",
+        "label": "求生者",
+        "description": "标准资源与损耗，城市风险和收益保持完整平衡。",
+        "survival_cost_percent": 100,
+        "starting_effects": []
+      },
+      {
+        "id": "ash_nightmare",
+        "label": "余烬噩梦",
+        "description": "生存损耗显著提高，初始秩序与药品更加紧张。",
+        "survival_cost_percent": 125,
+        "starting_effects": [
+          {"target": "player.medical_supplies", "operation": "subtract", "amount": 10},
+          {"target": "shelter.activity", "operation": "subtract", "amount": 10}
+        ]
+      }
+    ],
+    "origins": [
+      {
+        "id": "old_city_patrol",
+        "label": "旧城巡警",
+        "description": "熟悉街区封锁和近距离交火，攻击与防御略高。",
+        "starting_effects": [
+          {"target": "player.attack", "operation": "add", "amount": 5},
+          {"target": "player.defense", "operation": "add", "amount": 3}
+        ]
+      },
+      {
+        "id": "emergency_medic",
+        "label": "急诊医生",
+        "description": "带着灾变初期留下的药品与救治经验来到防空洞。",
+        "starting_effects": [
+          {"target": "player.medical_supplies", "operation": "add", "amount": 12},
+          {"target": "player.intelligence", "operation": "add", "amount": 8}
+        ]
+      },
+      {
+        "id": "municipal_engineer",
+        "label": "市政工程师",
+        "description": "能从废墟中识别可用结构件，并强化基地防御设施。",
+        "starting_effects": [
+          {"target": "player.parts", "operation": "add", "amount": 15},
+          {"target": "shelter.defense_damage", "operation": "add", "amount": 5}
+        ]
+      }
+    ],
+    "traits": [
+      {
+        "id": "hot_blooded",
+        "label": "好勇斗狠",
+        "description": "先动手往往能活下来：攻击提高、防御略降，远征步数+1。",
+        "expedition_step_bonus": 1,
+        "starting_effects": [
+          {"target": "player.attack", "operation": "add", "amount": 6},
+          {"target": "player.defense", "operation": "subtract", "amount": 2}
+        ]
+      },
+      {
+        "id": "meticulous",
+        "label": "谨慎周密",
+        "description": "会提前标记退路和物资点：敏捷与智力提高，远征步数+2。",
+        "expedition_step_bonus": 2,
+        "starting_effects": [
+          {"target": "player.agility", "operation": "add", "amount": 4},
+          {"target": "player.intelligence", "operation": "add", "amount": 6}
+        ]
+      },
+      {
+        "id": "rallying_voice",
+        "label": "人心所向",
+        "description": "擅长安抚幸存者，避难所活跃度提高，远征步数+1。",
+        "expedition_step_bonus": 1,
+        "starting_effects": [
+          {"target": "shelter.activity", "operation": "add", "amount": 15}
+        ]
+      }
+    ],
+    "migration_default": {
+      "difficulty_id": "survivor",
+      "origin_id": "old_city_patrol",
+      "trait_id": "meticulous",
+      "home_city_id": "city_a"
+    }
+  },
+  "mode_capabilities": {
+    "single": [],
+    "multiplayer": [],
+    "story": ["narrative", "boss_combat"]
   },
   "rules": {
     "companion_secret_unlock_trust": 2,
@@ -352,6 +456,11 @@
       "single": 100,
       "multiplayer": 100,
       "story": 35
+    },
+    "city_travel": {
+      "home_step_cost": 1,
+      "neighbor_step_cost": 2,
+      "remote_step_cost": 3
     },
     "default_survival_action_type": "default",
     "action_hunger_costs": {
@@ -482,14 +591,14 @@
     }
   },
   "cities": [
-    {"id": "city_a", "name": "a市", "event_ids": ["bank", "elder", "medical_pod", "thief", "hospital", "commercial_street", "skyscraper", "quiet_street"]},
-    {"id": "city_b", "name": "b市", "event_ids": ["bank", "thief", "hospital", "commercial_street", "quiet_street"]},
-    {"id": "city_c", "name": "c市", "event_ids": ["elder", "medical_pod", "thief", "skyscraper", "quiet_street"]},
-    {"id": "city_d", "name": "d市", "event_ids": ["hospital", "commercial_street", "skyscraper", "quiet_street"]},
-    {"id": "city_e", "name": "e市", "event_ids": ["bank", "elder", "thief", "quiet_street"]},
-    {"id": "city_f", "name": "f市", "event_ids": ["medical_pod", "hospital", "commercial_street", "quiet_street"]},
-    {"id": "city_g", "name": "g市", "event_ids": ["thief", "commercial_street", "skyscraper", "quiet_street"]},
-    {"id": "city_h", "name": "h市", "event_ids": ["bank", "hospital", "skyscraper", "quiet_street"]}
+    {"id": "city_a", "name": "A市", "district": "旧城中区", "description": "密集旧楼环绕B-17防空洞，街巷熟悉但尸群会沿广播声聚集。", "terrain": "land", "neighbor_ids": ["city_b", "city_c"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"], "event_ids": ["bank", "elder", "medical_pod", "thief", "hospital", "commercial_street", "skyscraper", "quiet_street"]},
+    {"id": "city_b", "name": "B市", "district": "临江仓储区", "description": "河堤、货栈和废弃冷库连成狭长走廊，桥面经常被尸群截断。", "terrain": "river", "neighbor_ids": ["city_a", "city_d", "city_e"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"], "event_ids": ["bank", "thief", "hospital", "commercial_street", "quiet_street"]},
+    {"id": "city_c", "name": "C市", "district": "高新北区", "description": "研究园和住宅塔楼仍有备用电力，自动门后的动静真假难辨。", "terrain": "land", "neighbor_ids": ["city_a", "city_d", "city_f"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"], "event_ids": ["elder", "medical_pod", "thief", "skyscraper", "quiet_street"]},
+    {"id": "city_d", "name": "D市", "district": "南湾港区", "description": "集装箱迷宫伸向海湾，潮汐会打开短暂通路，也会带来漂流感染者。", "terrain": "coastal", "neighbor_ids": ["city_b", "city_c", "city_g"], "intelligence_newspapers_required": 5, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"], "event_ids": ["hospital", "commercial_street", "skyscraper", "quiet_street"]},
+    {"id": "city_e", "name": "E市", "district": "西部矿城", "description": "采石场与隧道遍布山腹，地面开阔，地下却可能保存完整补给。", "terrain": "land", "neighbor_ids": ["city_b", "city_g", "city_h"], "intelligence_newspapers_required": 6, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"], "event_ids": ["bank", "elder", "thief", "quiet_street"]},
+    {"id": "city_f", "name": "F市", "district": "双河老街", "description": "两条河把城区切成数座孤岛，老桥和排水隧道构成危险捷径。", "terrain": "river", "neighbor_ids": ["city_c", "city_g", "city_h"], "intelligence_newspapers_required": 6, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"], "event_ids": ["medical_pod", "hospital", "commercial_street", "quiet_street"]},
+    {"id": "city_g", "name": "G市", "district": "东海工业带", "description": "炼化塔、船坞和高架管线遮蔽视野，旧厂房里仍有重型设备。", "terrain": "coastal", "neighbor_ids": ["city_d", "city_e", "city_f", "city_h"], "intelligence_newspapers_required": 8, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"], "event_ids": ["thief", "commercial_street", "skyscraper", "quiet_street"]},
+    {"id": "city_h", "name": "H市", "district": "白礁岛城", "description": "离岸岛屿曾是检疫中心，码头被毁后，只剩海路和低空航线可达。", "terrain": "island", "neighbor_ids": ["city_e", "city_f", "city_g"], "intelligence_newspapers_required": 10, "path_item_ids": ["route_map"], "transport_item_ids": ["motorboat", "helicopter"], "event_ids": ["bank", "hospital", "skyscraper", "quiet_street"]}
   ],
   "actions": [
     {"id": "story", "label": "剧情任务", "style": "primary", "icon": "◈"},
@@ -538,7 +647,9 @@
   "texts": {
     "welcome_log": "通讯接通。避难所等待你的第一项指令。",
     "new_game_started": "{player_name}成为避难所所长，生存行动正式开始。",
+    "new_game_profile_started": "模式：{mode}｜难度：{difficulty}｜起源：{origin}｜特性：{trait}｜出生地：{city}",
     "multiplayer_started": "{player_names}组成双人指挥组，将轮流执行生存行动。",
+    "multiplayer_name_separator": "、",
     "story_mode_started": "{player_name}进入剧情沉浸模式，生存损耗降低，但命运的代价不会消失。",
     "save_success": "进度已安全保存到本地。",
     "no_save": "还没有可读取的存档，请先开始新的游戏。",
@@ -546,6 +657,7 @@
     "story_started": "第一章《饥饿会说话》已经开启。末日里的第一项选择，往往不是打败谁，而是把最后一口食物留给谁。",
     "story_locked": "当前选择尚未满足条件：{reason}",
     "story_complete": "主线已经抵达终点。你的选择仍会留在这座城市的余烬里。",
+    "story_mode_required": "剧情任务仅能在剧情模式中推进。请从封面选择“剧情模式”开始主线。",
     "story_chapter_title_format": "第{chapter_number}章 · {chapter_title}",
     "story_status_ending_chapter_title": "旅程终章",
     "story_status_ending_objective": "本局故事已经结束",
@@ -606,12 +718,16 @@
     "discovery_found": "探索途中，你发现隐藏线索：{name}。{description}",
     "invalid_names": "需要输入两位不同的所长姓名。",
     "invalid_player_name": "所长姓名不能为空。",
+    "invalid_campaign_profile": "开局档案包含未配置的难度、起源、特性或出生城市。",
+    "expedition_travel_steps_insufficient": "本次远行至少需要{required}点步数，但当前队伍最多只有{maximum}点。请调整同行伙伴、携带物或特性。",
+    "mode_capability_unavailable": "当前游戏模式未开放能力：{capability}。请从剧情模式进入相关内容。",
     "unknown_mode": "未知游戏模式：{mode}",
     "turn_day": "你和伙伴们度过了充实的一天。",
     "daily_food_produced": "水培温室完成本日收获，获得{produced}份食物。",
     "turn_month": "避难所迎来了新的一月。",
     "turn_year": "你和朋友们又共同撑过了一年。",
     "weekly_summary_format": "第{week_number}周：已归档{entry_count}条通讯，避难所耐久{shelter_health}，群体饥饿{group_hunger}，已完成主线场景{completed_scenes}处。",
+    "weekly_summary_survival_format": "第{week_number}周：已归档{entry_count}条通讯，避难所耐久{shelter_health}，群体饥饿{group_hunger}，远征与经营仍在继续。",
     "weekly_archive_notice": "第{week_number}周通讯已归档，新的七日记录开始。",
     "checkpoint_created": "第{survival_days}个生存日检查点已建立。",
     "checkpoint_rollback_success": "已回档至第{survival_days}个生存日的检查点。",
@@ -656,6 +772,21 @@
     "exploration_abandoned": "你放弃了这次机会，谨慎撤回避难所。",
     "unknown_action": "未知行动：{action_id}",
     "unknown_city": "未知城市：{city_id}",
+    "city_terrain_land": "陆地城市",
+    "city_terrain_river": "河边城市",
+    "city_terrain_coastal": "海边城市",
+    "city_terrain_island": "岛屿城市",
+    "city_relation_home": "所在城市",
+    "city_relation_neighbor": "附近城市",
+    "city_relation_remote": "远处城市",
+    "city_access_summary": "{district}｜{terrain}｜{relation}｜出发消耗{steps}步\n{description}",
+    "city_access_home": "所在城市可直接探索，出发消耗{steps}步。",
+    "city_access_neighbor": "与出生地相邻，出发消耗{steps}步。",
+    "city_access_remote_ready": "情报与通行条件已满足，出发消耗{steps}步。",
+    "city_access_need_intelligence": "情报不足：需要收集至少{required}份旧报纸。",
+    "city_access_need_route": "缺少安全路径或适配交通工具：{items}。",
+    "city_access_item_separator": "、",
+    "city_access_unavailable": "当前路线无法安全到达。",
     "game_not_started": "请先从主菜单开始游戏。",
     "game_already_over": "本局游戏已经结束，请返回主菜单重新开始。",
     "save_error": "保存失败：{error}",

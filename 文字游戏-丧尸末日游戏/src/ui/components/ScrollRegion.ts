@@ -121,8 +121,11 @@ export class ScrollRegion {
    * 根据滚轮方向按配置步长滚动。
    */
   private readonly handleWheel = (event: unknown): void => {
-    const delta = isWheelEvent(event) ? event.delta : 0;
-    this.setOffset(this.offsetY - delta * this.scrollStep);
+    const delta = wheelDelta(event);
+    if (delta === 0) {
+      return;
+    }
+    this.setOffset(this.offsetY - Math.sign(delta) * this.scrollStep);
   };
 
   /**
@@ -136,11 +139,20 @@ export class ScrollRegion {
 }
 
 /**
- * 判断未知事件是否带有可用滚轮增量。
+ * 同时读取 Laya 与浏览器原生滚轮增量，统一触控板和鼠标方向。
  */
-function isWheelEvent(event: unknown): event is { readonly delta: number } {
-  if (typeof event !== "object" || event === null || !("delta" in event)) {
-    return false;
+function wheelDelta(event: unknown): number {
+  if (typeof event !== "object" || event === null) {
+    return 0;
   }
-  return typeof (event as { readonly delta?: unknown }).delta === "number";
+  const layaDelta = Reflect.get(event, "delta") as unknown;
+  if (typeof layaDelta === "number" && Number.isFinite(layaDelta)) {
+    return layaDelta;
+  }
+  const nativeEvent = Reflect.get(event, "nativeEvent") as unknown;
+  if (typeof nativeEvent !== "object" || nativeEvent === null) {
+    return 0;
+  }
+  const deltaY = Reflect.get(nativeEvent, "deltaY") as unknown;
+  return typeof deltaY === "number" && Number.isFinite(deltaY) ? -deltaY : 0;
 }

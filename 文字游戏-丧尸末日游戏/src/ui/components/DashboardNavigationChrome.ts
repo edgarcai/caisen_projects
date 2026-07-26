@@ -25,14 +25,14 @@ export interface DashboardNavigationChromeActions {
 
 /** 判断旧存档是否需要保留主线恢复入口，避免战斗或结局死锁。 */
 export function hasRestorableStoryState(snapshot: GameUiSnapshot): boolean {
-  return snapshot.battle !== null || snapshot.ending !== null || snapshot.ended;
+  return snapshot.storyAccess === "legacy_resume";
 }
 
 /** 判断当前模式是否应展示剧情任务卡。 */
 export function shouldRenderDashboardMission(
   snapshot: GameUiSnapshot,
 ): boolean {
-  return snapshot.mode === "story" || hasRestorableStoryState(snapshot);
+  return snapshot.storyAccess !== "hidden" && snapshot.mission !== null;
 }
 
 /** 按布局返回当前标题栏使用的导航位置。 */
@@ -56,7 +56,9 @@ export function resolveVisibleDashboardNavigation(
     if (!item.placements.includes(placement)) {
       return false;
     }
-    if (item.modes.includes(mode)) {
+    if (item.modes.includes(mode) && (
+      item.id !== "story" || snapshot.storyAccess === "mode"
+    )) {
       return true;
     }
     return item.id === "story" && hasRestorableStoryState(snapshot);

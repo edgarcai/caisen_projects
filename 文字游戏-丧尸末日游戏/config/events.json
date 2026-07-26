@@ -190,10 +190,11 @@
             },
             {
               "weight": 1,
-              "result": "你从书店带回一批读物，避难所活跃度+{activity}，书本+{books}。",
+              "result": "你从书店带回一批读物与灾前剪报，避难所活跃度+{activity}，书本+{books}，旧报纸+{newspapers}。",
               "effects": [
                 {"target": "shelter.activity", "operation": "add", "amount": [10, 30], "token": "activity"},
-                {"target": "shelter.books", "operation": "add", "amount": [3, 8], "token": "books"}
+                {"target": "shelter.books", "operation": "add", "amount": [3, 8], "token": "books"},
+                {"target": "shelter.newspapers", "operation": "add", "amount": [2, 4], "token": "newspapers"}
               ]
             },
             {
@@ -256,10 +257,11 @@
         {"weight": 2, "result": "你避开了游荡的丧尸，没有找到物资，但安全回到了避难所。", "effects": []},
         {
           "weight": 1,
-          "result": "你在公交站后找到一个遗落背包，获得{food}份食物和{parts}个零件。",
+          "result": "你在公交站后找到一个遗落背包，获得{food}份食物、{parts}个零件和{newspapers}份完整旧报纸。",
           "effects": [
             {"target": "player.food", "operation": "add", "amount": [2, 8], "token": "food"},
-            {"target": "player.parts", "operation": "add", "amount": [1, 5], "token": "parts"}
+            {"target": "player.parts", "operation": "add", "amount": [1, 5], "token": "parts"},
+            {"target": "shelter.newspapers", "operation": "add", "amount": [1, 3], "token": "newspapers"}
           ]
         }
       ]

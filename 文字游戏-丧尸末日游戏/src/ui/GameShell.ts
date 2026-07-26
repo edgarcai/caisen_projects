@@ -30,8 +30,9 @@ import {
   createExpeditionStatusPage,
   type ExpeditionDraft,
 } from "./pages/ExpeditionPages";
-import { createNameInputPage } from "./pages/NameInputPage";
+import { createNewGameSetupPage } from "./pages/NewGameSetupPage";
 import type { PageView } from "./pages/PageView";
+import { createSaveSlotsPage } from "./pages/SaveSlotsPage";
 import { createSuppliesPage } from "./pages/SuppliesPage";
 import {
   createCraftingPage,
@@ -52,6 +53,8 @@ import type {
   GameUiCommand,
   GameUiPort,
   GameUiSnapshot,
+  SaveSlotsPageMode,
+  UiCampaignProfileSelection,
   UiActionGroupView,
   UiDocumentView,
   UiNavigationDirective,
@@ -163,6 +166,9 @@ export class GameShell {
     ]);
     this.snapshot = snapshot;
     this.canLoad = canLoad;
+    if (this.config.update_log.auto_open) {
+      this.navigation.push({ screen: "update_log" });
+    }
     this.render(true);
   }
 
@@ -298,9 +304,11 @@ export class GameShell {
     }
     const topIndex = this.renderedPages.length - 1;
     this.renderedPages.forEach((entry, index) => {
+      const active = index === topIndex;
       entry.view.root.visible = index >= Math.max(0, topIndex - 1);
-      entry.view.root.mouseEnabled = index === topIndex;
+      entry.view.root.mouseEnabled = active;
       entry.view.root.zOrder = index;
+      entry.view.setActive?.(active);
     });
     const browserWindow = getBrowserWindow();
     if (browserWindow !== null) {
@@ -331,6 +339,16 @@ export class GameShell {
         return this.createCover(layout, snapshot);
       case "name_input":
         return this.createNameInput(route, layout, snapshot);
+      case "update_log":
+        return this.createDocumentRoute(
+          layout,
+          "page-update-log",
+          this.updateLogDocument(),
+          this.config.texts.close,
+          this.goBack,
+        );
+      case "save_slots":
+        return this.createSaveSlots(route, layout, snapshot);
       case "connection":
         return this.createConnection(layout);
       case "dashboard":
@@ -425,13 +443,20 @@ export class GameShell {
       {
         startSingle: (): void => { this.openNameInput("single"); },
         loadGame: (): void => {
-          void this.loadGame();
+          this.openSaveSlots("load");
         },
         startMultiplayer: (): void => { this.openNameInput("multiplayer"); },
         startStory: (): void => { this.openNameInput("story"); },
         showCredits: (): void => {
           this.navigation.push({ screen: "credits" });
           this.render();
+        },
+        showUpdateLog: (): void => {
+          this.navigation.push({ screen: "update_log" });
+          this.render();
+        },
+        openSettings: (): void => {
+          this.openSettings();
         },
         exitGame: (): void => {
           this.navigation.push({ screen: "exit_confirm" });
@@ -441,28 +466,54 @@ export class GameShell {
     );
   }
 
-  /**
-   * 创建单人或本地双人姓名页。
-   */
+  /** 创建姓名、模式、难度、起源、特性、出生城市与栏位开局页。 */
   private createNameInput(
     route: GameRoute,
     layout: ResponsiveLayout,
     snapshot: GameUiSnapshot,
   ): PageView {
     const mode = route.context?.mode ?? "single";
-    const view = createNameInputPage(
+    const view = createNewGameSetupPage(
       this.runtime,
       this.factory,
       this.config,
       layout,
       mode,
       snapshot.playerCounts[mode],
+      snapshot.campaignProfileOptions,
+      snapshot.saveSlots,
       this.goBack,
-      (names): void => {
-        void this.startGame(mode, names);
+      (names, profile, slotId): void => {
+        void this.startGame(mode, names, profile, slotId);
       },
+      this.handleTextEntryFocusOut,
     );
     return view.page;
+  }
+
+  /** 创建读档或保存语义明确的六栏存档覆盖页。 */
+  private createSaveSlots(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const mode = route.context?.saveSlotsMode ?? "load";
+    return createSaveSlotsPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.saveSlots,
+      mode,
+      (slotId): void => {
+        if (mode === "load") {
+          void this.loadGame(slotId);
+        } else {
+          void this.saveGame(slotId);
+        }
+      },
+      this.goBack,
+    );
   }
 
   /**
@@ -893,7 +944,7 @@ export class GameShell {
       snapshot.canRollback,
       {
         save: (): void => {
-          void this.saveGame();
+          this.openSaveSlots("save");
         },
         openSettings: (): void => {
           this.openSettings();
@@ -911,16 +962,31 @@ export class GameShell {
     );
   }
 
-  /** 创建持久化“减少动效”偏好的设置页。 */
+  /** 创建封面与局内共用的设置页，并仅在局内追加系统导航。 */
   private createSettings(layout: ResponsiveLayout): PageView {
+    const inGame = this.navigation.entries()[0]?.screen === "dashboard";
     return createSettingsPage(
       this.runtime,
       this.factory,
       this.config,
       layout,
       this.preferences,
-      this.toggleReducedMotion,
-      this.goBack,
+      {
+        toggleReducedMotion: this.toggleReducedMotion,
+        ...(inGame
+          ? {
+              openTutorial: (): void => {
+                this.navigation.push({ screen: "tutorial" });
+                this.render();
+              },
+              openReturnMenu: (): void => {
+                this.navigation.push({ screen: "return_menu_confirm" });
+                this.render();
+              },
+            }
+          : {}),
+        close: this.goBack,
+      },
     );
   }
 
@@ -956,6 +1022,24 @@ export class GameShell {
   private openNameInput(mode: GameMode): void {
     this.navigation.push({ screen: "name_input", context: { mode } });
     this.render();
+  }
+
+  /** 按读取或写入语义打开六栏存档覆盖页。 */
+  private openSaveSlots(mode: SaveSlotsPageMode): void {
+    this.navigation.push({
+      screen: "save_slots",
+      context: { saveSlotsMode: mode },
+    });
+    this.render();
+  }
+
+  /** 返回由配置提供的更新日志长文档。 */
+  private updateLogDocument(): UiDocumentView {
+    return {
+      title: this.config.texts.update_log_title,
+      body: this.config.texts.update_log_body,
+      tone: "default",
+    };
   }
 
   /**
@@ -1030,7 +1114,7 @@ export class GameShell {
         this.navigation.push({ screen: intent.screen });
         break;
       case "save_game":
-        void this.saveGame();
+        this.openSaveSlots("save");
         return;
       case "perform_supply_action":
         void this.performSupplyAction(intent.actionId);
@@ -1068,10 +1152,12 @@ export class GameShell {
   private async startGame(
     mode: GameMode,
     playerNames: readonly string[],
+    profile: UiCampaignProfileSelection,
+    saveSlotId: number,
   ): Promise<void> {
     this.expeditionDraft = emptyExpeditionDraft();
     await this.execute(
-      { type: "start_game", mode, playerNames },
+      { type: "start_game", mode, playerNames, profile, saveSlotId },
       (): void => { this.beginConnectionTransition(); },
     );
   }
@@ -1079,10 +1165,10 @@ export class GameShell {
   /**
    * 从本地存档恢复游戏。
    */
-  private async loadGame(): Promise<void> {
+  private async loadGame(slotId: number): Promise<void> {
     this.expeditionDraft = emptyExpeditionDraft();
     await this.execute(
-      { type: "load_game" },
+      { type: "load_game", slotId },
       (): void => { this.beginConnectionTransition(); },
     );
   }
@@ -1123,8 +1209,12 @@ export class GameShell {
   /**
    * 保存当前完整进度。
    */
-  private async saveGame(): Promise<void> {
-    await this.execute({ type: "save_game" }, (): void => undefined, true);
+  private async saveGame(slotId: number): Promise<void> {
+    await this.execute(
+      { type: "save_game", slotId },
+      (): void => { this.navigation.pop(); },
+      true,
+    );
     this.canLoad = await Promise.resolve(this.port.canLoadGame());
   }
 

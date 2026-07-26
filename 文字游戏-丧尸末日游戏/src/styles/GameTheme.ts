@@ -57,6 +57,10 @@ export interface GameControlTokens {
   readonly focus_border_width: number;
   readonly scroll_step: number;
   readonly drag_threshold: number;
+  readonly tooltip_width: number;
+  readonly tooltip_padding: number;
+  readonly tooltip_offset_x: number;
+  readonly tooltip_offset_y: number;
 }
 
 /** 单个响应式封面菜单布局配置。 */
@@ -72,6 +76,18 @@ export interface CoverMenuLayoutTokens {
   readonly menu_column_gap: number;
   readonly menu_row_gap: number;
   readonly menu_row_step_x: number;
+  readonly settings_button_top: number;
+  readonly settings_button_right: number;
+  readonly settings_button_width: number;
+  readonly settings_button_height: number;
+  readonly exit_button_top: number;
+  readonly exit_button_right: number;
+  readonly exit_button_width: number;
+  readonly exit_button_height: number;
+  readonly changelog_button_right: number;
+  readonly changelog_button_bottom: number;
+  readonly changelog_button_width: number;
+  readonly changelog_button_height: number;
   readonly description_left: number;
   readonly description_top: number;
   readonly description_width: number;
@@ -207,6 +223,11 @@ export interface GameWebExitTokens {
   readonly verification_delay_ms: number;
 }
 
+/** 更新日志页面在网页启动时的展示策略。 */
+export interface GameUpdateLogTokens {
+  readonly auto_open: boolean;
+}
+
 /** 局内导航允许出现的位置。 */
 export type NavigationPlacementToken =
   | "mobile_bottom"
@@ -265,6 +286,10 @@ export interface GameTextTokens {
   readonly rollback_description: string;
   readonly settings_title: string;
   readonly settings_body: string;
+  readonly settings_tutorial: string;
+  readonly settings_tutorial_description: string;
+  readonly settings_return_menu: string;
+  readonly settings_return_menu_description: string;
   readonly reduced_motion_description: string;
   readonly reduced_motion_on: string;
   readonly reduced_motion_off: string;
@@ -317,6 +342,33 @@ export interface GameTextTokens {
   readonly option_intelligence_title: string;
   readonly option_intelligence_format: string;
   readonly option_intelligence_separator: string;
+  readonly update_log: string;
+  readonly update_log_title: string;
+  readonly update_log_body: string;
+  readonly profile_setup_title: string;
+  readonly profile_setup_body: string;
+  readonly profile_name_label: string;
+  readonly profile_mode_label: string;
+  readonly profile_difficulty_label: string;
+  readonly profile_origin_label: string;
+  readonly profile_trait_label: string;
+  readonly profile_city_label: string;
+  readonly profile_slot_label: string;
+  readonly profile_field_format: string;
+  readonly profile_field_separator: string;
+  readonly save_slots_title: string;
+  readonly save_slots_load_body: string;
+  readonly save_slots_save_body: string;
+  readonly save_slot_title_format: string;
+  readonly save_slot_details_format: string;
+  readonly save_slot_empty_details: string;
+  readonly save_slot_corrupted_details: string;
+  readonly save_slot_unknown_value: string;
+  readonly save_slot_status_empty: string;
+  readonly save_slot_status_valid: string;
+  readonly save_slot_status_recoverable: string;
+  readonly save_slot_status_corrupted: string;
+  readonly save_slot_name_separator: string;
 }
 
 /**
@@ -331,6 +383,7 @@ export interface GameUiConfig {
   readonly controls: GameControlTokens;
   readonly layout: GameLayoutTokens;
   readonly web_exit: GameWebExitTokens;
+  readonly update_log: GameUpdateLogTokens;
   readonly navigation: readonly NavigationToken[];
   readonly texts: GameTextTokens;
 }
@@ -340,7 +393,7 @@ export interface GameUiConfig {
  */
 export function resolveToneColor(
   theme: GameThemeTokens,
-  tone: "default" | "primary" | "success" | "warning" | "danger",
+  tone: "default" | "muted" | "primary" | "success" | "warning" | "danger",
 ): string {
   switch (tone) {
     case "primary":
@@ -351,6 +404,8 @@ export function resolveToneColor(
       return theme.warning;
     case "danger":
       return theme.danger;
+    case "muted":
+      return theme.background_soft;
     default:
       return theme.secondary;
   }

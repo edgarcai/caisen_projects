@@ -5,6 +5,7 @@ import {
   isEnded,
   type GameMode,
   type GameState,
+  type NewGameSetup,
   type PendingExplorationState,
   type PlayerState,
   type WeeklyArchiveState,
@@ -13,6 +14,7 @@ import type {
   PlayerAttributeProvider,
   RandomSource,
   SaveRepository,
+  SaveSlotSummary,
 } from "../domain/ports";
 import type {
   CraftingRecipeView,
@@ -35,13 +37,18 @@ import {
 } from "../domain/reports";
 import type {
   ChronicleService,
+  CampaignProfileService,
+  CityAccessDecision,
   CombatService,
   ExpeditionService,
   ExplorationService,
   GameContent,
+  GameModeCapability,
+  GameModeCapabilityPolicy,
   GameRules,
   InventoryService,
   ResearchCraftingService,
+  ResolvedCampaignProfile,
   ShelterService,
   StoryService,
 } from "../services";
@@ -67,6 +74,8 @@ export class GameApplication {
   private readonly equipment: PlayerAttributeProvider;
   private readonly researchCrafting: ResearchCraftingService;
   private readonly expedition: ExpeditionService;
+  private readonly campaignProfiles: CampaignProfileService;
+  private readonly modeCapabilities: GameModeCapabilityPolicy;
   private readonly rules: GameRules;
   private readonly repository: SaveRepository;
   private readonly random: RandomSource;
@@ -83,6 +92,8 @@ export class GameApplication {
     equipment: PlayerAttributeProvider,
     researchCrafting: ResearchCraftingService,
     expedition: ExpeditionService,
+    campaignProfiles: CampaignProfileService,
+    modeCapabilities: GameModeCapabilityPolicy,
     rules: GameRules,
     repository: SaveRepository,
     random: RandomSource,
@@ -97,21 +108,35 @@ export class GameApplication {
     this.equipment = equipment;
     this.researchCrafting = researchCrafting;
     this.expedition = expedition;
+    this.campaignProfiles = campaignProfiles;
+    this.modeCapabilities = modeCapabilities;
     this.rules = rules;
     this.repository = repository;
     this.random = random;
     this.state = null;
   }
 
-  /** 根据配置创建单人或本地双人的全新完整游戏。 */
-  public startNewGame(playerNames: readonly string[], mode: GameMode): ActionReport {
-    const cleanNames = playerNames.map((name) => name.trim()).filter((name) => name !== "");
+  /** 根据完整开局档案创建单人、本地双人或剧情模式游戏。 */
+  public startNewGame(setup: NewGameSetup): ActionReport;
+
+  /** 兼容旧调用方，并使用迁移默认档案创建游戏。 */
+  public startNewGame(playerNames: readonly string[], mode: GameMode): ActionReport;
+
+  /** 解析新旧调用签名，创建聚合并应用配置化开局效果。 */
+  public startNewGame(
+    setupOrPlayerNames: NewGameSetup | readonly string[],
+    legacyMode?: GameMode,
+  ): ActionReport {
+    const setup = this.resolveNewGameSetup(setupOrPlayerNames, legacyMode);
+    const cleanNames = setup.playerNames
+      .map((name) => name.trim())
+      .filter((name) => name !== "");
     if (cleanNames.length === 0) {
       throw new GameApplicationError(this.content.text("invalid_player_name"));
     }
-    const modeLimits = this.content.game.rules.player_counts[mode];
+    const modeLimits = this.content.game.rules.player_counts[setup.mode];
     if (modeLimits === undefined) {
-      throw new GameApplicationError(this.content.text("unknown_mode", { mode }));
+      throw new GameApplicationError(this.content.text("unknown_mode", { mode: setup.mode }));
     }
     if (
       cleanNames.length < modeLimits.minimum
@@ -121,13 +146,15 @@ export class GameApplication {
       throw new GameApplicationError(this.content.text("invalid_names"));
     }
     const defaults = this.content.game.defaults;
+    const resolvedProfile = this.campaignProfiles.resolve(setup.profile);
     const players: PlayerState[] = cleanNames.map((name) => ({
       name,
       ...structuredClone(defaults.player),
     }));
     const time = this.content.game.rules.time;
-    this.state = {
-      mode,
+    const initialState: GameState = {
+      mode: setup.mode,
+      campaign: resolvedProfile.state,
       players,
       active_player_index: 0,
       shelter: structuredClone(defaults.shelter),
@@ -152,13 +179,25 @@ export class GameApplication {
       research: structuredClone(defaults.research),
       expedition: structuredClone(defaults.expedition),
     };
-    const opening = mode === "multiplayer"
-      ? this.content.text("multiplayer_started", { player_names: cleanNames.join("、") })
-      : mode === "story"
+    this.campaignProfiles.applyStartingEffects(initialState, resolvedProfile);
+    this.rules.normalize(initialState);
+    this.repository.selectSlot(setup.saveSlotId);
+    this.state = initialState;
+    const opening = setup.mode === "multiplayer"
+      ? this.content.text("multiplayer_started", {
+        player_names: cleanNames.join(this.content.text("multiplayer_name_separator")),
+      })
+      : setup.mode === "story"
         ? this.content.text("story_mode_started", { player_name: cleanNames[0] ?? "" })
         : this.content.text("new_game_started", { player_name: cleanNames[0] ?? "" });
-    const messages = [opening, this.content.text("story_started")];
-    this.chronicle.record(this.state, messages);
+    const profileMessage = this.newGameProfileMessage(
+      setup.mode,
+      resolvedProfile,
+    );
+    const messages = setup.mode === "story"
+      ? [opening, profileMessage, this.content.text("story_started")]
+      : [opening, profileMessage];
+    this.chronicle.record(initialState, messages);
     return actionReport(
       messages,
       true,
@@ -166,23 +205,32 @@ export class GameApplication {
   }
 
   /** 查询主档或任一备份是否存在可尝试读取的数据。 */
-  public hasSave(): boolean {
-    return this.repository.exists();
+  public hasSave(slotId?: number): boolean {
+    return this.repository.exists(slotId);
+  }
+
+  /** 返回六栏或其他配置化数量的存档摘要。 */
+  public saveSlots(): readonly SaveSlotSummary[] {
+    return this.repository.listSlots();
   }
 
   /** 保存包含剧情、战斗和待探索事件的完整状态。 */
-  public saveGame(): ActionReport {
+  public saveGame(slotId?: number): ActionReport {
     const state = this.requireState();
-    this.repository.save(state);
+    this.repository.save(state, slotId);
     const key = this.hasActiveBattle(state) ? "battle_saved" : "save_success";
     return actionReport([this.content.text(key)], false);
   }
 
   /** 读取并校验候选存档，全部成功后才替换当前状态。 */
-  public loadGame(): ActionReport {
-    const candidate = this.repository.load();
+  public loadGame(slotId?: number): ActionReport {
+    const candidate = this.repository.load(slotId);
     this.rules.normalize(candidate);
-    this.story.status(candidate);
+    if (this.modeCapabilities.allows(candidate.mode, "narrative")) {
+      this.story.status(candidate);
+    } else {
+      this.removeLegacyNarrativeState(candidate);
+    }
     if (candidate.pending_exploration !== null) {
       this.content.city(candidate.pending_exploration.city_id);
       this.exploration.prompt(candidate.pending_exploration.event_id);
@@ -199,19 +247,26 @@ export class GameApplication {
     );
   }
 
-  /** 返回当前章节、任务目标和主线进度。 */
-  public storyStatus(): StoryStatus {
-    return this.story.status(this.requireState());
+  /** 返回剧情模式的章节、任务目标和主线进度，普通模式不暴露主线读模型。 */
+  public storyStatus(): StoryStatus | null {
+    const state = this.requireState();
+    return this.modeCapabilities.allows(state.mode, "narrative")
+      ? this.story.status(state)
+      : null;
   }
 
-  /** 返回当前剧情场景；游戏结束或主线完成时返回 null。 */
+  /** 返回剧情模式的当前场景；普通模式、游戏结束或主线完成时返回 null。 */
   public currentStoryPrompt(): StoryPrompt | null {
-    return this.story.currentPrompt(this.requireState());
+    const state = this.requireState();
+    return this.modeCapabilities.allows(state.mode, "narrative")
+      ? this.story.currentPrompt(state)
+      : null;
   }
 
   /** 原子结算一个剧情选择，并按需启动配置化首领战。 */
   public resolveStoryChoice(sceneId: string, choiceId: string): ActionReport {
     const current = this.requireFreePlayableState();
+    this.modeCapabilities.assertAllowed(current.mode, "narrative");
     const working = cloneGameState(current);
     const resolution = this.story.resolveChoice(working, sceneId, choiceId);
     if (!resolution.applied) {
@@ -237,12 +292,15 @@ export class GameApplication {
 
   /** 返回当前首领战所有行动的实时可用状态。 */
   public combatActions(): readonly CombatAction[] {
-    return this.combat.availableActions(this.requireState());
+    const state = this.requireState();
+    this.modeCapabilities.assertAllowed(state.mode, "boss_combat");
+    return this.combat.availableActions(state);
   }
 
   /** 结算一个战斗回合，并处理胜利推进、撤退或战败终局。 */
   public performCombatAction(actionId: string): ActionReport {
     const current = this.requirePlayableState();
+    this.modeCapabilities.assertAllowed(current.mode, "boss_combat");
     if (!this.hasActiveBattle(current) || current.battle === null) {
       throw new GameApplicationError(this.content.text("battle_not_active"));
     }
@@ -333,6 +391,16 @@ export class GameApplication {
   /** 返回当前远征步数、队伍、携带物和战利品摘要。 */
   public expeditionStatus(): ExpeditionStatusView | null {
     return this.expedition.status(this.requireState());
+  }
+
+  /** 返回每座城市当前的可达性、路费、简介和锁定原因。 */
+  public expeditionCities(): readonly CityAccessDecision[] {
+    return this.expedition.cityOptions(this.requireState());
+  }
+
+  /** 返回当前模式是否具备一项由配置声明的游戏能力。 */
+  public supportsCapability(capability: GameModeCapability): boolean {
+    return this.modeCapabilities.allows(this.requireState().mode, capability);
   }
 
   /** 返回按周持久化的历史通讯记录。 */
@@ -744,6 +812,7 @@ export class GameApplication {
       return;
     }
     this.state.mode = source.mode;
+    this.state.campaign = source.campaign;
     this.state.players = source.players;
     this.state.active_player_index = source.active_player_index;
     this.state.shelter = source.shelter;
@@ -762,6 +831,52 @@ export class GameApplication {
     this.state.inventory = source.inventory;
     this.state.research = source.research;
     this.state.expedition = source.expedition;
+  }
+
+  /** 把旧签名升级为完整开局设置，并确保槽位仍来自仓库配置范围。 */
+  private resolveNewGameSetup(
+    setupOrPlayerNames: NewGameSetup | readonly string[],
+    legacyMode?: GameMode,
+  ): NewGameSetup {
+    if (!Array.isArray(setupOrPlayerNames)) {
+      return setupOrPlayerNames as NewGameSetup;
+    }
+    if (legacyMode === undefined) {
+      throw new GameApplicationError(this.content.text("invalid_campaign_profile"));
+    }
+    return {
+      mode: legacyMode,
+      playerNames: setupOrPlayerNames,
+      saveSlotId: this.repository.activeSlot(),
+      profile: structuredClone(this.content.game.campaign_profiles.migration_default),
+    };
+  }
+
+  /** 使用配置标签生成人名之外独立的开局档案通讯。 */
+  private newGameProfileMessage(
+    mode: GameMode,
+    profile: ResolvedCampaignProfile,
+  ): string {
+    const city = this.content.city(profile.state.home_city_id);
+    return this.content.text("new_game_profile_started", {
+      mode: this.content.game.mode_labels[mode] ?? mode,
+      difficulty: profile.difficulty.label,
+      origin: profile.origin.label,
+      trait: profile.trait.label,
+      city: `${city.name} · ${city.district}`,
+    });
+  }
+
+  /** 清除旧普通存档中残留的首领战和剧情结局，避免重新暴露主线入口。 */
+  private removeLegacyNarrativeState(state: GameState): void {
+    state.battle = null;
+    const endingId = state.ending?.ending_id;
+    if (
+      endingId !== undefined
+      && this.content.story.endings.some((ending) => ending.ending_id === endingId)
+    ) {
+      state.ending = null;
+    }
   }
 
   /** 返回当前状态；尚未开局时抛出可展示错误。 */

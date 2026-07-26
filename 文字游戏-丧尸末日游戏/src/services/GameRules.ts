@@ -9,6 +9,7 @@ import {
 import type { RuleModifierProvider } from "../domain/ports";
 import { advanceClock } from "./GameClock";
 import type { ChronicleService } from "./ChronicleService";
+import type { CampaignProfileService } from "./CampaignProfileService";
 import type { GameContent } from "./GameContent";
 
 /** 集中处理世界时间、生存消耗、不变量和失败优先级。 */
@@ -16,16 +17,19 @@ export class GameRules {
   private readonly content: GameContent;
   private readonly modifiers: RuleModifierProvider;
   private readonly chronicle: ChronicleService;
+  private readonly campaignProfiles: CampaignProfileService;
 
-  /** 注入统一配置、避难所被动修正与时间线记录服务。 */
+  /** 注入统一配置、避难所被动修正、开局档案与时间线记录服务。 */
   public constructor(
     content: GameContent,
     modifiers: RuleModifierProvider,
     chronicle: ChronicleService,
+    campaignProfiles: CampaignProfileService,
   ) {
     this.content = content;
     this.modifiers = modifiers;
     this.chronicle = chronicle;
+    this.campaignProfiles = campaignProfiles;
   }
 
   /** 暴露已经配置的生存上限，供应用服务复用。 */
@@ -47,10 +51,14 @@ export class GameRules {
       throw new RangeError(this.content.text("invalid_survival_turn_count"));
     }
     const hungerCosts = this.actionHungerCosts(actionType);
-    const modePercent = this.modeSurvivalCostPercent(state.mode);
+    const survivalCostPercent = this.survivalCostPercent(state);
     const messages: string[] = [];
     for (let index = 0; index < turns; index += 1) {
-      messages.push(...this.advanceSingleTurn(state, hungerCosts, modePercent));
+      messages.push(...this.advanceSingleTurn(
+        state,
+        hungerCosts,
+        survivalCostPercent,
+      ));
       if (isEnded(state)) {
         return messages;
       }
@@ -139,7 +147,7 @@ export class GameRules {
   private advanceSingleTurn(
     state: GameState,
     hungerCosts: GameContent["game"]["rules"]["action_hunger_costs"][string],
-    modePercent: number,
+    survivalCostPercent: number,
   ): string[] {
     const { turn_costs: costs, time } = this.content.game.rules;
     const negativePercent = 100 + this.modifier(
@@ -150,13 +158,13 @@ export class GameRules {
       const healthLoss = this.scaledSurvivalCost(
         costs.health_loss_per_negative_status * player.negative_status,
         negativePercent,
-        modePercent,
+        survivalCostPercent,
       );
       player.health -= healthLoss;
       player.hunger += this.scaledSurvivalCost(
         hungerCosts.player_hunger_gain,
         100,
-        modePercent,
+        survivalCostPercent,
       );
     }
     const shelterDamagePercent = 100 + this.modifier(
@@ -166,18 +174,18 @@ export class GameRules {
     state.shelter.health -= this.scaledSurvivalCost(
       costs.shelter_health_loss,
       shelterDamagePercent,
-      modePercent,
+      survivalCostPercent,
     );
     const hungerPercent = 100 + this.modifier(state, "rules.group_hunger_gain_percent");
     state.shelter.group_hunger += this.scaledSurvivalCost(
       hungerCosts.group_hunger_gain_per_person * state.shelter.population,
       hungerPercent,
-      modePercent,
+      survivalCostPercent,
     );
     state.shelter.activity -= this.scaledSurvivalCost(
       costs.activity_loss,
       100,
-      modePercent,
+      survivalCostPercent,
     );
     state.turn_number += 1;
 
@@ -246,16 +254,26 @@ export class GameRules {
     return percent;
   }
 
+  /** 合并游戏模式与难度档案的生存损耗比例。 */
+  private survivalCostPercent(state: GameState): number {
+    const modePercent = this.modeSurvivalCostPercent(state.mode);
+    const difficultyPercent = this.campaignProfiles.survivalCostPercent(state);
+    if (!Number.isInteger(difficultyPercent) || difficultyPercent < 0) {
+      throw new DomainError(this.content.text("invalid_campaign_profile"));
+    }
+    return Math.floor((modePercent * difficultyPercent) / 100);
+  }
+
   /** 将基础损耗、被动修正和模式比例合并为非负整数。 */
   private scaledSurvivalCost(
     base: number,
     modifierPercent: number,
-    modePercent: number,
+    survivalCostPercent: number,
   ): number {
-    if (base <= 0 || modifierPercent <= 0 || modePercent <= 0) return 0;
+    if (base <= 0 || modifierPercent <= 0 || survivalCostPercent <= 0) return 0;
     return Math.max(
       1,
-      Math.floor((base * modifierPercent * modePercent) / 10_000),
+      Math.floor((base * modifierPercent * survivalCostPercent) / 10_000),
     );
   }
 

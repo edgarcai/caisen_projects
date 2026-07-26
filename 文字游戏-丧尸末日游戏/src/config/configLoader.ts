@@ -14,6 +14,7 @@ import type {
   TextConfig,
   ThemeConfig,
   TypographyConfig,
+  UpdateLogConfig,
   WebActionConfig,
   WebExitConfig,
   WebGameConfig,
@@ -108,6 +109,10 @@ const CONTROL_KEYS = [
   "focus_border_width",
   "scroll_step",
   "drag_threshold",
+  "tooltip_width",
+  "tooltip_padding",
+  "tooltip_offset_x",
+  "tooltip_offset_y",
 ] as const;
 const COVER_LAYOUT_KEYS = [
   "content_left",
@@ -119,6 +124,18 @@ const COVER_LAYOUT_KEYS = [
   "menu_column_gap",
   "menu_row_gap",
   "menu_row_step_x",
+  "settings_button_top",
+  "settings_button_right",
+  "settings_button_width",
+  "settings_button_height",
+  "exit_button_top",
+  "exit_button_right",
+  "exit_button_width",
+  "exit_button_height",
+  "changelog_button_right",
+  "changelog_button_bottom",
+  "changelog_button_width",
+  "changelog_button_height",
   "description_left",
   "description_top",
   "description_width",
@@ -196,6 +213,10 @@ const TEXT_KEYS = [
   "rollback_description",
   "settings_title",
   "settings_body",
+  "settings_tutorial",
+  "settings_tutorial_description",
+  "settings_return_menu",
+  "settings_return_menu_description",
   "reduced_motion_description",
   "reduced_motion_on",
   "reduced_motion_off",
@@ -247,6 +268,33 @@ const TEXT_KEYS = [
   "history_entry_format",
   "option_intelligence_title",
   "option_intelligence_format",
+  "update_log",
+  "update_log_title",
+  "update_log_body",
+  "profile_setup_title",
+  "profile_setup_body",
+  "profile_name_label",
+  "profile_mode_label",
+  "profile_difficulty_label",
+  "profile_origin_label",
+  "profile_trait_label",
+  "profile_city_label",
+  "profile_slot_label",
+  "profile_field_format",
+  "profile_field_separator",
+  "save_slots_title",
+  "save_slots_load_body",
+  "save_slots_save_body",
+  "save_slot_title_format",
+  "save_slot_details_format",
+  "save_slot_empty_details",
+  "save_slot_corrupted_details",
+  "save_slot_unknown_value",
+  "save_slot_status_empty",
+  "save_slot_status_valid",
+  "save_slot_status_recoverable",
+  "save_slot_status_corrupted",
+  "save_slot_name_separator",
 ] as const;
 
 /** 表示 H5 配置无法加载或不符合契约。 */
@@ -695,6 +743,19 @@ function parseStorage(value: unknown): StorageConfig {
     ),
     auto_save: expectBoolean(source.auto_save, "storage.auto_save"),
     backup_slots: expectInteger(source.backup_slots, "storage.backup_slots"),
+    save_slot_count: expectInteger(
+      source.save_slot_count,
+      "storage.save_slot_count",
+      1,
+    ),
+  };
+}
+
+/** 解析更新日志首次挂载时的自动展示策略。 */
+function parseUpdateLog(value: unknown): UpdateLogConfig {
+  const source = expectObject(value, "update_log");
+  return {
+    auto_open: expectBoolean(source.auto_open, "update_log.auto_open"),
   };
 }
 
@@ -829,6 +890,7 @@ export function parseWebGameConfig(value: unknown): WebGameConfig {
     controls: parseControls(source.controls),
     layout: parseLayout(source.layout),
     storage: parseStorage(source.storage),
+    update_log: parseUpdateLog(source.update_log),
     web_exit: parseWebExit(source.web_exit),
     navigation: parseNavigationList(source.navigation),
     actions: parseWebActions(source.actions),

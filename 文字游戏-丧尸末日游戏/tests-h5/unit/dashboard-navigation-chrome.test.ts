@@ -47,6 +47,9 @@ describe("指挥台模式化导航组件", () => {
         snapshot,
       ).map((item) => item.id),
     ).toEqual(["settings"]);
+    expect(snapshot.storyAccess).toBe("hidden");
+    expect(snapshot.storyPrompt).toBeNull();
+    expect(snapshot.mission).toBeNull();
     expect(shouldRenderDashboardMission(snapshot)).toBe(false);
   });
 
@@ -70,10 +73,17 @@ describe("指挥台模式化导航组件", () => {
     expect(shouldRenderDashboardMission(snapshot)).toBe(true);
   });
 
-  it("旧普通存档存在结局时保留剧情恢复入口", () => {
+  it("旧普通存档存在剧情结局时保留剧情恢复入口", () => {
     const snapshot: GameUiSnapshot = {
       ...createSnapshot("single"),
       ended: true,
+      storyAccess: "legacy_resume",
+      mission: {
+        chapterLabel: "旧存档",
+        title: "旧存档结局",
+        objective: "继续查看结局。",
+        progressLabel: "已完成",
+      },
       ending: {
         title: "旧存档结局",
         body: "继续查看结局。",
@@ -89,6 +99,25 @@ describe("指挥台模式化导航组件", () => {
       ).map((item) => item.id),
     ).toEqual(["story", "settings"]);
     expect(shouldRenderDashboardMission(snapshot)).toBe(true);
+  });
+
+  it("普通生存失败不会重新暴露剧情入口", () => {
+    const snapshot: GameUiSnapshot = {
+      ...createSnapshot("single"),
+      ended: true,
+      ending: {
+        title: "避难所失守",
+        body: "本局已经结束。",
+      },
+    };
+
+    expect(hasRestorableStoryState(snapshot)).toBe(false);
+    expect(resolveVisibleDashboardNavigation(
+      webConfig.navigation,
+      "desktop_header",
+      snapshot,
+    ).map((item) => item.id)).toEqual(["settings"]);
+    expect(shouldRenderDashboardMission(snapshot)).toBe(false);
   });
 
   it("标题栏入口位于安全区内且每项不小于触控下限", () => {

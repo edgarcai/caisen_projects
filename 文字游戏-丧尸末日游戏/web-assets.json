@@ -1,24 +1,36 @@
 {
+  "removals": [
+    "public/assets/cover_art.png",
+    "public/assets/cover_art.webp",
+    "public/assets/ui/menu_button_idle.png",
+    "public/assets/ui/menu_button_hover.png",
+    "public/assets/ui/menu_button_pressed.png",
+    "public/assets/ui/menu_button_disabled.png"
+  ],
   "copies": [
     {
-      "source": "assets/cover_art.png",
-      "target": "public/assets/cover_art.png"
+      "source": "assets/cover_art_2k.png",
+      "target": "public/assets/cover_art_2k.png"
     },
     {
-      "source": "assets/cover_art.webp",
-      "target": "public/assets/cover_art.webp"
+      "source": "assets/cover_art_2k.webp",
+      "target": "public/assets/cover_art_2k.webp"
     },
     {
-      "source": "assets/ui/menu_button_idle.png",
-      "target": "public/assets/ui/menu_button_idle.png"
+      "source": "assets/ui/menu_button_idle_2k.png",
+      "target": "public/assets/ui/menu_button_idle_2k.png"
     },
     {
-      "source": "assets/ui/menu_button_hover.png",
-      "target": "public/assets/ui/menu_button_hover.png"
+      "source": "assets/ui/menu_button_hover_2k.png",
+      "target": "public/assets/ui/menu_button_hover_2k.png"
     },
     {
-      "source": "assets/ui/menu_button_pressed.png",
-      "target": "public/assets/ui/menu_button_pressed.png"
+      "source": "assets/ui/menu_button_pressed_2k.png",
+      "target": "public/assets/ui/menu_button_pressed_2k.png"
+    },
+    {
+      "source": "assets/ui/menu_button_disabled_2k.png",
+      "target": "public/assets/ui/menu_button_disabled_2k.png"
     },
     {
       "source": "config/game_config.json",
@@ -39,6 +51,10 @@
     {
       "source": "config/save_migrations/v2_to_v3.json",
       "target": "public/config/save_migrations/v2_to_v3.json"
+    },
+    {
+      "source": "config/save_migrations/v3_to_v4.json",
+      "target": "public/config/save_migrations/v3_to_v4.json"
     },
     {
       "source": "config/web_config.json",

@@ -150,6 +150,10 @@ export interface ControlConfig {
   readonly focus_border_width: number;
   readonly scroll_step: number;
   readonly drag_threshold: number;
+  readonly tooltip_width: number;
+  readonly tooltip_padding: number;
+  readonly tooltip_offset_x: number;
+  readonly tooltip_offset_y: number;
 }
 
 /** 单个响应式封面菜单结构。 */
@@ -165,6 +169,18 @@ export interface CoverMenuLayoutConfig {
   readonly menu_column_gap: number;
   readonly menu_row_gap: number;
   readonly menu_row_step_x: number;
+  readonly settings_button_top: number;
+  readonly settings_button_right: number;
+  readonly settings_button_width: number;
+  readonly settings_button_height: number;
+  readonly exit_button_top: number;
+  readonly exit_button_right: number;
+  readonly exit_button_width: number;
+  readonly exit_button_height: number;
+  readonly changelog_button_right: number;
+  readonly changelog_button_bottom: number;
+  readonly changelog_button_width: number;
+  readonly changelog_button_height: number;
   readonly description_left: number;
   readonly description_top: number;
   readonly description_width: number;
@@ -238,6 +254,12 @@ export interface StorageConfig {
   readonly schema_version: number;
   readonly auto_save: boolean;
   readonly backup_slots: number;
+  readonly save_slot_count: number;
+}
+
+/** 更新日志的自动展示策略。 */
+export interface UpdateLogConfig {
+  readonly auto_open: boolean;
 }
 
 /** 浏览器关闭能力受限时采用的退出策略。 */
@@ -324,6 +346,10 @@ export interface TextConfig {
   readonly rollback_description: string;
   readonly settings_title: string;
   readonly settings_body: string;
+  readonly settings_tutorial: string;
+  readonly settings_tutorial_description: string;
+  readonly settings_return_menu: string;
+  readonly settings_return_menu_description: string;
   readonly reduced_motion_description: string;
   readonly reduced_motion_on: string;
   readonly reduced_motion_off: string;
@@ -376,6 +402,33 @@ export interface TextConfig {
   readonly option_intelligence_title: string;
   readonly option_intelligence_format: string;
   readonly option_intelligence_separator: string;
+  readonly update_log: string;
+  readonly update_log_title: string;
+  readonly update_log_body: string;
+  readonly profile_setup_title: string;
+  readonly profile_setup_body: string;
+  readonly profile_name_label: string;
+  readonly profile_mode_label: string;
+  readonly profile_difficulty_label: string;
+  readonly profile_origin_label: string;
+  readonly profile_trait_label: string;
+  readonly profile_city_label: string;
+  readonly profile_slot_label: string;
+  readonly profile_field_format: string;
+  readonly profile_field_separator: string;
+  readonly save_slots_title: string;
+  readonly save_slots_load_body: string;
+  readonly save_slots_save_body: string;
+  readonly save_slot_title_format: string;
+  readonly save_slot_details_format: string;
+  readonly save_slot_empty_details: string;
+  readonly save_slot_corrupted_details: string;
+  readonly save_slot_unknown_value: string;
+  readonly save_slot_status_empty: string;
+  readonly save_slot_status_valid: string;
+  readonly save_slot_status_recoverable: string;
+  readonly save_slot_status_corrupted: string;
+  readonly save_slot_name_separator: string;
 }
 
 /** 经验证后供 H5 各层共享的根配置。 */
@@ -390,6 +443,7 @@ export interface WebGameConfig {
   readonly controls: ControlConfig;
   readonly layout: LayoutConfig;
   readonly storage: StorageConfig;
+  readonly update_log: UpdateLogConfig;
   readonly web_exit: WebExitConfig;
   readonly navigation: readonly NavigationConfig[];
   readonly actions: readonly WebActionConfig[];
