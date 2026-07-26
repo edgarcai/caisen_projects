@@ -57,6 +57,15 @@ export interface SaveRepository {
   activeSlot(): number;
 }
 
+/** 跨存档栏保留的成就元进度端口。 */
+export interface AchievementProgressPort {
+  /** 返回当前浏览器已解锁的稳定成就 ID。 */
+  unlockedAchievementIds(): readonly string[];
+
+  /** 幂等解锁一项成就；仅首次解锁返回 true。 */
+  unlock(achievementId: string): boolean;
+}
+
 export interface StorageLike {
   /** 按键读取字符串数据。 */
   getItem(key: string): string | null;

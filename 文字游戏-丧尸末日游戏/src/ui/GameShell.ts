@@ -1,6 +1,10 @@
 import { resolveResponsiveLayout } from "../styles/ResponsiveLayout";
 import type { ResponsiveLayout } from "../styles/ResponsiveLayout";
-import type { GameUiConfig, NavigationToken } from "../styles/GameTheme";
+import type {
+  CoverThemeTokens,
+  GameUiConfig,
+  NavigationToken,
+} from "../styles/GameTheme";
 import { UiFactory } from "./components/UiFactory";
 import type {
   LayaRuntimeLike,
@@ -14,6 +18,12 @@ import {
   type DashboardNavigationIntent,
 } from "./navigation/DashboardNavigationStrategy";
 import { DeferredResizeCoordinator } from "./interactions/DeferredResizeCoordinator";
+import {
+  buildCoverThemeSelectionStates,
+  isCoverThemeUnlocked,
+  resolveCoverThemeArtwork,
+  resolveSelectedCoverTheme,
+} from "./models/CoverThemeModel";
 import {
   resolveExpeditionEntryScreen,
   resolveExpeditionProgressScreen,
@@ -42,6 +52,7 @@ import {
 } from "./pages/SystemFeaturePages";
 import {
   createCreditsPage,
+  createCoverThemeSelectorPage,
   createExitConfirmPage,
   createFunctionMenuPage,
   createRollbackConfirmPage,
@@ -125,6 +136,7 @@ export class GameShell {
     this.renderedPages = [];
     this.preferences = settingsPort.load({
       reducedMotion: config.motion.reduced_motion,
+      selectedCoverThemeId: config.assets.cover_themes.default_id,
     });
     this.unsubscribe = null;
     this.canLoad = false;
@@ -192,6 +204,8 @@ export class GameShell {
     if (browserWindow !== null) {
       delete browserWindow.document.body.dataset.gameScreen;
       delete browserWindow.document.body.dataset.gameLayout;
+      delete browserWindow.document.body.dataset.gameCoverTheme;
+      delete browserWindow.document.body.dataset.gameCoverAsset;
     }
     this.mounted = false;
   }
@@ -312,8 +326,12 @@ export class GameShell {
     });
     const browserWindow = getBrowserWindow();
     if (browserWindow !== null) {
+      const activeCoverTheme = this.resolveActiveCoverTheme(this.requireSnapshot());
       browserWindow.document.body.dataset.gameScreen = this.navigation.current().screen;
       browserWindow.document.body.dataset.gameLayout = layout.kind;
+      browserWindow.document.body.dataset.gameCoverTheme = activeCoverTheme.id;
+      browserWindow.document.body.dataset.gameCoverAsset =
+        resolveCoverThemeArtwork(activeCoverTheme, layout).asset;
     }
   }
 
@@ -411,6 +429,8 @@ export class GameShell {
         return this.createFunctionMenu(layout, snapshot);
       case "settings":
         return this.createSettings(layout);
+      case "cover_theme_selector":
+        return this.createCoverThemeSelector(layout, snapshot);
       case "rollback_confirm":
         return this.createRollbackConfirm(layout);
       case "exit_confirm":
@@ -433,12 +453,14 @@ export class GameShell {
     layout: ResponsiveLayout,
     snapshot: GameUiSnapshot,
   ): CoverPage {
+    const coverTheme = this.resolveActiveCoverTheme(snapshot);
     return new CoverPage(
       this.runtime,
       this.factory,
       this.config,
       layout,
       snapshot.brand,
+      coverTheme,
       this.canLoad,
       {
         startSingle: (): void => { this.openNameInput("single"); },
@@ -972,6 +994,10 @@ export class GameShell {
       layout,
       this.preferences,
       {
+        openCoverThemes: (): void => {
+          this.navigation.push({ screen: "cover_theme_selector" });
+          this.render();
+        },
         toggleReducedMotion: this.toggleReducedMotion,
         ...(inGame
           ? {
@@ -987,6 +1013,26 @@ export class GameShell {
           : {}),
         close: this.goBack,
       },
+    );
+  }
+
+  /** 创建可显示成就锁定状态的主界面封面选择页。 */
+  private createCoverThemeSelector(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createCoverThemeSelectorPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      buildCoverThemeSelectionStates(
+        this.config.assets.cover_themes,
+        this.preferences.selectedCoverThemeId,
+        snapshot.unlockedAchievementIds,
+      ),
+      this.selectCoverTheme,
+      this.goBack,
     );
   }
 
@@ -1231,11 +1277,38 @@ export class GameShell {
   /** 切换并持久化减少动效偏好，然后刷新当前设置页。 */
   private readonly toggleReducedMotion = (): void => {
     this.preferences = {
+      ...this.preferences,
       reducedMotion: !this.preferences.reducedMotion,
     };
     this.settingsPort.save(this.preferences);
     this.render(true);
   };
+
+  /** 仅允许选择已解锁主题，并把偏好保存到独立设置仓库。 */
+  private readonly selectCoverTheme = (themeId: string): void => {
+    const theme = this.config.assets.cover_themes.items.find(
+      (candidate) => candidate.id === themeId,
+    );
+    const unlockedIds = this.requireSnapshot().unlockedAchievementIds;
+    if (theme === undefined || !isCoverThemeUnlocked(theme, unlockedIds)) {
+      return;
+    }
+    this.preferences = {
+      ...this.preferences,
+      selectedCoverThemeId: theme.id,
+    };
+    this.settingsPort.save(this.preferences);
+    this.render(true);
+  };
+
+  /** 根据当前偏好与元成就进度返回实际可渲染封面。 */
+  private resolveActiveCoverTheme(snapshot: GameUiSnapshot): CoverThemeTokens {
+    return resolveSelectedCoverTheme(
+      this.config.assets.cover_themes,
+      this.preferences.selectedCoverThemeId,
+      snapshot.unlockedAchievementIds,
+    );
+  }
 
   /** 按配置策略尝试关闭或回退当前 Web 页面。 */
   private readonly requestWebExit = (): void => {

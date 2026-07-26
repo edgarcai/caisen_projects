@@ -1,4 +1,5 @@
 export * from "./GameContent";
+export * from "./AchievementService";
 export * from "./GameClock";
 export * from "./ChronicleService";
 export * from "./GameRules";

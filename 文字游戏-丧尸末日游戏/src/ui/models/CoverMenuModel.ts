@@ -3,6 +3,10 @@ import type {
   GameUiConfig,
 } from "../../styles/GameTheme";
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
+import {
+  resolveCoverThemeArtwork,
+  resolveDefaultCoverTheme,
+} from "./CoverThemeModel";
 
 /** 封面菜单悬停后对外发布的简介模型。 */
 export interface CoverMenuDescription {
@@ -65,7 +69,10 @@ export function resolveCoverArtwork(
   config: GameUiConfig,
   layout: ResponsiveLayout,
 ): string {
-  return layout.kind === "mobile" ? config.assets.mobile_cover : config.assets.cover;
+  return resolveCoverThemeArtwork(
+    resolveDefaultCoverTheme(config.assets.cover_themes),
+    layout,
+  ).asset;
 }
 
 /** 按固定顺序构造五个主要游戏入口，系统操作由独立按钮承载。 */
@@ -165,16 +172,13 @@ export function resolveCoverSettingsGeometry(
   );
   const width = Math.min(menuLayout.settings_button_width, availableWidth);
   const height = Math.min(menuLayout.settings_button_height, availableHeight);
+  const exitGeometry = resolveCoverExitGeometry(config, layout);
+  const requestedX = menuLayout.settings_button_anchor === "left"
+    ? layout.safeArea.left + menuLayout.settings_button_offset
+    : exitGeometry.x - menuLayout.settings_button_offset - width;
+  const maximumX = layout.stageWidth - layout.safeArea.right - width;
   return {
-    x: Math.max(
-      layout.safeArea.left,
-      layout.stageWidth -
-        layout.safeArea.right -
-        menuLayout.exit_button_right -
-        menuLayout.exit_button_width -
-        config.controls.button_gap -
-        width,
-    ),
+    x: Math.min(maximumX, Math.max(layout.safeArea.left, requestedX)),
     y: Math.min(
       layout.stageHeight - layout.safeArea.bottom - height,
       layout.safeArea.top + menuLayout.settings_button_top,

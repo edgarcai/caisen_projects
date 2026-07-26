@@ -92,8 +92,11 @@ export function resolveDashboardHeaderNavigationGeometry(
     headerWidth,
     Math.max(preferredWidth, minimumWidth),
   );
+  const anchor = layout.kind === "mobile"
+    ? config.layout.mobile.header_navigation_anchor
+    : config.layout.desktop.header_navigation_anchor;
   return {
-    left: headerLeft + headerWidth - width,
+    left: anchor === "left" ? headerLeft : headerLeft + headerWidth - width,
     top: layout.safeArea.top + layout.outerPadding,
     width,
     height: Math.min(

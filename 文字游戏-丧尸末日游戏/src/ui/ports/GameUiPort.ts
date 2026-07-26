@@ -22,6 +22,7 @@ export type GameScreenId =
   | "return_menu_confirm"
   | "function_menu"
   | "settings"
+  | "cover_theme_selector"
   | "warehouse"
   | "research"
   | "crafting"
@@ -362,6 +363,7 @@ export interface UiNoticeView {
 export interface GameUiSnapshot {
   readonly revision: number;
   readonly brand: UiBrandView;
+  readonly unlockedAchievementIds: readonly string[];
   readonly playerCounts: Readonly<Record<GameMode, number>>;
   readonly campaignProfileOptions: UiCampaignProfileOptionsView;
   readonly campaignProfile: UiCampaignProfileView | null;

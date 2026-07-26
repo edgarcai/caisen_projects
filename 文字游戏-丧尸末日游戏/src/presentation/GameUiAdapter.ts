@@ -141,6 +141,7 @@ export class GameUiAdapter implements GameUiPort {
         title: this.presentation.interface.cover.title,
         subtitle: this.presentation.interface.cover.subtitle,
       },
+      unlockedAchievementIds: this.application.unlockedAchievementIds(),
       playerCounts: this.playerCounts(),
       campaignProfileOptions: this.campaignProfileOptions(),
       campaignProfile: state === null ? null : this.campaignProfileView(state),

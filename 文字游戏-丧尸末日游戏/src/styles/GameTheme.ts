@@ -76,8 +76,9 @@ export interface CoverMenuLayoutTokens {
   readonly menu_column_gap: number;
   readonly menu_row_gap: number;
   readonly menu_row_step_x: number;
+  readonly settings_button_anchor: "left" | "before_exit";
+  readonly settings_button_offset: number;
   readonly settings_button_top: number;
-  readonly settings_button_right: number;
   readonly settings_button_width: number;
   readonly settings_button_height: number;
   readonly exit_button_top: number;
@@ -111,6 +112,7 @@ export interface DesktopLayoutTokens {
   readonly outer_padding: number;
   readonly header_height: number;
   readonly header_navigation_width: number;
+  readonly header_navigation_anchor: "left" | "right";
   readonly left_rail_width: number;
   readonly right_rail_width: number;
   readonly column_gap: number;
@@ -128,6 +130,7 @@ export interface MobileLayoutTokens {
   readonly outer_padding: number;
   readonly header_height: number;
   readonly header_navigation_width: number;
+  readonly header_navigation_anchor: "left" | "right";
   readonly bottom_navigation_height: number;
   readonly panel_padding: number;
   readonly section_gap: number;
@@ -203,7 +206,42 @@ export interface GameAssetTokens {
   readonly mobile_cover: string;
   readonly cover_width?: number;
   readonly cover_height?: number;
+  readonly cover_themes: CoverThemesTokens;
   readonly skins: GameSkinTokens;
+}
+
+/** 封面主题决定作品标题是否由界面层绘制。 */
+export type CoverBrandModeToken = "overlay" | "embedded";
+
+/** 封面图片在当前断点采用填满裁切或完整包含。 */
+export type CoverArtworkFitToken = "cover" | "contain";
+
+/** 设置页与封面渲染器共享的一套主题资源。 */
+export interface CoverThemeTokens {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly desktop_asset: string;
+  readonly desktop_width: number;
+  readonly desktop_height: number;
+  readonly desktop_fit: CoverArtworkFitToken;
+  readonly mobile_portrait_asset: string;
+  readonly mobile_portrait_width: number;
+  readonly mobile_portrait_height: number;
+  readonly mobile_portrait_fit: CoverArtworkFitToken;
+  readonly mobile_landscape_asset: string;
+  readonly mobile_landscape_width: number;
+  readonly mobile_landscape_height: number;
+  readonly mobile_landscape_fit: CoverArtworkFitToken;
+  readonly brand_mode: CoverBrandModeToken;
+  readonly required_achievement_id: string | null;
+  readonly unlock_description: string;
+}
+
+/** 可选择的主界面主题集合。 */
+export interface CoverThemesTokens {
+  readonly default_id: string;
+  readonly items: readonly CoverThemeTokens[];
 }
 
 /** 可由美术轨道替换的可选皮肤路径。 */
@@ -286,6 +324,12 @@ export interface GameTextTokens {
   readonly rollback_description: string;
   readonly settings_title: string;
   readonly settings_body: string;
+  readonly settings_cover_theme: string;
+  readonly settings_cover_theme_description: string;
+  readonly cover_theme_title: string;
+  readonly cover_theme_body: string;
+  readonly cover_theme_selected_description: string;
+  readonly cover_theme_description_separator: string;
   readonly settings_tutorial: string;
   readonly settings_tutorial_description: string;
   readonly settings_return_menu: string;

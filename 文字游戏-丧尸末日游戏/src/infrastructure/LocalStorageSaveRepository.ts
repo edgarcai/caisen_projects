@@ -7,8 +7,11 @@ import type {
   StorageLike,
 } from "../domain/ports";
 import type { SaveDocument, SaveMigrator } from "./SaveMigration";
-
-const FIRST_SLOT_ID = 1;
+import {
+  buildSaveBackupStorageKey,
+  buildSaveSlotStorageKey,
+  FIRST_SAVE_SLOT_ID,
+} from "./SaveStorageKeys";
 
 /** 存档仓库实际依赖的最小状态校验能力。 */
 export interface SaveStateValidationPort {
@@ -67,7 +70,10 @@ export class LocalStorageSaveRepository implements SaveRepository {
     if (!Number.isInteger(options.schemaVersion) || options.schemaVersion < 1) {
       throw new SaveDataError("存档版本必须是正整数。");
     }
-    if (!Number.isInteger(options.slotCount) || options.slotCount < FIRST_SLOT_ID) {
+    if (
+      !Number.isInteger(options.slotCount) ||
+      options.slotCount < FIRST_SAVE_SLOT_ID
+    ) {
       throw new SaveDataError("手动存档槽数量必须是正整数。");
     }
     if (!Number.isInteger(options.backupSlots) || options.backupSlots < 0) {
@@ -80,7 +86,7 @@ export class LocalStorageSaveRepository implements SaveRepository {
     this.backupSlots = options.backupSlots;
     this.validator = options.validator;
     this.now = options.now ?? (() => new Date());
-    this.activeSlotId = FIRST_SLOT_ID;
+    this.activeSlotId = FIRST_SAVE_SLOT_ID;
     const migrators = new Map<number, SaveMigrator>();
     for (const migrator of options.migrators ?? []) {
       if (migrator.toVersion !== migrator.fromVersion + 1) {
@@ -100,7 +106,11 @@ export class LocalStorageSaveRepository implements SaveRepository {
   public listSlots(): readonly SaveSlotSummary[] {
     try {
       const summaries: SaveSlotSummary[] = [];
-      for (let slotId = FIRST_SLOT_ID; slotId <= this.slotCount; slotId += 1) {
+      for (
+        let slotId = FIRST_SAVE_SLOT_ID;
+        slotId <= this.slotCount;
+        slotId += 1
+      ) {
         summaries.push(this.summarizeSlot(slotId));
       }
       return summaries;
@@ -197,9 +207,7 @@ export class LocalStorageSaveRepository implements SaveRepository {
   /** 返回指定手动槽的稳定主键；一号槽继续使用旧版主键。 */
   public slotKey(slotId: number): string {
     const validatedSlotId = this.requireSlotId(slotId);
-    return validatedSlotId === FIRST_SLOT_ID
-      ? this.storageKey
-      : `${this.storageKey}:slot:${String(validatedSlotId)}`;
+    return buildSaveSlotStorageKey(this.storageKey, validatedSlotId);
   }
 
   /** 返回指定手动槽内一个滚动备份使用的稳定键。 */
@@ -207,12 +215,16 @@ export class LocalStorageSaveRepository implements SaveRepository {
     const validatedSlotId = this.requireSlotId(slotId);
     if (
       !Number.isInteger(backupIndex)
-      || backupIndex < FIRST_SLOT_ID
+      || backupIndex < FIRST_SAVE_SLOT_ID
       || backupIndex > this.backupSlots
     ) {
       throw new RangeError("备份槽索引越界。");
     }
-    return `${this.slotKey(validatedSlotId)}:backup:${String(backupIndex)}`;
+    return buildSaveBackupStorageKey(
+      this.storageKey,
+      validatedSlotId,
+      backupIndex,
+    );
   }
 
   /** 将目标槽旧备份后移一格，并把可信主档保存为第一备份。 */
@@ -226,13 +238,17 @@ export class LocalStorageSaveRepository implements SaveRepository {
         this.storage.setItem(this.backupKey(backupIndex, slotId), previous);
       }
     }
-    this.storage.setItem(this.backupKey(FIRST_SLOT_ID, slotId), current);
+    this.storage.setItem(this.backupKey(FIRST_SAVE_SLOT_ID, slotId), current);
   }
 
   /** 返回指定手动槽按恢复优先级排列的主档与备份键。 */
   private candidateKeys(slotId: number): string[] {
     const keys = [this.slotKey(slotId)];
-    for (let backupIndex = FIRST_SLOT_ID; backupIndex <= this.backupSlots; backupIndex += 1) {
+    for (
+      let backupIndex = FIRST_SAVE_SLOT_ID;
+      backupIndex <= this.backupSlots;
+      backupIndex += 1
+    ) {
       keys.push(this.backupKey(backupIndex, slotId));
     }
     return keys;
@@ -242,7 +258,7 @@ export class LocalStorageSaveRepository implements SaveRepository {
   private allSlotIds(): number[] {
     return Array.from(
       { length: this.slotCount },
-      (_value, index) => index + FIRST_SLOT_ID,
+      (_value, index) => index + FIRST_SAVE_SLOT_ID,
     );
   }
 
@@ -250,7 +266,7 @@ export class LocalStorageSaveRepository implements SaveRepository {
   private requireSlotId(slotId: number): number {
     if (
       !Number.isInteger(slotId)
-      || slotId < FIRST_SLOT_ID
+      || slotId < FIRST_SAVE_SLOT_ID
       || slotId > this.slotCount
     ) {
       throw new RangeError("手动存档槽索引越界。");

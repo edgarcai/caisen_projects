@@ -10,18 +10,20 @@
   },
   "scripts": {
     "sync:assets": "node scripts/sync-web-assets.mjs",
+    "verify:assets": "node scripts/verify-web-assets.mjs",
     "predev": "npm run sync:assets",
     "dev": "vite --host 0.0.0.0",
-    "prebuild": "npm run sync:assets",
+    "prebuild": "npm run sync:assets && npm run verify:assets",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test:asset-policy": "node --test tests-h5/unit/web-asset-policy.test.mjs",
+    "test": "vitest run && npm run test:asset-policy",
     "test:watch": "vitest",
     "pretest:e2e": "npm run build",
     "test:e2e": "playwright test",
-    "check": "npm run lint && npm run test && npm run build"
+    "check": "npm run lint && npm run test && npm run build && npm run verify:assets"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

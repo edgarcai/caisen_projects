@@ -12,6 +12,10 @@ interface E2eWebConfig {
   };
   readonly storage: {
     readonly save_slot_count: number;
+    readonly settings_key: string;
+    readonly settings_schema_version: number;
+    readonly achievement_key: string;
+    readonly achievement_schema_version: number;
   };
   readonly texts: {
     readonly profile_name_label: string;
@@ -713,6 +717,91 @@ test("启动更新日志关闭后展示五个主入口和独立退出键", async
   expect(await readLayaNodeBounds(page, "page-exit-confirm")).not.toBeNull();
   await clickLayaNode(page, "page-exit-confirm-cancel");
   await waitForScreen(page, "menu");
+});
+
+test("长夜守望成就解锁封面并在刷新后保持选择", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
+  await clickLayaNode(page, "menu-settings");
+  await waitForScreen(page, "settings");
+  await clickScrollableLayaNode(
+    page,
+    "page-settings-option-cover-theme",
+    "page-settings-scroll",
+  );
+  await waitForScreen(page, "cover_theme_selector");
+  expect(await page.evaluate(() => document.body.dataset.gameCoverTheme))
+    .toBe("classic_embers");
+  await clickScrollableLayaNode(
+    page,
+    "page-cover-theme-selector-option-bunker_gate",
+    "page-cover-theme-selector-scroll",
+  );
+  await waitForScreen(page, "cover_theme_selector");
+  expect(await page.evaluate(() => document.body.dataset.gameCoverTheme))
+    .toBe("classic_embers");
+
+  await page.evaluate(({ key, schemaVersion }) => {
+    localStorage.setItem(key, JSON.stringify({
+      schema_version: schemaVersion,
+      unlocked_achievement_ids: ["ending_long_night_watch"],
+    }));
+  }, {
+    key: webConfigDocument.storage.achievement_key,
+    schemaVersion: webConfigDocument.storage.achievement_schema_version,
+  });
+  await page.reload();
+  await expect(page.locator("#boot-status")).toBeHidden();
+  await closeAutomaticUpdateLog(page);
+  await clickLayaNode(page, "menu-settings");
+  await waitForScreen(page, "settings");
+  await clickScrollableLayaNode(
+    page,
+    "page-settings-option-cover-theme",
+    "page-settings-scroll",
+  );
+  await waitForScreen(page, "cover_theme_selector");
+  await clickScrollableLayaNode(
+    page,
+    "page-cover-theme-selector-option-bunker_gate",
+    "page-cover-theme-selector-scroll",
+  );
+  await expect.poll(async () => page.evaluate(() =>
+    document.body.dataset.gameCoverTheme,
+  )).toBe("bunker_gate");
+  await clickLayaNode(page, "page-cover-theme-selector-back");
+  await clickLayaNode(page, "page-settings-back");
+  await waitForScreen(page, "menu");
+  expect(await readLayaNodeBounds(page, "menu-title")).toBeNull();
+  expect(await readLayaNodeBounds(page, "menu-cover-art")).not.toBeNull();
+
+  const expectedAsset = await page.evaluate(() => {
+    const mobile = document.body.dataset.gameLayout === "mobile";
+    return mobile && window.innerHeight > window.innerWidth
+      ? "assets/covers/cover_theme_bunker_gate_mobile_2k.webp"
+      : "assets/covers/cover_theme_bunker_gate_2k.webp";
+  });
+  expect(await page.evaluate(() => document.body.dataset.gameCoverAsset))
+    .toBe(expectedAsset);
+
+  await page.reload();
+  await expect(page.locator("#boot-status")).toBeHidden();
+  await closeAutomaticUpdateLog(page);
+  expect(await page.evaluate(() => document.body.dataset.gameCoverTheme))
+    .toBe("bunker_gate");
+  expect(await page.evaluate(({ key }) => {
+    const value = localStorage.getItem(key);
+    if (value === null) {
+      return null;
+    }
+    const parsed: unknown = JSON.parse(value);
+    if (typeof parsed !== "object" || parsed === null) {
+      return null;
+    }
+    const candidate = parsed as Record<string, unknown>;
+    return typeof candidate.selected_cover_theme_id === "string"
+      ? candidate.selected_cover_theme_id
+      : null;
+  }, { key: webConfigDocument.storage.settings_key })).toBe("bunker_gate");
 });
 
 test("Escape 功能菜单叠加在二级页上并逐层返回", async ({ page }) => {

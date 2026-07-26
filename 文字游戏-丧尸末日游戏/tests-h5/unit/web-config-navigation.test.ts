@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import webConfigDocument from "../../config/web_config.json";
-import { parseWebGameConfig } from "../../src/config/configLoader";
+import {
+  parseWebGameConfig,
+  validateCoverThemeAchievementReferences,
+} from "../../src/config/configLoader";
 
 interface MutableNavigationEntry {
   id: string;
@@ -11,6 +14,31 @@ interface MutableNavigationEntry {
 interface MutableWebConfigDocument {
   navigation: MutableNavigationEntry[];
   action_groups: Array<{ id: string; action_ids: string[] }>;
+  assets: {
+    cover_themes: {
+      default_id: string;
+      items: Array<{
+        id: string;
+        desktop_fit?: string;
+        mobile_portrait_fit?: string;
+        mobile_landscape_fit?: string;
+        required_achievement_id: string | null;
+        unlock_description: string;
+      }>;
+    };
+  };
+  layout: {
+    cover: {
+      mobile: { settings_button_anchor: string };
+    };
+    desktop: { header_navigation_anchor: string };
+    mobile: { header_navigation_anchor: string };
+  };
+  storage: {
+    key: string;
+    settings_key: string;
+    achievement_key: string;
+  };
 }
 
 /** 克隆权威配置，允许单项破坏后验证解析器快速失败。 */
@@ -59,5 +87,97 @@ describe("局内导航配置完整性", () => {
     expect(() => parseWebGameConfig(emptyPlacement)).toThrow("至少需要一个值");
     expect(() => parseWebGameConfig(duplicateMode)).toThrow("不能包含重复值");
     expect(() => parseWebGameConfig(unknownPlacement)).toThrow("desktop_header 之一");
+  });
+
+  it("拒绝未知的封面设置键与标题导航锚点", () => {
+    const invalidCoverAnchor = cloneWebConfig();
+    const invalidHeaderAnchor = cloneWebConfig();
+    invalidCoverAnchor.layout.cover.mobile.settings_button_anchor = "center";
+    invalidHeaderAnchor.layout.mobile.header_navigation_anchor = "center";
+
+    expect(() => parseWebGameConfig(invalidCoverAnchor)).toThrow(
+      "layout.cover.mobile.settings_button_anchor",
+    );
+    expect(() => parseWebGameConfig(invalidHeaderAnchor)).toThrow(
+      "layout.mobile.header_navigation_anchor",
+    );
+  });
+});
+
+describe("本地存储命名空间完整性", () => {
+  it("拒绝设置或成就键占用存档主键及派生槽位命名空间", () => {
+    const directConflict = cloneWebConfig();
+    const slotConflict = cloneWebConfig();
+    const backupConflict = cloneWebConfig();
+    directConflict.storage.settings_key = directConflict.storage.key;
+    slotConflict.storage.achievement_key =
+      `${slotConflict.storage.key}:slot:2`;
+    backupConflict.storage.settings_key =
+      `${backupConflict.storage.key}:backup:1`;
+
+    for (const candidate of [directConflict, slotConflict, backupConflict]) {
+      expect(() => parseWebGameConfig(candidate)).toThrow("存档命名空间冲突");
+    }
+  });
+
+  it("拒绝设置与成就共用同一个独立存储键", () => {
+    const candidate = cloneWebConfig();
+    candidate.storage.achievement_key = candidate.storage.settings_key;
+
+    expect(() => parseWebGameConfig(candidate)).toThrow("设置与成就存储键冲突");
+  });
+});
+
+describe("成就封面配置完整性", () => {
+  it("拒绝封面断点缺失 fit 或声明未知缩放策略", () => {
+    const missingFit = cloneWebConfig();
+    const unknownFit = cloneWebConfig();
+    const missingTheme = missingFit.assets.cover_themes.items[0];
+    const unknownTheme = unknownFit.assets.cover_themes.items[1];
+    if (missingTheme === undefined || unknownTheme === undefined) {
+      throw new Error("测试配置缺少封面主题。");
+    }
+    delete missingTheme.desktop_fit;
+    unknownTheme.mobile_portrait_fit = "stretch";
+
+    expect(() => parseWebGameConfig(missingFit)).toThrow("desktop_fit");
+    expect(() => parseWebGameConfig(unknownFit)).toThrow(
+      "mobile_portrait_fit 必须是 cover / contain 之一",
+    );
+  });
+
+  it("拒绝重复主题 ID、缺失默认主题与受锁默认项", () => {
+    const duplicate = cloneWebConfig();
+    const missingDefault = cloneWebConfig();
+    const lockedDefault = cloneWebConfig();
+    const first = duplicate.assets.cover_themes.items[0];
+    const second = duplicate.assets.cover_themes.items[1];
+    const locked = lockedDefault.assets.cover_themes.items[0];
+    if (first === undefined || second === undefined || locked === undefined) {
+      throw new Error("测试配置缺少封面主题。");
+    }
+    second.id = first.id;
+    missingDefault.assets.cover_themes.default_id = "missing-theme";
+    locked.required_achievement_id = "ending_long_night_watch";
+    locked.unlock_description = "完成结局后解锁";
+
+    expect(() => parseWebGameConfig(duplicate)).toThrow("重复 ID");
+    expect(() => parseWebGameConfig(missingDefault)).toThrow("default_id 不存在");
+    expect(() => parseWebGameConfig(lockedDefault)).toThrow("默认主题不能要求成就");
+  });
+
+  it("拒绝引用剧情配置未声明的成就", () => {
+    const parsed = parseWebGameConfig(webConfigDocument);
+
+    expect(() => {
+      validateCoverThemeAchievementReferences(
+        parsed,
+        ["ending_long_night_watch"],
+      );
+    }).not.toThrow();
+    expect(() => {
+      validateCoverThemeAchievementReferences(parsed, []);
+    })
+      .toThrow("未知成就");
   });
 });

@@ -1,6 +1,7 @@
 /** 当前浏览器保存的纯界面偏好。 */
 export interface UiPreferences {
   readonly reducedMotion: boolean;
+  readonly selectedCoverThemeId: string;
 }
 
 /**

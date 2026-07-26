@@ -1,4 +1,7 @@
-import type { GameUiConfig } from "../../styles/GameTheme";
+import type {
+  CoverThemeTokens,
+  GameUiConfig,
+} from "../../styles/GameTheme";
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
 import { PointerTooltip } from "../components/PointerTooltip";
 import type { UiFactory } from "../components/UiFactory";
@@ -9,7 +12,6 @@ import type {
 import type { UiBrandView } from "../ports/GameUiPort";
 import {
   buildCoverMenuItems,
-  resolveCoverArtwork,
   resolveCoverChangelogGeometry,
   resolveCoverExitGeometry,
   resolveCoverHorizontalPosition,
@@ -17,6 +19,10 @@ import {
   resolveCoverMenuLayout,
   resolveCoverSettingsGeometry,
 } from "../models/CoverMenuModel";
+import {
+  resolveCoverArtworkGeometry,
+  resolveCoverThemeArtwork,
+} from "../models/CoverThemeModel";
 import type {
   CoverMenuItem,
   CoverPageActions,
@@ -35,6 +41,7 @@ export class CoverPage implements PageView {
     config: GameUiConfig,
     layout: ResponsiveLayout,
     brand: UiBrandView,
+    coverTheme: CoverThemeTokens,
     canLoadGame: boolean,
     actions: CoverPageActions,
   ) {
@@ -47,9 +54,11 @@ export class CoverPage implements PageView {
       layout.stageHeight,
       config.theme.background,
     );
-    this.renderArtwork(runtime, factory, config, layout);
+    this.renderArtwork(runtime, factory, layout, coverTheme);
     this.renderScrim(factory, config, layout);
-    this.renderBrand(factory, config, layout, brand);
+    if (coverTheme.brand_mode === "overlay") {
+      this.renderBrand(factory, config, layout, brand);
+    }
     this.renderUtilities(factory, config, layout, actions);
     this.tooltip = layout.kind === "mobile"
       ? null
@@ -108,13 +117,14 @@ export class CoverPage implements PageView {
     }
   }
 
-  /** 加载并按原始比例居中裁切正式封面。 */
+  /** 加载封面并按当前主题与断点声明的 fit 策略等比居中。 */
   private renderArtwork(
     runtime: LayaRuntimeLike,
     factory: UiFactory,
-    config: GameUiConfig,
     layout: ResponsiveLayout,
+    coverTheme: CoverThemeTokens,
   ): void {
+    const themeArtwork = resolveCoverThemeArtwork(coverTheme, layout);
     const artworkViewport = factory.container("menu-cover-viewport");
     artworkViewport.size(layout.stageWidth, layout.stageHeight);
     artworkViewport.scrollRect = new runtime.Rectangle(
@@ -129,37 +139,33 @@ export class CoverPage implements PageView {
     artworkViewport.addChild(artwork);
     this.root.addChild(artworkViewport);
 
-    /** 按原图比例填充舞台，避免手机纵屏拉伸。 */
+    /** 使用实际纹理尺寸与配置化 fit 计算封面几何。 */
     const layoutArtwork = (): void => {
       const sourceWidth =
         artwork.source?.sourceWidth ||
         artwork.source?.width ||
-        config.assets.cover_width ||
+        themeArtwork.width ||
         0;
       const sourceHeight =
         artwork.source?.sourceHeight ||
         artwork.source?.height ||
-        config.assets.cover_height ||
+        themeArtwork.height ||
         0;
       if (sourceWidth <= 0 || sourceHeight <= 0) {
         return;
       }
-      const scale = Math.max(
-        layout.stageWidth / sourceWidth,
-        layout.stageHeight / sourceHeight,
+      const geometry = resolveCoverArtworkGeometry(
+        { width: sourceWidth, height: sourceHeight, fit: themeArtwork.fit },
+        layout.stageWidth,
+        layout.stageHeight,
       );
-      const renderedWidth = sourceWidth * scale;
-      const renderedHeight = sourceHeight * scale;
-      artwork.size(renderedWidth, renderedHeight);
-      artwork.pos(
-        (layout.stageWidth - renderedWidth) / 2,
-        (layout.stageHeight - renderedHeight) / 2,
-      );
+      artwork.size(geometry.width, geometry.height);
+      artwork.pos(geometry.x, geometry.y);
       artwork.visible = true;
     };
 
     artwork.on(runtime.Event.LOADED, artwork, layoutArtwork);
-    artwork.skin = resolveCoverArtwork(config, layout);
+    artwork.skin = themeArtwork.asset;
     layoutArtwork();
   }
 

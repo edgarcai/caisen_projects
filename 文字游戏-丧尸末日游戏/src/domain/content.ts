@@ -341,6 +341,7 @@ export interface RecruitConfig {
 
 export interface EndingConfig {
   ending_id: string;
+  achievement_id: string;
   title: string;
   body: string;
   epilogue_title: string;

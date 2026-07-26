@@ -36,6 +36,7 @@ import {
   type StoryStatus,
 } from "../domain/reports";
 import type {
+  AchievementService,
   ChronicleService,
   CampaignProfileService,
   CityAccessDecision,
@@ -65,6 +66,7 @@ export class GameApplication {
   public readonly content: GameContent;
   public state: GameState | null;
 
+  private readonly achievements: AchievementService;
   private readonly exploration: ExplorationService;
   private readonly story: StoryService;
   private readonly combat: CombatService;
@@ -83,6 +85,7 @@ export class GameApplication {
   /** 通过构造器注入所有服务和端口，应用层只承担用例编排。 */
   public constructor(
     content: GameContent,
+    achievements: AchievementService,
     exploration: ExplorationService,
     story: StoryService,
     combat: CombatService,
@@ -99,6 +102,7 @@ export class GameApplication {
     random: RandomSource,
   ) {
     this.content = content;
+    this.achievements = achievements;
     this.exploration = exploration;
     this.story = story;
     this.combat = combat;
@@ -214,6 +218,11 @@ export class GameApplication {
     return this.repository.listSlots();
   }
 
+  /** 返回跨存档栏保留的已解锁成就 ID 副本。 */
+  public unlockedAchievementIds(): readonly string[] {
+    return this.achievements.unlockedAchievementIds();
+  }
+
   /** 保存包含剧情、战斗和待探索事件的完整状态。 */
   public saveGame(slotId?: number): ActionReport {
     const state = this.requireState();
@@ -240,6 +249,7 @@ export class GameApplication {
       if (!candidate.battle.finished) this.combat.availableActions(candidate);
     }
     this.state = candidate;
+    this.achievements.evaluate(candidate);
     return actionReport(
       [this.content.text("load_success")],
       true,
@@ -796,6 +806,9 @@ export class GameApplication {
       working.battle = null;
     }
     this.storeState(working);
+    if (isEnded(working)) {
+      this.achievements.evaluate(working);
+    }
     return actionReport(messages, true, isEnded(working));
   }
 

@@ -17,6 +17,12 @@ export type EngineHorizontalAlignment = "left" | "center" | "right";
 /** LayaAir 垂直对齐标识。 */
 export type EngineVerticalAlignment = "top" | "middle" | "bottom";
 
+/** 封面设置键相对安全区或退出键的水平锚点。 */
+export type CoverSettingsButtonAnchor = "left" | "before_exit";
+
+/** 指挥台标题栏导航在安全区内的水平锚点。 */
+export type HeaderNavigationAnchor = "left" | "right";
+
 /** LayaAir 渲染限能模式标识。 */
 export type EngineFrameMode = "fast" | "slow" | "mouse" | "sleep";
 
@@ -77,12 +83,47 @@ export interface SkinConfig {
   readonly action_bar: string;
 }
 
+/** 封面主题决定作品标题由界面叠加，还是已经嵌入图片。 */
+export type CoverBrandMode = "overlay" | "embedded";
+
+/** 封面资源在舞台内保持完整显示或填满裁切的缩放策略。 */
+export type CoverArtworkFit = "cover" | "contain";
+
+/** 一套可由成就解锁的响应式主界面封面。 */
+export interface CoverThemeConfig {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly desktop_asset: string;
+  readonly desktop_width: number;
+  readonly desktop_height: number;
+  readonly desktop_fit: CoverArtworkFit;
+  readonly mobile_portrait_asset: string;
+  readonly mobile_portrait_width: number;
+  readonly mobile_portrait_height: number;
+  readonly mobile_portrait_fit: CoverArtworkFit;
+  readonly mobile_landscape_asset: string;
+  readonly mobile_landscape_width: number;
+  readonly mobile_landscape_height: number;
+  readonly mobile_landscape_fit: CoverArtworkFit;
+  readonly brand_mode: CoverBrandMode;
+  readonly required_achievement_id: string | null;
+  readonly unlock_description: string;
+}
+
+/** 主界面可选封面集合及其默认项。 */
+export interface CoverThemesConfig {
+  readonly default_id: string;
+  readonly items: readonly CoverThemeConfig[];
+}
+
 /** 引擎直接使用的公共资源路径。 */
 export interface AssetConfig {
   readonly cover: string;
   readonly mobile_cover: string;
   readonly cover_width: number;
   readonly cover_height: number;
+  readonly cover_themes: CoverThemesConfig;
   readonly skins: SkinConfig;
 }
 
@@ -169,8 +210,9 @@ export interface CoverMenuLayoutConfig {
   readonly menu_column_gap: number;
   readonly menu_row_gap: number;
   readonly menu_row_step_x: number;
+  readonly settings_button_anchor: CoverSettingsButtonAnchor;
+  readonly settings_button_offset: number;
   readonly settings_button_top: number;
-  readonly settings_button_right: number;
   readonly settings_button_width: number;
   readonly settings_button_height: number;
   readonly exit_button_top: number;
@@ -202,6 +244,7 @@ export interface DesktopLayoutConfig {
   readonly outer_padding: number;
   readonly header_height: number;
   readonly header_navigation_width: number;
+  readonly header_navigation_anchor: HeaderNavigationAnchor;
   readonly left_rail_width: number;
   readonly right_rail_width: number;
   readonly column_gap: number;
@@ -217,6 +260,7 @@ export interface MobileLayoutConfig {
   readonly outer_padding: number;
   readonly header_height: number;
   readonly header_navigation_width: number;
+  readonly header_navigation_anchor: HeaderNavigationAnchor;
   readonly bottom_navigation_height: number;
   readonly panel_padding: number;
   readonly section_gap: number;
@@ -251,6 +295,8 @@ export interface StorageConfig {
   readonly key: string;
   readonly settings_key: string;
   readonly settings_schema_version: number;
+  readonly achievement_key: string;
+  readonly achievement_schema_version: number;
   readonly schema_version: number;
   readonly auto_save: boolean;
   readonly backup_slots: number;
@@ -346,6 +392,12 @@ export interface TextConfig {
   readonly rollback_description: string;
   readonly settings_title: string;
   readonly settings_body: string;
+  readonly settings_cover_theme: string;
+  readonly settings_cover_theme_description: string;
+  readonly cover_theme_title: string;
+  readonly cover_theme_body: string;
+  readonly cover_theme_selected_description: string;
+  readonly cover_theme_description_separator: string;
   readonly settings_tutorial: string;
   readonly settings_tutorial_description: string;
   readonly settings_return_menu: string;

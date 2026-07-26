@@ -17,9 +17,15 @@ import type {
   V3ToV4SaveMigrationConfig,
 } from "../domain/content";
 import type { SurvivalSystemsConfigDocument } from "../domain/survival-systems";
-import type { RandomSource, SaveRepository, StorageLike } from "../domain/ports";
+import type {
+  AchievementProgressPort,
+  RandomSource,
+  SaveRepository,
+  StorageLike,
+} from "../domain/ports";
 import {
   BrowserRandomSource,
+  LocalStorageAchievementRepository,
   LocalStorageSaveRepository,
   MemoryStorage,
   SaveStateValidator,
@@ -28,6 +34,7 @@ import {
 } from "../infrastructure";
 import { V3ToV4SaveMigrator } from "../infrastructure/V3ToV4SaveMigrator";
 import {
+  AchievementService,
   CampaignProfileService,
   ChronicleService,
   CityAccessService,
@@ -48,6 +55,8 @@ import { GameApplication } from "./GameApplication";
 
 interface StorageDocument {
   key: string;
+  achievement_key: string;
+  achievement_schema_version: number;
   schema_version: number;
   save_slot_count: number;
   backup_slots: number;
@@ -56,6 +65,7 @@ interface StorageDocument {
 export interface CreateGameApplicationOptions {
   randomSource?: RandomSource;
   repository?: SaveRepository;
+  achievementRepository?: AchievementProgressPort;
   storage?: StorageLike;
   storageKey?: string;
   slotCount?: number;
@@ -77,6 +87,7 @@ export function createGameApplication(
   const survivalSystems = validateSurvivalSystemsConfig(survivalSystemsDocument);
   const content = new GameContent(game, story, events);
   const random = options.randomSource ?? new BrowserRandomSource();
+  const storage = options.storage ?? browserStorageOrMemory();
   const operations = new StateOperations(random);
   const campaignProfiles = new CampaignProfileService(content, operations);
   const modeCapabilities = new GameModeCapabilityPolicy(content);
@@ -104,8 +115,15 @@ export function createGameApplication(
     random,
   );
   const combat = new CombatService(content, operations, random, shelter, equipment);
+  const achievementRepository = options.achievementRepository
+    ?? new LocalStorageAchievementRepository(
+      storage,
+      storageConfig.achievement_key,
+      storageConfig.achievement_schema_version,
+    );
+  const achievements = new AchievementService(content, achievementRepository);
   const repository = options.repository ?? createRepository(
-    options,
+    { ...options, storage },
     storageConfig,
     game,
     story,
@@ -116,6 +134,7 @@ export function createGameApplication(
   );
   return new GameApplication(
     content,
+    achievements,
     exploration,
     storyService,
     combat,

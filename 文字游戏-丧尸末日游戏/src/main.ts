@@ -1,4 +1,5 @@
 import { createGameApplication } from "./application";
+import { validateCoverThemeAchievementReferences } from "./config/configLoader";
 import type { WebGameConfig } from "./config/types";
 import type { LayaRuntimeGlobal } from "./engine/runtimeLoader";
 import { createBrowserUiSettingsRepository } from "./infrastructure";
@@ -46,6 +47,10 @@ export async function mountGame(
 ): Promise<MountedGame> {
   mountedGame?.destroy();
   const application = createGameApplication();
+  validateCoverThemeAchievementReferences(
+    config,
+    application.content.story.endings.map((ending) => ending.achievement_id),
+  );
   const adapter = new GameUiAdapter(application, config);
   const settingsRepository = createBrowserUiSettingsRepository(
     config.storage.settings_key,

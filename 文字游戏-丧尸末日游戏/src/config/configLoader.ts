@@ -1,6 +1,8 @@
 import type {
   ActionGroupConfig,
   AssetConfig,
+  CoverThemeConfig,
+  CoverThemesConfig,
   CoverMenuLayoutConfig,
   ControlConfig,
   EngineConfig,
@@ -19,6 +21,7 @@ import type {
   WebExitConfig,
   WebGameConfig,
 } from "./types";
+import { isSaveStorageNamespaceKey } from "../infrastructure/SaveStorageKeys";
 
 type JsonObject = Readonly<Record<string, unknown>>;
 type ConfigFetcher = (
@@ -40,6 +43,8 @@ const SCALE_MODES = [
 const SCREEN_MODES = ["none", "horizontal", "vertical"] as const;
 const HORIZONTAL_ALIGNMENTS = ["left", "center", "right"] as const;
 const VERTICAL_ALIGNMENTS = ["top", "middle", "bottom"] as const;
+const COVER_SETTINGS_BUTTON_ANCHORS = ["left", "before_exit"] as const;
+const HEADER_NAVIGATION_ANCHORS = ["left", "right"] as const;
 const FRAME_MODES = ["fast", "slow", "mouse", "sleep"] as const;
 const NAVIGATION_PLACEMENTS = [
   "mobile_bottom",
@@ -52,6 +57,8 @@ const WEB_EXIT_STRATEGIES = [
   "history_back",
   "close_then_history_back",
 ] as const;
+const COVER_BRAND_MODES = ["overlay", "embedded"] as const;
+const COVER_ARTWORK_FITS = ["cover", "contain"] as const;
 
 const SKIN_KEYS = [
   "cover_button_idle",
@@ -124,8 +131,8 @@ const COVER_LAYOUT_KEYS = [
   "menu_column_gap",
   "menu_row_gap",
   "menu_row_step_x",
+  "settings_button_offset",
   "settings_button_top",
-  "settings_button_right",
   "settings_button_width",
   "settings_button_height",
   "exit_button_top",
@@ -213,6 +220,12 @@ const TEXT_KEYS = [
   "rollback_description",
   "settings_title",
   "settings_body",
+  "settings_cover_theme",
+  "settings_cover_theme_description",
+  "cover_theme_title",
+  "cover_theme_body",
+  "cover_theme_selected_description",
+  "cover_theme_description_separator",
   "settings_tutorial",
   "settings_tutorial_description",
   "settings_return_menu",
@@ -331,6 +344,11 @@ function expectOptionalString(value: unknown, path: string): string {
     throw new WebConfigError(`${path} 必须是字符串`);
   }
   return value.trim();
+}
+
+/** 读取允许为 null 的非空字符串配置。 */
+function expectNullableString(value: unknown, path: string): string | null {
+  return value === null ? null : expectString(value, path);
 }
 
 /** 读取允许由空白符组成、但原始长度必须大于零的字符串配置项。 */
@@ -561,6 +579,114 @@ function parseResponsive(value: unknown): ResponsiveConfig {
   };
 }
 
+/** 解析一套响应式封面主题资源。 */
+function parseCoverTheme(value: unknown, index: number): CoverThemeConfig {
+  const path = `assets.cover_themes.items[${String(index)}]`;
+  const source = expectObject(value, path);
+  return {
+    id: expectString(source.id, `${path}.id`),
+    label: expectString(source.label, `${path}.label`),
+    description: expectString(source.description, `${path}.description`),
+    desktop_asset: expectString(source.desktop_asset, `${path}.desktop_asset`),
+    desktop_width: expectInteger(source.desktop_width, `${path}.desktop_width`, 1),
+    desktop_height: expectInteger(source.desktop_height, `${path}.desktop_height`, 1),
+    desktop_fit: expectEnum(
+      source.desktop_fit,
+      COVER_ARTWORK_FITS,
+      `${path}.desktop_fit`,
+    ),
+    mobile_portrait_asset: expectString(
+      source.mobile_portrait_asset,
+      `${path}.mobile_portrait_asset`,
+    ),
+    mobile_portrait_width: expectInteger(
+      source.mobile_portrait_width,
+      `${path}.mobile_portrait_width`,
+      1,
+    ),
+    mobile_portrait_height: expectInteger(
+      source.mobile_portrait_height,
+      `${path}.mobile_portrait_height`,
+      1,
+    ),
+    mobile_portrait_fit: expectEnum(
+      source.mobile_portrait_fit,
+      COVER_ARTWORK_FITS,
+      `${path}.mobile_portrait_fit`,
+    ),
+    mobile_landscape_asset: expectString(
+      source.mobile_landscape_asset,
+      `${path}.mobile_landscape_asset`,
+    ),
+    mobile_landscape_width: expectInteger(
+      source.mobile_landscape_width,
+      `${path}.mobile_landscape_width`,
+      1,
+    ),
+    mobile_landscape_height: expectInteger(
+      source.mobile_landscape_height,
+      `${path}.mobile_landscape_height`,
+      1,
+    ),
+    mobile_landscape_fit: expectEnum(
+      source.mobile_landscape_fit,
+      COVER_ARTWORK_FITS,
+      `${path}.mobile_landscape_fit`,
+    ),
+    brand_mode: expectEnum(
+      source.brand_mode,
+      COVER_BRAND_MODES,
+      `${path}.brand_mode`,
+    ),
+    required_achievement_id: expectNullableString(
+      source.required_achievement_id,
+      `${path}.required_achievement_id`,
+    ),
+    unlock_description: expectOptionalString(
+      source.unlock_description,
+      `${path}.unlock_description`,
+    ),
+  };
+}
+
+/** 解析封面主题集合并拒绝重复、缺失或被锁定的默认项。 */
+function parseCoverThemes(value: unknown): CoverThemesConfig {
+  const source = expectObject(value, "assets.cover_themes");
+  const defaultId = expectString(
+    source.default_id,
+    "assets.cover_themes.default_id",
+  );
+  const items = expectArray(
+    source.items,
+    "assets.cover_themes.items",
+  ).map(parseCoverTheme);
+  if (items.length === 0) {
+    throw new WebConfigError("assets.cover_themes.items 至少需要一个封面主题");
+  }
+  const ids = items.map((item) => item.id);
+  if (new Set(ids).size !== ids.length) {
+    throw new WebConfigError("assets.cover_themes.items 不能包含重复 ID");
+  }
+  const defaultTheme = items.find((item) => item.id === defaultId);
+  if (defaultTheme === undefined) {
+    throw new WebConfigError(`assets.cover_themes.default_id 不存在：${defaultId}`);
+  }
+  if (defaultTheme.required_achievement_id !== null) {
+    throw new WebConfigError("assets.cover_themes 默认主题不能要求成就");
+  }
+  for (const item of items) {
+    if (
+      item.required_achievement_id !== null &&
+      item.unlock_description.trim() === ""
+    ) {
+      throw new WebConfigError(
+        `assets.cover_themes 受锁主题缺少解锁说明：${item.id}`,
+      );
+    }
+  }
+  return { default_id: defaultId, items };
+}
+
 /** 解析公共资源路径。 */
 function parseAssets(value: unknown): AssetConfig {
   const source = expectObject(value, "assets");
@@ -569,6 +695,7 @@ function parseAssets(value: unknown): AssetConfig {
     mobile_cover: expectString(source.mobile_cover, "assets.mobile_cover"),
     cover_width: expectInteger(source.cover_width, "assets.cover_width", 1),
     cover_height: expectInteger(source.cover_height, "assets.cover_height", 1),
+    cover_themes: parseCoverThemes(source.cover_themes),
     skins: readOptionalStringFields(
       expectObject(source.skins, "assets.skins"),
       SKIN_KEYS,
@@ -649,6 +776,11 @@ function parseCoverMenuLayout(
       VERTICAL_ALIGNMENTS,
       `${path}.vertical_alignment`,
     ),
+    settings_button_anchor: expectEnum(
+      source.settings_button_anchor,
+      COVER_SETTINGS_BUTTON_ANCHORS,
+      `${path}.settings_button_anchor`,
+    ),
     ...readNumberFields(source, COVER_LAYOUT_KEYS, path),
     menu_columns: expectInteger(source.menu_columns, `${path}.menu_columns`, 1),
   };
@@ -658,6 +790,8 @@ function parseCoverMenuLayout(
 function parseLayout(value: unknown): LayoutConfig {
   const source = expectObject(value, "layout");
   const coverSource = expectObject(source.cover, "layout.cover");
+  const desktopSource = expectObject(source.desktop, "layout.desktop");
+  const mobileSource = expectObject(source.mobile, "layout.mobile");
   return {
     cover: {
       desktop: parseCoverMenuLayout(
@@ -686,16 +820,22 @@ function parseLayout(value: unknown): LayoutConfig {
         1,
       ),
     },
-    desktop: readNumberFields(
-      expectObject(source.desktop, "layout.desktop"),
-      DESKTOP_LAYOUT_KEYS,
-      "layout.desktop",
-    ),
-    mobile: readNumberFields(
-      expectObject(source.mobile, "layout.mobile"),
-      MOBILE_LAYOUT_KEYS,
-      "layout.mobile",
-    ),
+    desktop: {
+      header_navigation_anchor: expectEnum(
+        desktopSource.header_navigation_anchor,
+        HEADER_NAVIGATION_ANCHORS,
+        "layout.desktop.header_navigation_anchor",
+      ),
+      ...readNumberFields(desktopSource, DESKTOP_LAYOUT_KEYS, "layout.desktop"),
+    },
+    mobile: {
+      header_navigation_anchor: expectEnum(
+        mobileSource.header_navigation_anchor,
+        HEADER_NAVIGATION_ANCHORS,
+        "layout.mobile.header_navigation_anchor",
+      ),
+      ...readNumberFields(mobileSource, MOBILE_LAYOUT_KEYS, "layout.mobile"),
+    },
     page: readNumberFields(
       expectObject(source.page, "layout.page"),
       PAGE_LAYOUT_KEYS,
@@ -725,15 +865,42 @@ function parseWebExit(value: unknown): WebExitConfig {
   };
 }
 
-/** 解析本地存档策略。 */
+/** 拒绝设置或成就键占用存档主键及其派生槽位命名空间。 */
+function validateStorageKeyNamespaces(config: StorageConfig): void {
+  const auxiliaryKeys = [
+    { path: "storage.settings_key", value: config.settings_key },
+    { path: "storage.achievement_key", value: config.achievement_key },
+  ] as const;
+  for (const entry of auxiliaryKeys) {
+    if (isSaveStorageNamespaceKey(config.key, entry.value)) {
+      throw new WebConfigError(
+        `${entry.path} 与 storage.key 的存档命名空间冲突`,
+      );
+    }
+  }
+  if (config.settings_key === config.achievement_key) {
+    throw new WebConfigError("设置与成就存储键冲突");
+  }
+}
+
+/** 解析本地存档策略，并验证三类文档使用互斥命名空间。 */
 function parseStorage(value: unknown): StorageConfig {
   const source = expectObject(value, "storage");
-  return {
+  const config: StorageConfig = {
     key: expectString(source.key, "storage.key"),
     settings_key: expectString(source.settings_key, "storage.settings_key"),
     settings_schema_version: expectInteger(
       source.settings_schema_version,
       "storage.settings_schema_version",
+      1,
+    ),
+    achievement_key: expectString(
+      source.achievement_key,
+      "storage.achievement_key",
+    ),
+    achievement_schema_version: expectInteger(
+      source.achievement_schema_version,
+      "storage.achievement_schema_version",
       1,
     ),
     schema_version: expectInteger(
@@ -749,6 +916,8 @@ function parseStorage(value: unknown): StorageConfig {
       1,
     ),
   };
+  validateStorageKeyNamespaces(config);
+  return config;
 }
 
 /** 解析更新日志首次挂载时的自动展示策略。 */
@@ -899,6 +1068,22 @@ export function parseWebGameConfig(value: unknown): WebGameConfig {
     ),
     texts: parseTexts(source.texts),
   };
+}
+
+/** 跨配置校验封面主题引用的成就必须由剧情结局声明。 */
+export function validateCoverThemeAchievementReferences(
+  config: WebGameConfig,
+  knownAchievementIds: readonly string[],
+): void {
+  const knownIds = new Set(knownAchievementIds);
+  for (const theme of config.assets.cover_themes.items) {
+    const requiredId = theme.required_achievement_id;
+    if (requiredId !== null && !knownIds.has(requiredId)) {
+      throw new WebConfigError(
+        `封面主题 ${theme.id} 引用了未知成就：${requiredId}`,
+      );
+    }
+  }
 }
 
 /** 从 HTML meta 元素解析 H5 配置 URL。 */

@@ -20,15 +20,23 @@ import {
   resolveCoverChangelogGeometry,
   resolveCoverDescriptionGeometry,
   resolveCoverExitGeometry,
+  resolveCoverMenuLayout,
   resolveCoverMenuItemGeometry,
   resolveCoverSettingsGeometry,
 } from "../../src/ui/models/CoverMenuModel";
 import { resolvePageScaffoldGeometry } from "../../src/ui/pages/PageView";
 import {
   buildFunctionMenuPrompt,
+  buildCoverThemePrompt,
   buildSettingsPrompt,
   createCreditsDocument,
 } from "../../src/ui/pages/SystemMenuPages";
+import {
+  buildCoverThemeSelectionStates,
+  resolveCoverArtworkGeometry,
+  resolveCoverThemeArtwork,
+  resolveSelectedCoverTheme,
+} from "../../src/ui/models/CoverThemeModel";
 
 const webConfig = parseWebGameConfig(webConfigDocument);
 const zeroSafeArea = { top: 0, right: 0, bottom: 0, left: 0 } as const;
@@ -342,24 +350,31 @@ describe("五入口响应式封面与独立退出契约", () => {
     }
   });
 
-  it("手机和电脑封面设置键满足触控下限并始终落在安全区内", () => {
-    const layouts = [
-      resolveTestLayout(1440, 900, false, {
-        top: 12,
-        right: 18,
-        bottom: 0,
-        left: 8,
-      }),
-      resolveTestLayout(600, 1067, true, {
-        top: 36,
-        right: 20,
-        bottom: 24,
-        left: 16,
-      }),
-    ];
+  it("手机封面设置键锚定左安全区，电脑仍位于退出键左侧", () => {
+    const desktop = resolveTestLayout(1440, 900, false, {
+      top: 12,
+      right: 18,
+      bottom: 0,
+      left: 8,
+    });
+    const mobilePortrait = resolveTestLayout(600, 1067, true, {
+      top: 36,
+      right: 20,
+      bottom: 24,
+      left: 16,
+    });
+    const mobileLandscape = resolveTestLayout(1067, 600, true, {
+      top: 18,
+      right: 24,
+      bottom: 12,
+      left: 30,
+    });
+    const layouts = [desktop, mobilePortrait, mobileLandscape];
 
     for (const layout of layouts) {
       const geometry = resolveCoverSettingsGeometry(webConfig, layout);
+      const exit = resolveCoverExitGeometry(webConfig, layout);
+      const tokens = resolveCoverMenuLayout(webConfig, layout);
       expect(geometry.width).toBeGreaterThanOrEqual(
         webConfig.controls.minimum_touch_size,
       );
@@ -374,7 +389,40 @@ describe("五入口响应式封面与独立退出契约", () => {
       expect(geometry.y + geometry.height).toBeLessThanOrEqual(
         layout.stageHeight - layout.safeArea.bottom,
       );
+      if (layout.kind === "mobile") {
+        expect(tokens.settings_button_anchor).toBe("left");
+        expect(geometry.x).toBe(
+          layout.safeArea.left + tokens.settings_button_offset,
+        );
+        expect(geometry.x + geometry.width).toBeLessThan(exit.x);
+      } else {
+        expect(tokens.settings_button_anchor).toBe("before_exit");
+        expect(geometry.x + geometry.width + tokens.settings_button_offset).toBe(
+          exit.x,
+        );
+      }
     }
+  });
+
+  it("紧凑桌面封面继续使用电脑设置键锚点", () => {
+    const compactDesktop = resolveTestLayout(
+      webConfig.responsive.desktop_min_stage_width - 1,
+      900,
+      false,
+      {
+        top: 12,
+        right: 18,
+        bottom: 0,
+        left: 8,
+      },
+    );
+    const settings = resolveCoverSettingsGeometry(webConfig, compactDesktop);
+    const exit = resolveCoverExitGeometry(webConfig, compactDesktop);
+    const tokens = resolveCoverMenuLayout(webConfig, compactDesktop);
+
+    expect(compactDesktop.kind).toBe("compact");
+    expect(tokens.settings_button_anchor).toBe("before_exit");
+    expect(settings.x + settings.width + tokens.settings_button_offset).toBe(exit.x);
   });
 
   it("悬停满配置化延迟才发布简介，离开立即清空", () => {
@@ -426,21 +474,29 @@ describe("通用底部操作区与本地设置", () => {
   it("封面设置仅含体验偏好，局内设置承载玩法与返回主菜单", () => {
     const cover = buildSettingsPrompt(
       webConfig,
-      { reducedMotion: false },
+      {
+        reducedMotion: false,
+        selectedCoverThemeId: webConfig.assets.cover_themes.default_id,
+      },
       false,
       false,
     );
     const inGame = buildSettingsPrompt(
       webConfig,
-      { reducedMotion: true },
+      {
+        reducedMotion: true,
+        selectedCoverThemeId: webConfig.assets.cover_themes.default_id,
+      },
       true,
       true,
     );
 
     expect(cover.options.map((option) => option.id)).toEqual([
+      "cover-theme",
       "reduced-motion",
     ]);
     expect(inGame.options.map((option) => option.id)).toEqual([
+      "cover-theme",
       "reduced-motion",
       "tutorial",
       "return-menu",
@@ -467,17 +523,176 @@ describe("通用底部操作区与本地设置", () => {
       webConfig.storage.settings_schema_version,
     );
 
-    expect(repository.load({ reducedMotion: false })).toEqual({
+    const fallback = {
       reducedMotion: false,
-    });
-    repository.save({ reducedMotion: true });
-    expect(repository.load({ reducedMotion: false })).toEqual({
+      selectedCoverThemeId: webConfig.assets.cover_themes.default_id,
+    };
+    expect(repository.load(fallback)).toEqual(fallback);
+    repository.save({
       reducedMotion: true,
+      selectedCoverThemeId: "bunker_gate",
+    });
+    expect(repository.load(fallback)).toEqual({
+      reducedMotion: true,
+      selectedCoverThemeId: "bunker_gate",
     });
 
     storage.setItem(webConfig.storage.settings_key, "{broken");
-    expect(repository.load({ reducedMotion: false })).toEqual({
+    expect(repository.load(fallback)).toEqual(fallback);
+  });
+
+  it("旧版设置迁移时保留减少动效，并使用配置默认封面", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(webConfig.storage.settings_key, JSON.stringify({
+      schema_version: 1,
+      reduced_motion: true,
+    }));
+    const repository = new LocalStorageUiSettingsRepository(
+      storage,
+      webConfig.storage.settings_key,
+      webConfig.storage.settings_schema_version,
+    );
+
+    expect(repository.load({
       reducedMotion: false,
+      selectedCoverThemeId: webConfig.assets.cover_themes.default_id,
+    })).toEqual({
+      reducedMotion: true,
+      selectedCoverThemeId: webConfig.assets.cover_themes.default_id,
     });
+  });
+
+  it("未来版本设置只读降级，旧代码切换偏好也不会覆盖原文档", () => {
+    const futureDocument = JSON.stringify({
+      schema_version: webConfig.storage.settings_schema_version + 1,
+      future_motion_profile: "cinematic",
+    });
+    const storage = new MemoryStorage({
+      [webConfig.storage.settings_key]: futureDocument,
+    });
+    const repository = new LocalStorageUiSettingsRepository(
+      storage,
+      webConfig.storage.settings_key,
+      webConfig.storage.settings_schema_version,
+    );
+    const fallback = {
+      reducedMotion: false,
+      selectedCoverThemeId: webConfig.assets.cover_themes.default_id,
+    };
+
+    expect(repository.load(fallback)).toEqual(fallback);
+    repository.save({
+      reducedMotion: true,
+      selectedCoverThemeId: "bunker_gate",
+    });
+    expect(storage.getItem(webConfig.storage.settings_key)).toBe(futureDocument);
+  });
+
+  it("其他页面升级设置文档后，当前旧实例在保存前重新阻止覆盖", () => {
+    const storage = new MemoryStorage();
+    const repository = new LocalStorageUiSettingsRepository(
+      storage,
+      webConfig.storage.settings_key,
+      webConfig.storage.settings_schema_version,
+    );
+    const fallback = {
+      reducedMotion: false,
+      selectedCoverThemeId: webConfig.assets.cover_themes.default_id,
+    };
+    const futureDocument = JSON.stringify({
+      schema_version: webConfig.storage.settings_schema_version + 1,
+      future_motion_profile: "responsive",
+    });
+    expect(repository.load(fallback)).toEqual(fallback);
+    storage.setItem(webConfig.storage.settings_key, futureDocument);
+
+    repository.save({
+      reducedMotion: true,
+      selectedCoverThemeId: "bunker_gate",
+    });
+
+    expect(storage.getItem(webConfig.storage.settings_key)).toBe(futureDocument);
+  });
+
+  it("成就封面锁定时不可选，解锁后使用独立手机竖版资源", () => {
+    const lockedStates = buildCoverThemeSelectionStates(
+      webConfig.assets.cover_themes,
+      "bunker_gate",
+      [],
+    );
+    const lockedPrompt = buildCoverThemePrompt(webConfig, lockedStates);
+    const lockedTheme = lockedPrompt.options.find(
+      (option) => option.id === "bunker_gate",
+    );
+    expect(lockedTheme).toMatchObject({
+      disabled: true,
+      tone: "muted",
+    });
+    expect(resolveSelectedCoverTheme(
+      webConfig.assets.cover_themes,
+      "bunker_gate",
+      [],
+    ).id).toBe(webConfig.assets.cover_themes.default_id);
+
+    const unlockedIds = ["ending_long_night_watch"];
+    const selected = resolveSelectedCoverTheme(
+      webConfig.assets.cover_themes,
+      "bunker_gate",
+      unlockedIds,
+    );
+    const mobile = resolveTestLayout(600, 1067, true);
+    expect(selected.id).toBe("bunker_gate");
+    expect(resolveCoverThemeArtwork(selected, mobile)).toMatchObject({
+      asset: "assets/covers/cover_theme_bunker_gate_mobile_2k.webp",
+      width: 1152,
+      height: 2048,
+      fit: "contain",
+    });
+  });
+
+  it("封面主题按断点选择 fit，并以纯几何保持包含或填满语义", () => {
+    const unlockedIds = ["ending_long_night_watch"];
+    const bunkerTheme = resolveSelectedCoverTheme(
+      webConfig.assets.cover_themes,
+      "bunker_gate",
+      unlockedIds,
+    );
+    const classicTheme = resolveSelectedCoverTheme(
+      webConfig.assets.cover_themes,
+      webConfig.assets.cover_themes.default_id,
+      unlockedIds,
+    );
+    const portrait = resolveTestLayout(390, 844, true);
+    const landscape = resolveTestLayout(844, 390, true);
+    const desktop = resolveTestLayout(1440, 900, false);
+
+    const bunkerPortrait = resolveCoverThemeArtwork(bunkerTheme, portrait);
+    const bunkerLandscape = resolveCoverThemeArtwork(bunkerTheme, landscape);
+    const bunkerDesktop = resolveCoverThemeArtwork(bunkerTheme, desktop);
+    const classicPortrait = resolveCoverThemeArtwork(classicTheme, portrait);
+    expect(bunkerPortrait.fit).toBe("contain");
+    expect(bunkerLandscape.fit).toBe("cover");
+    expect(bunkerDesktop.fit).toBe("cover");
+    expect(classicPortrait.fit).toBe("cover");
+
+    const contained = resolveCoverArtworkGeometry(
+      bunkerPortrait,
+      portrait.stageWidth,
+      portrait.stageHeight,
+    );
+    expect(contained.x).toBeCloseTo(0);
+    expect(contained.y).toBeGreaterThan(0);
+    expect(contained.width).toBeCloseTo(portrait.stageWidth);
+    expect(contained.height).toBeLessThan(portrait.stageHeight);
+
+    const covered = resolveCoverArtworkGeometry(
+      classicPortrait,
+      portrait.stageWidth,
+      portrait.stageHeight,
+    );
+    expect(covered.x).toBeLessThan(0);
+    expect(covered.y).toBeCloseTo(0);
+    expect(covered.width).toBeGreaterThan(portrait.stageWidth);
+    expect(covered.height).toBeCloseTo(portrait.stageHeight);
   });
 });

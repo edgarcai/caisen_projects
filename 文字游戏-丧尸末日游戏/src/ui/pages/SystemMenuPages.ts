@@ -2,6 +2,7 @@ import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
 import type { GameUiConfig } from "../../styles/GameTheme";
 import type { UiFactory } from "../components/UiFactory";
 import type { LayaRuntimeLike } from "../laya/LayaRuntime";
+import type { CoverThemeSelectionState } from "../models/CoverThemeModel";
 import type { UiPreferences } from "../ports/UiSettingsPort";
 import type {
   UiDocumentView,
@@ -25,6 +26,7 @@ export interface FunctionMenuActions {
 
 /** 设置页把本地偏好与局内系统导航分离后的交互出口。 */
 export interface SettingsPageActions {
+  readonly openCoverThemes: () => void;
   readonly toggleReducedMotion: () => void;
   readonly openTutorial?: () => void;
   readonly openReturnMenu?: () => void;
@@ -121,7 +123,9 @@ export function createSettingsPage(
     prompt,
     onBack: actions.close,
     onSelect: (option): void => {
-      if (option.id === "reduced-motion") {
+      if (option.id === "cover-theme") {
+        actions.openCoverThemes();
+      } else if (option.id === "reduced-motion") {
         actions.toggleReducedMotion();
       } else if (option.id === "tutorial") {
         actions.openTutorial?.();
@@ -140,6 +144,13 @@ export function buildSettingsPrompt(
   includeReturnMenu: boolean,
 ): UiPromptView {
   const options: UiOptionView[] = [
+    {
+      id: "cover-theme",
+      label: config.texts.settings_cover_theme,
+      description: config.texts.settings_cover_theme_description,
+      disabled: false,
+      tone: "primary",
+    },
     {
       id: "reduced-motion",
       label: preferences.reducedMotion
@@ -173,6 +184,60 @@ export function buildSettingsPrompt(
     title: config.texts.settings_title,
     body: config.texts.settings_body,
     options,
+  };
+}
+
+/** 创建设置之上的封面主题选择页。 */
+export function createCoverThemeSelectorPage(
+  runtime: LayaRuntimeLike,
+  factory: UiFactory,
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  themes: readonly CoverThemeSelectionState[],
+  onSelect: (themeId: string) => void,
+  onBack: () => void,
+): PageView {
+  return createChoicePage(runtime, factory, config, layout, {
+    testId: "page-cover-theme-selector",
+    title: config.texts.cover_theme_title,
+    prompt: buildCoverThemePrompt(config, themes),
+    onBack,
+    onSelect: (option): void => {
+      if (!option.disabled) {
+        onSelect(option.id);
+      }
+    },
+  });
+}
+
+/** 把主题解锁状态转换为通用二级页选项。 */
+export function buildCoverThemePrompt(
+  config: GameUiConfig,
+  themes: readonly CoverThemeSelectionState[],
+): UiPromptView {
+  return {
+    id: "cover-theme-selector",
+    title: config.texts.cover_theme_title,
+    body: config.texts.cover_theme_body,
+    options: themes.map((entry) => ({
+      id: entry.theme.id,
+      label: entry.theme.label,
+      description: [
+        entry.theme.description,
+        entry.locked
+          ? entry.theme.unlock_description
+          : entry.selected
+            ? config.texts.cover_theme_selected_description
+            : "",
+      ].filter((part) => part !== "").join(
+        config.texts.cover_theme_description_separator,
+      ),
+      disabled: entry.locked,
+      disabledReason: entry.locked
+        ? entry.theme.unlock_description
+        : undefined,
+      tone: entry.selected ? "success" : entry.locked ? "muted" : "default",
+    })),
   };
 }
 

@@ -12,7 +12,6 @@ import type { GameUiSnapshot } from "../../src/ui/ports/GameUiPort";
 import { buildH5Harness } from "../helpers/H5TestHarness";
 
 const webConfig = parseWebGameConfig(webConfigDocument);
-const zeroSafeArea = { top: 0, right: 0, bottom: 0, left: 0 } as const;
 
 /** 以真实适配器创建指定模式的指挥台快照。 */
 function createSnapshot(mode: "single" | "multiplayer" | "story"): GameUiSnapshot {
@@ -120,29 +119,65 @@ describe("指挥台模式化导航组件", () => {
     expect(shouldRenderDashboardMission(snapshot)).toBe(false);
   });
 
-  it("标题栏入口位于安全区内且每项不小于触控下限", () => {
-    const layout = resolveResponsiveLayoutFromMetrics(
+  it("手机标题栏锚定左侧，普通与紧凑电脑仍锚定右侧", () => {
+    const safeArea = { top: 12, right: 18, bottom: 10, left: 24 } as const;
+    const mobile = resolveResponsiveLayoutFromMetrics(
       {
-        stageWidth: webConfig.engine.design_width,
-        stageHeight: webConfig.engine.design_height,
-        isMobileDevice: false,
-        safeArea: zeroSafeArea,
+        stageWidth: webConfig.engine.mobile_design_width,
+        stageHeight: webConfig.engine.mobile_design_height,
+        isMobileDevice: true,
+        safeArea,
       },
       webConfig,
     );
-    const geometry = resolveDashboardHeaderNavigationGeometry(
+    const compactDesktop = resolveResponsiveLayoutFromMetrics(
+      {
+        stageWidth: webConfig.responsive.desktop_min_stage_width - 1,
+        stageHeight: 900,
+        isMobileDevice: false,
+        safeArea,
+      },
       webConfig,
-      layout,
+    );
+    const desktop = resolveResponsiveLayoutFromMetrics(
+      {
+        stageWidth: 1440,
+        stageHeight: 900,
+        isMobileDevice: false,
+        safeArea,
+      },
+      webConfig,
+    );
+    const mobileGeometry = resolveDashboardHeaderNavigationGeometry(
+      webConfig,
+      mobile,
+      1,
+    );
+    const compactGeometry = resolveDashboardHeaderNavigationGeometry(
+      webConfig,
+      compactDesktop,
+      1,
+    );
+    const desktopGeometry = resolveDashboardHeaderNavigationGeometry(
+      webConfig,
+      desktop,
       2,
     );
 
-    expect(geometry).not.toBeNull();
-    expect(geometry?.itemWidth).toBeGreaterThanOrEqual(
-      webConfig.controls.minimum_touch_size,
-    );
-    expect(geometry?.left).toBeGreaterThanOrEqual(layout.safeArea.left);
-    expect((geometry?.left ?? 0) + (geometry?.width ?? 0)).toBeLessThanOrEqual(
-      layout.stageWidth - layout.safeArea.right,
-    );
+    expect(mobile.kind).toBe("mobile");
+    expect(compactDesktop.kind).toBe("compact");
+    expect(desktop.kind).toBe("desktop");
+    expect(mobileGeometry?.left).toBe(safeArea.left + mobile.outerPadding);
+    for (const [layout, geometry] of [
+      [compactDesktop, compactGeometry],
+      [desktop, desktopGeometry],
+    ] as const) {
+      expect(geometry?.itemWidth).toBeGreaterThanOrEqual(
+        webConfig.controls.minimum_touch_size,
+      );
+      expect((geometry?.left ?? 0) + (geometry?.width ?? 0)).toBe(
+        layout.stageWidth - layout.safeArea.right - layout.outerPadding,
+      );
+    }
   });
 });

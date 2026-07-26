@@ -1,4 +1,8 @@
 {
+  "schema_version": 2,
+  "managed_roots": [
+    "public/assets"
+  ],
   "removals": [
     "public/assets/cover_art.png",
     "public/assets/cover_art.webp",
@@ -10,27 +14,123 @@
   "copies": [
     {
       "source": "assets/cover_art_2k.png",
-      "target": "public/assets/cover_art_2k.png"
+      "target": "public/assets/cover_art_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 1152,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 2500000
+      }
     },
     {
       "source": "assets/cover_art_2k.webp",
-      "target": "public/assets/cover_art_2k.webp"
+      "target": "public/assets/cover_art_2k.webp",
+      "image_policy": {
+        "format": "webp",
+        "width": 2048,
+        "height": 1152,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
+    },
+    {
+      "source": "assets/covers/cover_theme_bunker_gate_2k.png",
+      "target": "public/assets/covers/cover_theme_bunker_gate_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 1152,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 2500000
+      }
+    },
+    {
+      "source": "assets/covers/cover_theme_bunker_gate_2k.webp",
+      "target": "public/assets/covers/cover_theme_bunker_gate_2k.webp",
+      "image_policy": {
+        "format": "webp",
+        "width": 2048,
+        "height": 1152,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
+    },
+    {
+      "source": "assets/covers/cover_theme_bunker_gate_mobile_2k.png",
+      "target": "public/assets/covers/cover_theme_bunker_gate_mobile_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 1152,
+        "height": 2048,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 2500000
+      }
+    },
+    {
+      "source": "assets/covers/cover_theme_bunker_gate_mobile_2k.webp",
+      "target": "public/assets/covers/cover_theme_bunker_gate_mobile_2k.webp",
+      "image_policy": {
+        "format": "webp",
+        "width": 1152,
+        "height": 2048,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
     },
     {
       "source": "assets/ui/menu_button_idle_2k.png",
-      "target": "public/assets/ui/menu_button_idle_2k.png"
+      "target": "public/assets/ui/menu_button_idle_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 384,
+        "alpha": true,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
     },
     {
       "source": "assets/ui/menu_button_hover_2k.png",
-      "target": "public/assets/ui/menu_button_hover_2k.png"
+      "target": "public/assets/ui/menu_button_hover_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 384,
+        "alpha": true,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
     },
     {
       "source": "assets/ui/menu_button_pressed_2k.png",
-      "target": "public/assets/ui/menu_button_pressed_2k.png"
+      "target": "public/assets/ui/menu_button_pressed_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 384,
+        "alpha": true,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
     },
     {
       "source": "assets/ui/menu_button_disabled_2k.png",
-      "target": "public/assets/ui/menu_button_disabled_2k.png"
+      "target": "public/assets/ui/menu_button_disabled_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 384,
+        "alpha": true,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
     },
     {
       "source": "config/game_config.json",
@@ -59,6 +159,10 @@
     {
       "source": "config/web_config.json",
       "target": "public/config/web_config.json"
+    },
+    {
+      "source": "assets/favicon.svg",
+      "target": "public/assets/favicon.svg"
     }
   ]
 }
