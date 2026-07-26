@@ -7,16 +7,28 @@ interface QualityViewport {
   id: string;
   width: number;
   height: number;
+  mobile: boolean;
+  touch: boolean;
+  device_scale_factor: number;
 }
 
 interface QualityConfig {
   base_url: string;
   web_server_command: string;
   server_timeout_ms: number;
+  worker_count: number;
   action_timeout_ms: number;
   navigation_timeout_ms: number;
   screenshot_directory: string;
   trace_mode: "off" | "on" | "retain-on-failure" | "on-first-retry";
+  mobile_user_agent: string;
+  minimum_touch_css_px: number;
+  keyboard_simulated_height_px: number;
+  keyboard_minimum_viewport_height_px: number;
+  scroll_drag_ratio: number;
+  scroll_drag_steps: number;
+  scroll_max_attempts: number;
+  scroll_settle_ms: number;
 }
 
 interface WebTestConfig {
@@ -37,14 +49,17 @@ const webConfig = loadWebTestConfig();
 const quality = webConfig.quality_assurance;
 const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
 
-/** 将每个配置化 QA 视口转换为桌面或触控测试项目。 */
+/** 将每个配置化 QA 视口转换为明确的桌面或真实移动能力项目。 */
 function buildViewportProject(viewport: QualityViewport) {
-  const isMobile = viewport.width <= webConfig.responsive.mobile_max_stage_width;
   return {
     name: viewport.id,
     use: {
       viewport: { width: viewport.width, height: viewport.height },
-      ...(isMobile ? { hasTouch: true, isMobile: true } : {}),
+      screen: { width: viewport.width, height: viewport.height },
+      deviceScaleFactor: viewport.device_scale_factor,
+      hasTouch: viewport.touch,
+      isMobile: viewport.mobile,
+      ...(viewport.mobile ? { userAgent: quality.mobile_user_agent } : {}),
     },
   };
 }
@@ -53,9 +68,13 @@ export default defineConfig({
   testDir: "tests-h5/e2e",
   outputDir: "test-results",
   fullyParallel: false,
+  workers: quality.worker_count,
   retries: 0,
   reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
   timeout: quality.navigation_timeout_ms,
+  expect: {
+    timeout: quality.action_timeout_ms,
+  },
   use: {
     baseURL: quality.base_url,
     actionTimeout: quality.action_timeout_ms,

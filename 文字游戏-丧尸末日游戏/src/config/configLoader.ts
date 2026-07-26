@@ -391,6 +391,16 @@ function parseEngine(value: unknown): EngineConfig {
     version: expectString(source.version, "engine.version"),
     design_width: expectInteger(source.design_width, "engine.design_width", 1),
     design_height: expectInteger(source.design_height, "engine.design_height", 1),
+    mobile_design_width: expectInteger(
+      source.mobile_design_width,
+      "engine.mobile_design_width",
+      1,
+    ),
+    mobile_design_height: expectInteger(
+      source.mobile_design_height,
+      "engine.mobile_design_height",
+      1,
+    ),
     scale_mode: expectEnum(
       source.scale_mode,
       SCALE_MODES,
@@ -422,6 +432,11 @@ function parseEngine(value: unknown): EngineConfig {
       FRAME_MODES,
       "engine.active_frame_mode",
     ),
+    mobile_active_frame_mode: expectEnum(
+      source.mobile_active_frame_mode,
+      FRAME_MODES,
+      "engine.mobile_active_frame_mode",
+    ),
     idle_frame_mode: expectEnum(
       source.idle_frame_mode,
       FRAME_MODES,
@@ -449,6 +464,13 @@ function parseQualityViewport(value: unknown, index: number): QualityViewport {
     id: expectString(source.id, `${path}.id`),
     width: expectInteger(source.width, `${path}.width`, 1),
     height: expectInteger(source.height, `${path}.height`, 1),
+    mobile: expectBoolean(source.mobile, `${path}.mobile`),
+    touch: expectBoolean(source.touch, `${path}.touch`),
+    device_scale_factor: expectNumber(
+      source.device_scale_factor,
+      `${path}.device_scale_factor`,
+      1,
+    ),
   };
 }
 
@@ -470,6 +492,19 @@ function parseResponsive(value: unknown): ResponsiveConfig {
       "responsive.compact_max_stage_height",
       1,
     ),
+    mobile_max_css_short_edge: expectNumber(
+      source.mobile_max_css_short_edge,
+      "responsive.mobile_max_css_short_edge",
+      1,
+    ),
+    resize_debounce_ms: expectNumber(
+      source.resize_debounce_ms,
+      "responsive.resize_debounce_ms",
+    ),
+    keyboard_resize_settle_ms: expectNumber(
+      source.keyboard_resize_settle_ms,
+      "responsive.keyboard_resize_settle_ms",
+    ),
     safe_area_fallback: parseSafeArea(source.safe_area_fallback),
     quality_viewports: viewportValues.map(parseQualityViewport),
   };
@@ -480,6 +515,7 @@ function parseAssets(value: unknown): AssetConfig {
   const source = expectObject(value, "assets");
   return {
     cover: expectString(source.cover, "assets.cover"),
+    mobile_cover: expectString(source.mobile_cover, "assets.mobile_cover"),
     cover_width: expectInteger(source.cover_width, "assets.cover_width", 1),
     cover_height: expectInteger(source.cover_height, "assets.cover_height", 1),
     skins: readOptionalStringFields(
@@ -580,6 +616,10 @@ function parseLayout(value: unknown): LayoutConfig {
       mobile: parseCoverMenuLayout(
         coverSource.mobile,
         "layout.cover.mobile",
+      ),
+      mobile_landscape: parseCoverMenuLayout(
+        coverSource.mobile_landscape,
+        "layout.cover.mobile_landscape",
       ),
       image_dark_edge_ratio: expectRatio(
         coverSource.image_dark_edge_ratio,

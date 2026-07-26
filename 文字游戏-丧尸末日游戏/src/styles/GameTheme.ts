@@ -82,6 +82,7 @@ export interface CoverMenuLayoutTokens {
 export interface CoverLayoutTokens {
   readonly desktop: CoverMenuLayoutTokens;
   readonly mobile: CoverMenuLayoutTokens;
+  readonly mobile_landscape: CoverMenuLayoutTokens;
   readonly image_dark_edge_ratio: number;
   readonly image_dark_solid_ratio: number;
   readonly image_dark_fade_steps: number;
@@ -171,6 +172,9 @@ export interface SafeAreaInsets {
 export interface ResponsiveTokens {
   readonly mobile_max_stage_width: number;
   readonly compact_max_stage_height: number;
+  readonly mobile_max_css_short_edge: number;
+  readonly resize_debounce_ms: number;
+  readonly keyboard_resize_settle_ms: number;
   readonly safe_area_fallback: SafeAreaInsets;
 }
 
@@ -179,6 +183,7 @@ export interface ResponsiveTokens {
  */
 export interface GameAssetTokens {
   readonly cover: string;
+  readonly mobile_cover: string;
   readonly cover_width?: number;
   readonly cover_height?: number;
   readonly skins: GameSkinTokens;

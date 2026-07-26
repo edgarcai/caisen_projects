@@ -10,6 +10,7 @@ import {
   loadLayaRuntime,
   type LayaRuntimeGlobal,
 } from "./runtimeLoader";
+import { isMobileEnvironment } from "../services/DeviceCapabilityResolver";
 
 /** 已初始化的 LayaAir 引擎句柄。 */
 export interface LayaEngineHandle {
@@ -86,22 +87,48 @@ function resolveThrottleMode(mode: EngineFrameMode): 0 | 1 | 2 | 3 {
   return modes[mode];
 }
 
-/** 在引擎初始化前判断当前宿主是否为移动浏览器。 */
-function isMobileEnvironment(documentRef: Document): boolean {
-  const userAgent = documentRef.defaultView?.navigator.userAgent ?? "";
-  return /Mobile|Android|iPhone|iPad|iPod/i.test(userAgent);
-}
-
 /** 根据页面可见性切换活跃与后台限能模式。 */
 function applyVisibilityFrameMode(
   runtime: LayaRuntimeGlobal,
   config: WebGameConfig,
   documentRef: Document,
+  mobileEnvironment: boolean,
 ): void {
   const frameMode = documentRef.hidden
     ? config.engine.idle_frame_mode
-    : config.engine.active_frame_mode;
+    : mobileEnvironment
+      ? config.engine.mobile_active_frame_mode
+      : config.engine.active_frame_mode;
   runtime.Render.throttleMode = resolveThrottleMode(frameMode);
+}
+
+/** 返回当前 CSS 视口是否为横屏，不受 Laya 逻辑舞台尺寸影响。 */
+function isLandscapeViewport(documentRef: Document): boolean {
+  const windowRef = documentRef.defaultView;
+  return windowRef?.matchMedia("(orientation: landscape)").matches ?? false;
+}
+
+/** 按移动端方向返回配置化设计尺寸，横屏时交换宽高。 */
+function resolveDesignSize(
+  config: WebGameConfig,
+  mobileEnvironment: boolean,
+  landscape: boolean,
+): { readonly width: number; readonly height: number } {
+  if (!mobileEnvironment) {
+    return {
+      width: config.engine.design_width,
+      height: config.engine.design_height,
+    };
+  }
+  return landscape
+    ? {
+        width: config.engine.mobile_design_height,
+        height: config.engine.mobile_design_width,
+      }
+    : {
+        width: config.engine.mobile_design_width,
+        height: config.engine.mobile_design_height,
+      };
 }
 
 /** 加载官方运行库，并按已校验配置初始化二维 H5 舞台。 */
@@ -111,12 +138,19 @@ export async function bootLayaEngine(
 ): Promise<LayaEngineHandle> {
   const runtime = await loadLayaRuntime(config.engine, documentRef);
   runtime.Config.useRetinalCanvas = config.engine.retina_canvas;
-  const screenMode = isMobileEnvironment(documentRef)
+  const mobileEnvironment = isMobileEnvironment(documentRef, config.responsive);
+  let mobileLandscape = mobileEnvironment && isLandscapeViewport(documentRef);
+  const screenMode = mobileEnvironment
     ? config.engine.mobile_screen_mode
     : config.engine.desktop_screen_mode;
+  const designSize = resolveDesignSize(
+    config,
+    mobileEnvironment,
+    mobileLandscape,
+  );
   await runtime.init({
-    designWidth: config.engine.design_width,
-    designHeight: config.engine.design_height,
+    designWidth: designSize.width,
+    designHeight: designSize.height,
     scaleMode: resolveScaleMode(runtime, config.engine.scale_mode),
     screenMode: resolveScreenMode(runtime, screenMode),
     alignH: resolveHorizontalAlignment(
@@ -127,17 +161,46 @@ export async function bootLayaEngine(
     backgroundColor: config.theme.background,
   });
   runtime.stage.bgColor = config.theme.background;
+  documentRef.body.dataset.gameDevice = mobileEnvironment ? "mobile" : "desktop";
+  documentRef.body.dataset.gameOrientation = mobileLandscape
+    ? "landscape"
+    : "portrait";
+
+  const orientationQuery = documentRef.defaultView?.matchMedia(
+    "(orientation: landscape)",
+  ) ?? null;
+
+  /** 旋转手机后交换设计宽高，使触控尺寸和字号不随方向缩小。 */
+  const handleOrientationChange = (): void => {
+    if (!mobileEnvironment || orientationQuery === null) {
+      return;
+    }
+    const nextLandscape = orientationQuery.matches;
+    if (nextLandscape === mobileLandscape) {
+      return;
+    }
+    mobileLandscape = nextLandscape;
+    const nextSize = resolveDesignSize(config, true, mobileLandscape);
+    runtime.stage.size(nextSize.width, nextSize.height);
+    documentRef.body.dataset.gameOrientation = mobileLandscape
+      ? "landscape"
+      : "portrait";
+  };
 
   /** 在可见性变化时重新应用限能配置。 */
   const handleVisibilityChange = (): void => {
-    applyVisibilityFrameMode(runtime, config, documentRef);
+    applyVisibilityFrameMode(runtime, config, documentRef, mobileEnvironment);
   };
-  applyVisibilityFrameMode(runtime, config, documentRef);
+  applyVisibilityFrameMode(runtime, config, documentRef, mobileEnvironment);
   documentRef.addEventListener("visibilitychange", handleVisibilityChange);
+  orientationQuery?.addEventListener("change", handleOrientationChange);
 
   /** 释放本层注册的浏览器生命周期监听。 */
   const dispose = (): void => {
     documentRef.removeEventListener("visibilitychange", handleVisibilityChange);
+    orientationQuery?.removeEventListener("change", handleOrientationChange);
+    delete documentRef.body.dataset.gameDevice;
+    delete documentRef.body.dataset.gameOrientation;
   };
 
   return { config, runtime, stage: runtime.stage, dispose };

@@ -5,18 +5,24 @@
     "version": "3.4.0",
     "design_width": 750,
     "design_height": 1334,
+    "mobile_design_width": 600,
+    "mobile_design_height": 1067,
     "scale_mode": "fixedauto",
     "desktop_screen_mode": "none",
-    "mobile_screen_mode": "vertical",
+    "mobile_screen_mode": "none",
     "align_horizontal": "center",
     "align_vertical": "middle",
     "retina_canvas": false,
     "active_frame_mode": "fast",
+    "mobile_active_frame_mode": "mouse",
     "idle_frame_mode": "slow"
   },
   "responsive": {
     "mobile_max_stage_width": 900,
     "compact_max_stage_height": 1050,
+    "mobile_max_css_short_edge": 1024,
+    "resize_debounce_ms": 120,
+    "keyboard_resize_settle_ms": 180,
     "safe_area_fallback": {
       "top": 0,
       "right": 0,
@@ -24,14 +30,18 @@
       "left": 0
     },
     "quality_viewports": [
-      {"id": "desktop", "width": 1440, "height": 900},
-      {"id": "mobile", "width": 390, "height": 844},
-      {"id": "small_mobile", "width": 360, "height": 640},
-      {"id": "tablet", "width": 768, "height": 1024}
+      {"id": "desktop", "width": 1440, "height": 900, "mobile": false, "touch": false, "device_scale_factor": 1},
+      {"id": "minimum_mobile", "width": 320, "height": 568, "mobile": true, "touch": true, "device_scale_factor": 2},
+      {"id": "small_mobile", "width": 360, "height": 640, "mobile": true, "touch": true, "device_scale_factor": 2},
+      {"id": "mobile", "width": 390, "height": 844, "mobile": true, "touch": true, "device_scale_factor": 3},
+      {"id": "large_mobile", "width": 430, "height": 932, "mobile": true, "touch": true, "device_scale_factor": 3},
+      {"id": "mobile_landscape", "width": 844, "height": 390, "mobile": true, "touch": true, "device_scale_factor": 3},
+      {"id": "tablet", "width": 768, "height": 1024, "mobile": true, "touch": true, "device_scale_factor": 2}
     ]
   },
   "assets": {
     "cover": "assets/cover_art.png",
+    "mobile_cover": "assets/cover_art.webp",
     "cover_width": 1280,
     "cover_height": 720,
     "skins": {
@@ -137,6 +147,23 @@
         "description_width": 0,
         "description_height": 0
       },
+      "mobile_landscape": {
+        "horizontal_alignment": "center",
+        "vertical_alignment": "bottom",
+        "content_left": 44,
+        "content_top": 36,
+        "menu_top": 270,
+        "menu_bottom": 24,
+        "menu_width": 340,
+        "menu_columns": 2,
+        "menu_column_gap": 22,
+        "menu_row_gap": 14,
+        "menu_row_step_x": 0,
+        "description_left": 0,
+        "description_top": 0,
+        "description_width": 0,
+        "description_height": 0
+      },
       "image_dark_edge_ratio": 0.58,
       "image_dark_solid_ratio": 0.55,
       "image_dark_fade_steps": 96
@@ -192,10 +219,19 @@
     "base_url": "http://127.0.0.1:4173",
     "web_server_command": "npm run preview",
     "server_timeout_ms": 120000,
+    "worker_count": 1,
     "action_timeout_ms": 10000,
     "navigation_timeout_ms": 30000,
     "screenshot_directory": "artifacts/qa",
-    "trace_mode": "retain-on-failure"
+    "trace_mode": "retain-on-failure",
+    "mobile_user_agent": "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+    "minimum_touch_css_px": 44,
+    "keyboard_simulated_height_px": 240,
+    "keyboard_minimum_viewport_height_px": 280,
+    "scroll_drag_ratio": 0.6,
+    "scroll_drag_steps": 8,
+    "scroll_max_attempts": 6,
+    "scroll_settle_ms": 80
   },
   "navigation": [
     {"id": "dashboard", "label": "指挥台", "icon": "▰"},

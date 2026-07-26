@@ -72,6 +72,7 @@ export class ScrollRegion {
     this.viewport.offAll();
     this.runtime.stage.off(this.runtime.Event.MOUSE_MOVE, this, this.handleMove);
     this.runtime.stage.off(this.runtime.Event.MOUSE_UP, this, this.handleUp);
+    this.runtime.stage.off(this.runtime.Event.MOUSE_OUT, this, this.handleUp);
     this.viewport.destroy(true);
   }
 
@@ -83,6 +84,7 @@ export class ScrollRegion {
     this.viewport.on(this.runtime.Event.MOUSE_WHEEL, this, this.handleWheel);
     this.runtime.stage.on(this.runtime.Event.MOUSE_MOVE, this, this.handleMove);
     this.runtime.stage.on(this.runtime.Event.MOUSE_UP, this, this.handleUp);
+    this.runtime.stage.on(this.runtime.Event.MOUSE_OUT, this, this.handleUp);
   }
 
   /**

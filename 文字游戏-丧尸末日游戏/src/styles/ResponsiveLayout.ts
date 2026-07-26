@@ -1,4 +1,5 @@
 import type { GameUiConfig, SafeAreaInsets } from "./GameTheme";
+import { isMobileEnvironment } from "../services/DeviceCapabilityResolver";
 
 /**
  * 当前舞台对应的响应式页面几何信息。
@@ -7,6 +8,7 @@ export interface ResponsiveLayout {
   readonly stageWidth: number;
   readonly stageHeight: number;
   readonly isMobile: boolean;
+  readonly isLandscape: boolean;
   readonly isCompact: boolean;
   readonly safeArea: SafeAreaInsets;
   readonly outerPadding: number;
@@ -75,7 +77,11 @@ export function resolveResponsiveLayout(
       stageWidth,
       stageHeight,
     );
-  const isMobile = stageWidth <= config.responsive.mobile_max_stage_width;
+  const browserDocument = (globalThis as { document?: Document }).document;
+  const isMobile =
+    (browserDocument !== undefined &&
+      isMobileEnvironment(browserDocument, config.responsive)) ||
+    stageWidth <= config.responsive.mobile_max_stage_width;
   const isCompact = stageHeight <= config.responsive.compact_max_stage_height;
   const layout = isMobile ? config.layout.mobile : config.layout.desktop;
   const outerPadding = layout.outer_padding;
@@ -97,6 +103,7 @@ export function resolveResponsiveLayout(
     stageWidth,
     stageHeight,
     isMobile,
+    isLandscape: stageWidth > stageHeight,
     isCompact,
     safeArea: resolvedSafeArea,
     outerPadding,

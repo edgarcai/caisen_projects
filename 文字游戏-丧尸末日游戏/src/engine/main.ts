@@ -3,6 +3,7 @@ import {
   resolveWebConfigUrl,
 } from "../config/configLoader";
 import type { WebGameConfig } from "../config/types";
+import { isMobileEnvironment } from "../services/DeviceCapabilityResolver";
 import { bootLayaEngine, type LayaEngineHandle } from "./layaBootstrap";
 
 export const LAYA_ENGINE_READY_EVENT = "shelter:laya-engine-ready";
@@ -23,6 +24,31 @@ function applyDocumentTheme(config: WebGameConfig, documentRef: Document): void 
   documentRef.documentElement.style.backgroundColor = config.theme.background;
   documentRef.body.style.backgroundColor = config.theme.background;
   documentRef.body.style.color = config.theme.text;
+  documentRef.documentElement.style.colorScheme = "dark";
+  const themeMeta = documentRef.querySelector<HTMLMetaElement>(
+    'meta[name="theme-color"]',
+  );
+  if (themeMeta !== null) {
+    themeMeta.content = config.theme.background;
+  }
+}
+
+/** 在运行库加载期间并行预热当前设备所需的封面资源。 */
+function preloadCoverArtwork(
+  config: WebGameConfig,
+  documentRef: Document,
+): void {
+  const source = isMobileEnvironment(documentRef, config.responsive)
+    ? config.assets.mobile_cover
+    : config.assets.cover;
+  const sourceUrl = new URL(source, documentRef.baseURI).toString();
+  const preload = documentRef.createElement("link");
+  preload.rel = "preload";
+  preload.as = "image";
+  preload.href = sourceUrl;
+  preload.setAttribute("fetchpriority", "high");
+  preload.dataset.gameCoverPreload = "true";
+  documentRef.head.append(preload);
 }
 
 /** 根据当前舞台尺寸居中引擎就绪文字。 */
@@ -78,6 +104,7 @@ async function main(documentRef: Document = document): Promise<void> {
     const configUrl = resolveWebConfigUrl(documentRef);
     const config = await loadWebConfig(configUrl);
     applyDocumentTheme(config, documentRef);
+    preloadCoverArtwork(config, documentRef);
     statusElement.textContent = config.texts.loading;
     const engineHandle = await bootLayaEngine(config, documentRef);
     createBootLabel(engineHandle.runtime, config);

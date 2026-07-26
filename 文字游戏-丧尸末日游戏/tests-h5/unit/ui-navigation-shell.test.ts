@@ -11,6 +11,7 @@ import { DelayedHoverIntent } from "../../src/ui/interactions/DelayedHoverIntent
 import { PageStack } from "../../src/ui/navigation/PageStack";
 import {
   buildCoverMenuItems,
+  resolveCoverArtwork,
   resolveCoverMenuItemGeometry,
 } from "../../src/ui/pages/CoverPage";
 import {
@@ -131,6 +132,36 @@ describe("六入口响应式封面契约", () => {
     expect(mobileSecond.x).toBe(mobileFirst.x);
     expect(mobileSecond.y).toBeGreaterThan(mobileFirst.y);
     expect(mobileExit.y).toBeGreaterThan(mobileSecond.y);
+    expect(resolveCoverArtwork(webConfig, desktop)).toBe(webConfig.assets.cover);
+    expect(resolveCoverArtwork(webConfig, mobile)).toBe(
+      webConfig.assets.mobile_cover,
+    );
+  });
+
+  it("手机横屏使用两列矩形菜单且完整落在安全区域内", () => {
+    const viewport = webConfig.responsive.quality_viewports.find(
+      (candidate) => candidate.id === "mobile_landscape",
+    );
+    if (viewport === undefined) {
+      throw new Error("配置缺少手机横屏质量视口。");
+    }
+    const landscape = resolveResponsiveLayout(
+      viewport.width,
+      viewport.height,
+      webConfig,
+      zeroSafeArea,
+    );
+    const itemCount = buildCoverMenuItems(webConfig, false, createActions()).length;
+    const first = resolveCoverMenuItemGeometry(webConfig, landscape, 0, itemCount);
+    const second = resolveCoverMenuItemGeometry(webConfig, landscape, 1, itemCount);
+    const exit = resolveCoverMenuItemGeometry(webConfig, landscape, 5, itemCount);
+
+    expect(landscape.isMobile).toBe(true);
+    expect(landscape.isLandscape).toBe(true);
+    expect(first.shape).toBe("rectangle");
+    expect(second.x).toBeGreaterThan(first.x);
+    expect(second.y).toBe(first.y);
+    expect(exit.y + exit.height).toBeLessThanOrEqual(landscape.stageHeight);
   });
 
   it("悬停满配置化 800ms 才发布简介，离开立即清空", () => {

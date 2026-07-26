@@ -26,6 +26,8 @@ export interface EngineConfig {
   readonly version: string;
   readonly design_width: number;
   readonly design_height: number;
+  readonly mobile_design_width: number;
+  readonly mobile_design_height: number;
   readonly scale_mode: EngineScaleMode;
   readonly desktop_screen_mode: EngineScreenMode;
   readonly mobile_screen_mode: EngineScreenMode;
@@ -33,6 +35,7 @@ export interface EngineConfig {
   readonly align_vertical: EngineVerticalAlignment;
   readonly retina_canvas: boolean;
   readonly active_frame_mode: EngineFrameMode;
+  readonly mobile_active_frame_mode: EngineFrameMode;
   readonly idle_frame_mode: EngineFrameMode;
 }
 
@@ -49,12 +52,18 @@ export interface QualityViewport {
   readonly id: string;
   readonly width: number;
   readonly height: number;
+  readonly mobile: boolean;
+  readonly touch: boolean;
+  readonly device_scale_factor: number;
 }
 
 /** 响应式断点与质量视口配置。 */
 export interface ResponsiveConfig {
   readonly mobile_max_stage_width: number;
   readonly compact_max_stage_height: number;
+  readonly mobile_max_css_short_edge: number;
+  readonly resize_debounce_ms: number;
+  readonly keyboard_resize_settle_ms: number;
   readonly safe_area_fallback: SafeAreaInsets;
   readonly quality_viewports: readonly QualityViewport[];
 }
@@ -72,6 +81,7 @@ export interface SkinConfig {
 /** 引擎直接使用的公共资源路径。 */
 export interface AssetConfig {
   readonly cover: string;
+  readonly mobile_cover: string;
   readonly cover_width: number;
   readonly cover_height: number;
   readonly skins: SkinConfig;
@@ -166,6 +176,7 @@ export interface CoverMenuLayoutConfig {
 export interface CoverLayoutConfig {
   readonly desktop: CoverMenuLayoutConfig;
   readonly mobile: CoverMenuLayoutConfig;
+  readonly mobile_landscape: CoverMenuLayoutConfig;
   readonly image_dark_edge_ratio: number;
   readonly image_dark_solid_ratio: number;
   readonly image_dark_fade_steps: number;

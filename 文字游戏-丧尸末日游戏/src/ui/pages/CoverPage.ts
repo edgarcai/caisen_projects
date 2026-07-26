@@ -48,6 +48,14 @@ export interface CoverMenuItemGeometry {
   readonly shape: "rectangle" | "parallelogram";
 }
 
+/** 根据当前响应式布局选择桌面 PNG 或轻量手机封面。 */
+export function resolveCoverArtwork(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+): string {
+  return layout.isMobile ? config.assets.mobile_cover : config.assets.cover;
+}
+
 /**
  * 按固定顺序构造六个封面入口，确保退出永远位于最低优先级位置。
  */
@@ -237,7 +245,7 @@ export class CoverPage implements PageView {
     };
 
     artwork.on(runtime.Event.LOADED, artwork, layoutArtwork);
-    artwork.skin = config.assets.cover;
+    artwork.skin = resolveCoverArtwork(config, layout);
     layoutArtwork();
   }
 
@@ -431,6 +439,9 @@ function resolveCoverMenuLayout(
   config: GameUiConfig,
   layout: ResponsiveLayout,
 ): CoverMenuLayoutTokens {
+  if (layout.isMobile && layout.isLandscape) {
+    return config.layout.cover.mobile_landscape;
+  }
   return layout.isMobile
     ? config.layout.cover.mobile
     : config.layout.cover.desktop;

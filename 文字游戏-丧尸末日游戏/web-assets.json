@@ -5,6 +5,10 @@
       "target": "public/assets/cover_art.png"
     },
     {
+      "source": "assets/cover_art.webp",
+      "target": "public/assets/cover_art.webp"
+    },
+    {
       "source": "assets/ui/menu_button_idle.png",
       "target": "public/assets/ui/menu_button_idle.png"
     },

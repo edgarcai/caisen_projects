@@ -9,6 +9,7 @@ import type {
 } from "./laya/LayaRuntime";
 import { PageStack } from "./navigation/PageStack";
 import type { GameRoute } from "./navigation/PageStack";
+import { DeferredResizeCoordinator } from "./interactions/DeferredResizeCoordinator";
 import {
   resolveExpeditionEntryScreen,
   resolveExpeditionProgressScreen,
@@ -86,6 +87,8 @@ export class GameShell {
   private browserGuardInstalled: boolean;
   private exitVerificationTimer: ReturnType<typeof setTimeout> | null;
   private connectionTimer: ReturnType<typeof setTimeout> | null;
+  private readonly resizeCoordinator: DeferredResizeCoordinator;
+  private viewportListenersInstalled: boolean;
   private expeditionDraft: ExpeditionDraft;
 
   /**
@@ -123,6 +126,15 @@ export class GameShell {
     this.browserGuardInstalled = false;
     this.exitVerificationTimer = null;
     this.connectionTimer = null;
+    this.resizeCoordinator = new DeferredResizeCoordinator(
+      {
+        debounceMs: config.responsive.resize_debounce_ms,
+        keyboardSettleMs: config.responsive.keyboard_resize_settle_ms,
+      },
+      this.hasActiveTextEntry,
+      this.commitResize,
+    );
+    this.viewportListenersInstalled = false;
     this.expeditionDraft = emptyExpeditionDraft();
   }
 
@@ -139,6 +151,7 @@ export class GameShell {
     this.stage.on(this.runtime.Event.RESIZE, this, this.handleResize);
     this.stage.on(this.runtime.Event.KEY_DOWN, this, this.handleKeyDown);
     this.installBrowserBackGuard();
+    this.installViewportListeners();
     this.unsubscribe = this.port.subscribe(this.handleSnapshot);
     const [snapshot, canLoad] = await Promise.all([
       Promise.resolve(this.port.getSnapshot()),
@@ -158,6 +171,8 @@ export class GameShell {
     this.stage.off(this.runtime.Event.RESIZE, this, this.handleResize);
     this.stage.off(this.runtime.Event.KEY_DOWN, this, this.handleKeyDown);
     this.removeBrowserBackGuard();
+    this.removeViewportListeners();
+    this.resizeCoordinator.destroy();
     this.clearExitVerificationTimer();
     this.clearConnectionTimer();
     this.destroyRenderedPages();
@@ -183,7 +198,7 @@ export class GameShell {
    */
   private readonly handleSnapshot = (snapshot: GameUiSnapshot): void => {
     this.snapshot = snapshot;
-    if (this.mounted) {
+    if (this.mounted && !this.executing) {
       this.render(true);
     }
   };
@@ -192,6 +207,23 @@ export class GameShell {
    * 舞台尺寸变化时重新计算断点和安全区。
    */
   private readonly handleResize = (): void => {
+    this.resizeCoordinator.request();
+  };
+
+  /** 原生输入结束后等待软键盘动画稳定，再执行被延迟的刷新。 */
+  private readonly handleTextEntryFocusOut = (): void => {
+    this.resizeCoordinator.settleAfterTextEntry();
+  };
+
+  /** 返回当前文档是否正由原生输入控件持有焦点。 */
+  private readonly hasActiveTextEntry = (): boolean => {
+    const browserWindow = getBrowserWindow();
+    return browserWindow !== null &&
+      isTextEntryElement(browserWindow.document.activeElement);
+  };
+
+  /** 在尺寸事件稳定且无原生输入焦点时重建当前响应式页面。 */
+  private readonly commitResize = (): void => {
     if (this.mounted) {
       this.render(true);
     }
@@ -262,7 +294,7 @@ export class GameShell {
     }
     const topIndex = this.renderedPages.length - 1;
     this.renderedPages.forEach((entry, index) => {
-      entry.view.root.visible = true;
+      entry.view.root.visible = index >= Math.max(0, topIndex - 1);
       entry.view.root.mouseEnabled = index === topIndex;
       entry.view.root.zOrder = index;
     });
@@ -1571,6 +1603,40 @@ export class GameShell {
     this.browserGuardInstalled = false;
   }
 
+  /** 监听可视视口和原生输入焦点，覆盖手机软键盘的独立 resize 链路。 */
+  private installViewportListeners(): void {
+    const browserWindow = getBrowserWindow();
+    if (browserWindow === null || this.viewportListenersInstalled) {
+      return;
+    }
+    browserWindow.document.addEventListener(
+      "focusout",
+      this.handleTextEntryFocusOut,
+    );
+    browserWindow.visualViewport?.addEventListener(
+      "resize",
+      this.handleResize,
+    );
+    this.viewportListenersInstalled = true;
+  }
+
+  /** 移除手机视口与输入焦点监听，避免热重载留下重复回调。 */
+  private removeViewportListeners(): void {
+    const browserWindow = getBrowserWindow();
+    if (browserWindow === null || !this.viewportListenersInstalled) {
+      return;
+    }
+    browserWindow.document.removeEventListener(
+      "focusout",
+      this.handleTextEntryFocusOut,
+    );
+    browserWindow.visualViewport?.removeEventListener(
+      "resize",
+      this.handleResize,
+    );
+    this.viewportListenersInstalled = false;
+  }
+
   /**
    * 返回配置中的底部导航标签。
    */
@@ -1687,6 +1753,17 @@ function isEscapeEvent(event: unknown): boolean {
  */
 function getBrowserWindow(): Window | null {
   return (globalThis as { window?: Window }).window ?? null;
+}
+
+/** 判断当前活动元素是否为会唤起手机软键盘的文本输入控件。 */
+function isTextEntryElement(element: Element | null): boolean {
+  if (element === null) {
+    return false;
+  }
+  const tagName = element.tagName.toLowerCase();
+  return tagName === "input" ||
+    tagName === "textarea" ||
+    element.getAttribute("contenteditable") === "true";
 }
 
 /** 创建一份不共享可变容器的空远征整备草稿。 */
