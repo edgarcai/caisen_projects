@@ -40,6 +40,12 @@ const SCREEN_MODES = ["none", "horizontal", "vertical"] as const;
 const HORIZONTAL_ALIGNMENTS = ["left", "center", "right"] as const;
 const VERTICAL_ALIGNMENTS = ["top", "middle", "bottom"] as const;
 const FRAME_MODES = ["fast", "slow", "mouse", "sleep"] as const;
+const NAVIGATION_PLACEMENTS = [
+  "mobile_bottom",
+  "mobile_header",
+  "desktop_header",
+] as const;
+const NAVIGATION_GAME_MODES = ["single", "multiplayer", "story"] as const;
 const WEB_EXIT_STRATEGIES = [
   "close_only",
   "history_back",
@@ -121,6 +127,7 @@ const COVER_LAYOUT_KEYS = [
 const DESKTOP_LAYOUT_KEYS = [
   "outer_padding",
   "header_height",
+  "header_navigation_width",
   "left_rail_width",
   "right_rail_width",
   "column_gap",
@@ -133,6 +140,7 @@ const DESKTOP_LAYOUT_KEYS = [
 const MOBILE_LAYOUT_KEYS = [
   "outer_padding",
   "header_height",
+  "header_navigation_width",
   "bottom_navigation_height",
   "panel_padding",
   "section_gap",
@@ -482,14 +490,9 @@ function parseResponsive(value: unknown): ResponsiveConfig {
     "responsive.quality_viewports",
   );
   return {
-    mobile_max_stage_width: expectNumber(
-      source.mobile_max_stage_width,
-      "responsive.mobile_max_stage_width",
-      1,
-    ),
-    compact_max_stage_height: expectNumber(
-      source.compact_max_stage_height,
-      "responsive.compact_max_stage_height",
+    desktop_min_stage_width: expectNumber(
+      source.desktop_min_stage_width,
+      "responsive.desktop_min_stage_width",
       1,
     ),
     mobile_max_css_short_edge: expectNumber(
@@ -703,7 +706,48 @@ function parseNavigation(value: unknown, index: number): NavigationConfig {
     id: expectString(source.id, `${path}.id`),
     label: expectString(source.label, `${path}.label`),
     icon: expectString(source.icon, `${path}.icon`),
+    placements: parseNavigationEnumArray(
+      source.placements,
+      NAVIGATION_PLACEMENTS,
+      `${path}.placements`,
+    ),
+    modes: parseNavigationEnumArray(
+      source.modes,
+      NAVIGATION_GAME_MODES,
+      `${path}.modes`,
+    ),
   };
+}
+
+/** 解析非空、无重复的局内导航枚举数组。 */
+function parseNavigationEnumArray<const TValues extends readonly string[]>(
+  value: unknown,
+  supportedValues: TValues,
+  path: string,
+): readonly TValues[number][] {
+  const entries = expectArray(value, path).map((entry, index) =>
+    expectEnum(entry, supportedValues, `${path}[${String(index)}]`),
+  );
+  if (entries.length === 0) {
+    throw new WebConfigError(`${path} 至少需要一个值`);
+  }
+  if (new Set(entries).size !== entries.length) {
+    throw new WebConfigError(`${path} 不能包含重复值`);
+  }
+  return entries;
+}
+
+/** 解析局内导航并拒绝重复稳定 ID。 */
+function parseNavigationList(value: unknown): readonly NavigationConfig[] {
+  const navigation = expectArray(value, "navigation").map(parseNavigation);
+  const ids = new Set<string>();
+  for (const item of navigation) {
+    if (ids.has(item.id)) {
+      throw new WebConfigError(`navigation 出现重复 ID：${item.id}`);
+    }
+    ids.add(item.id);
+  }
+  return navigation;
 }
 
 /** 读取非空字符串数组。 */
@@ -786,7 +830,7 @@ export function parseWebGameConfig(value: unknown): WebGameConfig {
     layout: parseLayout(source.layout),
     storage: parseStorage(source.storage),
     web_exit: parseWebExit(source.web_exit),
-    navigation: expectArray(source.navigation, "navigation").map(parseNavigation),
+    navigation: parseNavigationList(source.navigation),
     actions: parseWebActions(source.actions),
     action_groups: expectArray(source.action_groups, "action_groups").map(
       parseActionGroup,

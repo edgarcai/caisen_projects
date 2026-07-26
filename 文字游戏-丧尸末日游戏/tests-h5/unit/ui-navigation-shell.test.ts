@@ -5,15 +5,22 @@ import {
   LocalStorageUiSettingsRepository,
   MemoryStorage,
 } from "../../src/infrastructure";
-import { resolveResponsiveLayout } from "../../src/styles/ResponsiveLayout";
+import {
+  resolveResponsiveLayoutFromMetrics,
+  resolveResponsiveLayoutKind,
+  type ResponsiveLayout,
+  type ResponsiveLayoutMetrics,
+} from "../../src/styles/ResponsiveLayout";
 import { resolvePageActionBarGeometry } from "../../src/ui/components/PageActionBar";
 import { DelayedHoverIntent } from "../../src/ui/interactions/DelayedHoverIntent";
 import { PageStack } from "../../src/ui/navigation/PageStack";
 import {
   buildCoverMenuItems,
   resolveCoverArtwork,
+  resolveCoverDescriptionGeometry,
   resolveCoverMenuItemGeometry,
 } from "../../src/ui/pages/CoverPage";
+import { resolvePageScaffoldGeometry } from "../../src/ui/pages/PageView";
 import {
   buildFunctionMenuPrompt,
   createCreditsDocument,
@@ -21,6 +28,19 @@ import {
 
 const webConfig = parseWebGameConfig(webConfigDocument);
 const zeroSafeArea = { top: 0, right: 0, bottom: 0, left: 0 } as const;
+
+/** 使用显式设备能力和安全区构造确定性的响应式测试布局。 */
+function resolveTestLayout(
+  stageWidth: number,
+  stageHeight: number,
+  isMobileDevice: boolean,
+  safeArea: ResponsiveLayoutMetrics["safeArea"] = zeroSafeArea,
+): ResponsiveLayout {
+  return resolveResponsiveLayoutFromMetrics(
+    { stageWidth, stageHeight, isMobileDevice, safeArea },
+    webConfig,
+  );
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -66,6 +86,125 @@ describe("覆盖式 PageStack 路由语义", () => {
   });
 });
 
+describe("手机、紧凑与桌面响应式基础", () => {
+  it("按设备能力和配置化可用宽度稳定解析三种布局", () => {
+    const desktopMinimum = webConfig.responsive.desktop_min_stage_width;
+
+    expect(
+      resolveResponsiveLayoutKind(desktopMinimum, true, desktopMinimum),
+    ).toBe("mobile");
+    expect(
+      resolveResponsiveLayoutKind(desktopMinimum - 1, false, desktopMinimum),
+    ).toBe("compact");
+    expect(
+      resolveResponsiveLayoutKind(desktopMinimum, false, desktopMinimum),
+    ).toBe("desktop");
+
+    const mobile = resolveTestLayout(
+      webConfig.engine.mobile_design_width,
+      webConfig.engine.mobile_design_height,
+      true,
+    );
+    const compact = resolveTestLayout(
+      desktopMinimum - 1,
+      webConfig.engine.design_height,
+      false,
+    );
+    const desktop = resolveTestLayout(
+      desktopMinimum,
+      webConfig.engine.design_height,
+      false,
+    );
+
+    expect(mobile.kind).toBe("mobile");
+    expect(compact.kind).toBe("compact");
+    expect(desktop.kind).toBe("desktop");
+    expect(mobile.usesCompactUi).toBe(true);
+    expect(compact.usesCompactUi).toBe(true);
+    expect(desktop.usesCompactUi).toBe(false);
+  });
+
+  it("左右安全区会参与桌面断点而不是仅扣减内容宽度", () => {
+    const safeArea = {
+      top: 0,
+      right: webConfig.layout.desktop.outer_padding,
+      bottom: 0,
+      left: webConfig.layout.desktop.outer_padding,
+    } as const;
+    const availableWidth = webConfig.responsive.desktop_min_stage_width;
+    const desktop = resolveTestLayout(
+      availableWidth + safeArea.left + safeArea.right,
+      webConfig.engine.design_height,
+      false,
+      safeArea,
+    );
+    const compact = resolveTestLayout(
+      availableWidth + safeArea.left + safeArea.right - 1,
+      webConfig.engine.design_height,
+      false,
+      safeArea,
+    );
+
+    expect(desktop.kind).toBe("desktop");
+    expect(compact.kind).toBe("compact");
+  });
+
+  it("非对称安全区中的二级页面按可用内容范围居中", () => {
+    const safeArea = {
+      top: 0,
+      right: webConfig.layout.desktop.outer_padding,
+      bottom: webConfig.layout.mobile.outer_padding,
+      left: webConfig.controls.minimum_touch_size,
+    } as const;
+    const layout = resolveTestLayout(
+      webConfig.responsive.desktop_min_stage_width +
+        safeArea.left +
+        safeArea.right,
+      webConfig.engine.design_height,
+      false,
+      safeArea,
+    );
+    const geometry = resolvePageScaffoldGeometry(webConfig, layout);
+    const expectedLeft =
+      layout.contentLeft + (layout.contentWidth - geometry.pageWidth) / 2;
+
+    expect(layout.kind).toBe("desktop");
+    expect(geometry.pageLeft).toBe(expectedLeft);
+    expect(geometry.pageLeft).toBeGreaterThanOrEqual(layout.contentLeft);
+    expect(geometry.pageLeft + geometry.pageWidth).toBeLessThanOrEqual(
+      layout.contentLeft + layout.contentWidth,
+    );
+  });
+
+  it("桌面封面简介在配置化最小宽度和安全区内保持完整", () => {
+    const safeArea = {
+      top: webConfig.layout.desktop.outer_padding,
+      right: webConfig.layout.desktop.outer_padding,
+      bottom: 0,
+      left: webConfig.controls.minimum_touch_size,
+    } as const;
+    const stageWidth =
+      webConfig.responsive.desktop_min_stage_width +
+      safeArea.left +
+      safeArea.right;
+    const layout = resolveTestLayout(
+      stageWidth,
+      webConfig.engine.design_height,
+      false,
+      safeArea,
+    );
+    const geometry = resolveCoverDescriptionGeometry(webConfig, layout);
+
+    expect(layout.kind).toBe("desktop");
+    expect(geometry.x).toBe(
+      safeArea.left + webConfig.layout.cover.desktop.description_left,
+    );
+    expect(geometry.x + geometry.width).toBeLessThanOrEqual(
+      stageWidth - safeArea.right,
+    );
+  });
+});
+
 describe("六入口响应式封面契约", () => {
   /** 创建不产生副作用的封面回调夹具。 */
   function createActions() {
@@ -96,17 +235,15 @@ describe("六入口响应式封面契约", () => {
   });
 
   it("桌面使用 PNG 平行四边形网格，手机使用主题色矩形单列", () => {
-    const desktop = resolveResponsiveLayout(
-      1440,
-      900,
-      webConfig,
-      zeroSafeArea,
+    const desktop = resolveTestLayout(
+      webConfig.responsive.desktop_min_stage_width,
+      webConfig.engine.design_height,
+      false,
     );
-    const mobile = resolveResponsiveLayout(
-      750,
-      1334,
-      webConfig,
-      zeroSafeArea,
+    const mobile = resolveTestLayout(
+      webConfig.engine.mobile_design_width,
+      webConfig.engine.mobile_design_height,
+      true,
     );
     const itemCount = buildCoverMenuItems(webConfig, false, createActions()).length;
     const desktopFirst = resolveCoverMenuItemGeometry(webConfig, desktop, 0, itemCount);
@@ -139,24 +276,17 @@ describe("六入口响应式封面契约", () => {
   });
 
   it("手机横屏使用两列矩形菜单且完整落在安全区域内", () => {
-    const viewport = webConfig.responsive.quality_viewports.find(
-      (candidate) => candidate.id === "mobile_landscape",
-    );
-    if (viewport === undefined) {
-      throw new Error("配置缺少手机横屏质量视口。");
-    }
-    const landscape = resolveResponsiveLayout(
-      viewport.width,
-      viewport.height,
-      webConfig,
-      zeroSafeArea,
+    const landscape = resolveTestLayout(
+      webConfig.engine.mobile_design_height,
+      webConfig.engine.mobile_design_width,
+      true,
     );
     const itemCount = buildCoverMenuItems(webConfig, false, createActions()).length;
     const first = resolveCoverMenuItemGeometry(webConfig, landscape, 0, itemCount);
     const second = resolveCoverMenuItemGeometry(webConfig, landscape, 1, itemCount);
     const exit = resolveCoverMenuItemGeometry(webConfig, landscape, 5, itemCount);
 
-    expect(landscape.isMobile).toBe(true);
+    expect(landscape.kind).toBe("mobile");
     expect(landscape.isLandscape).toBe(true);
     expect(first.shape).toBe("rectangle");
     expect(second.x).toBeGreaterThan(first.x);

@@ -1,6 +1,11 @@
 import type { GameUiConfig } from "../../styles/GameTheme";
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
 import { ScrollRegion } from "../components/ScrollRegion";
+import {
+  DashboardNavigationChrome,
+  type DashboardHeaderNavigationGeometry,
+  shouldRenderDashboardMission,
+} from "../components/DashboardNavigationChrome";
 import type { UiFactory } from "../components/UiFactory";
 import type {
   LayaRuntimeLike,
@@ -9,7 +14,6 @@ import type {
 import type {
   GameUiSnapshot,
   UiActionGroupView,
-  UiOptionView,
   UiStatView,
 } from "../ports/GameUiPort";
 import type { PageView } from "./PageView";
@@ -18,8 +22,7 @@ import type { PageView } from "./PageView";
  * 指挥台可触发的导航和领域意图。
  */
 export interface DashboardActions {
-  readonly selectAction: (action: UiOptionView) => void;
-  readonly selectNavigation: (navigationId: string) => void;
+  readonly selectEntry: (entryId: string) => void;
 }
 
 /**
@@ -49,8 +52,21 @@ export class DashboardPage implements PageView {
       layout.stageHeight,
       config.theme.background,
     );
-    this.renderHeader(factory, config, layout, snapshot);
-    if (layout.isMobile) {
+    const navigationChrome = new DashboardNavigationChrome(
+      factory,
+      config,
+      layout,
+      snapshot,
+      actions,
+    );
+    this.renderHeader(
+      factory,
+      config,
+      layout,
+      snapshot,
+      navigationChrome.headerGeometry(),
+    );
+    if (layout.usesCompactUi) {
       this.scrolls = [
         this.renderMobile(
           runtime,
@@ -61,7 +77,6 @@ export class DashboardPage implements PageView {
           actions,
         ),
       ];
-      this.renderBottomNavigation(factory, config, layout, actions);
     } else {
       this.scrolls = this.renderDesktop(
         runtime,
@@ -72,6 +87,7 @@ export class DashboardPage implements PageView {
         actions,
       );
     }
+    navigationChrome.render(this.root);
   }
 
   /**
@@ -91,6 +107,7 @@ export class DashboardPage implements PageView {
     config: GameUiConfig,
     layout: ResponsiveLayout,
     snapshot: GameUiSnapshot,
+    navigationGeometry: DashboardHeaderNavigationGeometry | null,
   ): void {
     const headerLeft = layout.safeArea.left + layout.outerPadding;
     const headerTop = layout.safeArea.top + layout.outerPadding;
@@ -99,6 +116,12 @@ export class DashboardPage implements PageView {
       layout.safeArea.left -
       layout.safeArea.right -
       layout.outerPadding * 2;
+    const textWidth = navigationGeometry === null
+      ? headerWidth
+      : Math.max(
+          config.controls.minimum_touch_size,
+          navigationGeometry.left - headerLeft - config.controls.button_gap,
+        );
     const clockText = snapshot.clock === null
       ? ""
       : `${snapshot.clock.dateLabel}  ${snapshot.clock.timeLabel}`;
@@ -110,7 +133,7 @@ export class DashboardPage implements PageView {
       text: clockText,
       x: headerLeft,
       y: headerTop,
-      width: headerWidth,
+      width: textWidth,
       height: config.typography.section_title_size + layout.sectionGap,
       fontSize: config.typography.section_title_size,
       color: config.theme.accent,
@@ -122,7 +145,7 @@ export class DashboardPage implements PageView {
       text: activePlayerText,
       x: headerLeft,
       y: headerTop + config.typography.section_title_size + layout.sectionGap,
-      width: headerWidth,
+      width: textWidth,
       height: config.typography.body_line_height,
       fontSize: config.typography.body_size,
       color: config.theme.text,
@@ -132,7 +155,7 @@ export class DashboardPage implements PageView {
       text: snapshot.clock?.turnLabel ?? "",
       x: headerLeft,
       y: headerTop,
-      width: headerWidth,
+      width: textWidth,
       height: config.typography.section_title_size + layout.sectionGap,
       fontSize: config.typography.caption_size,
       color: config.theme.muted_text,
@@ -174,19 +197,21 @@ export class DashboardPage implements PageView {
       layout.contentWidth,
       config.layout.mobile.quick_action_columns,
     );
-    cursorY += layout.sectionGap;
-    cursorY = this.renderMission(
-      factory,
-      config,
-      layout,
-      scroll.content,
-      snapshot,
-      0,
-      cursorY,
-      layout.contentWidth,
-      config.layout.mobile.mission_height,
-    );
-    cursorY += layout.sectionGap;
+    if (shouldRenderDashboardMission(snapshot)) {
+      cursorY += layout.sectionGap;
+      cursorY = this.renderMission(
+        factory,
+        config,
+        layout,
+        scroll.content,
+        snapshot,
+        0,
+        cursorY,
+        layout.contentWidth,
+        config.layout.mobile.mission_height,
+      );
+      cursorY += layout.sectionGap;
+    }
     cursorY = this.renderActionGroups(
       factory,
       config,
@@ -291,28 +316,31 @@ export class DashboardPage implements PageView {
     leftScroll.setContentHeight(leftCursor + layout.sectionGap);
     const centerPadding = config.layout.desktop.panel_padding;
     const centerInnerWidth = centerWidth - centerPadding * 2;
-    const missionBottom = this.renderMission(
-      factory,
-      config,
-      layout,
-      centerPanel,
-      snapshot,
-      centerPadding,
-      centerPadding,
-      centerInnerWidth,
-      config.layout.desktop.mission_height,
-    );
+    const missionBottom = shouldRenderDashboardMission(snapshot)
+      ? this.renderMission(
+          factory,
+          config,
+          layout,
+          centerPanel,
+          snapshot,
+          centerPadding,
+          centerPadding,
+          centerInnerWidth,
+          config.layout.desktop.mission_height,
+        )
+      : centerPadding - layout.sectionGap;
+    const logTop = missionBottom + layout.sectionGap;
     this.renderLogs(
       factory,
       config,
       centerPanel,
       snapshot.logs,
       centerPadding,
-      missionBottom + layout.sectionGap,
+      logTop,
       centerInnerWidth,
       Math.max(
         config.layout.desktop.log_min_height,
-        layout.contentHeight - missionBottom - layout.sectionGap - centerPadding,
+        layout.contentHeight - logTop - centerPadding,
       ),
     );
     const rightInnerWidth = rightWidth - panelPadding * 2;
@@ -498,7 +526,7 @@ export class DashboardPage implements PageView {
           height: config.controls.compact_button_height,
           tone: action.tone,
           disabled: action.disabled,
-          onClick: (): void => { actions.selectAction(action); },
+          onClick: (): void => { actions.selectEntry(action.id); },
         });
       });
       const rows = Math.ceil(group.actions.length / safeColumns);
@@ -563,41 +591,4 @@ export class DashboardPage implements PageView {
     });
   }
 
-  /**
-   * 绘制手机端五入口底部导航。
-   */
-  private renderBottomNavigation(
-    factory: UiFactory,
-    config: GameUiConfig,
-    layout: ResponsiveLayout,
-    actions: DashboardActions,
-  ): void {
-    const navigationHeight = config.layout.mobile.bottom_navigation_height;
-    const navigationTop =
-      layout.stageHeight - layout.safeArea.bottom - navigationHeight;
-    const navigationWidth =
-      layout.stageWidth - layout.safeArea.left - layout.safeArea.right;
-    const bar = factory.panel(this.root, {
-      testId: "mobile-bottom-navigation",
-      x: layout.safeArea.left,
-      y: navigationTop,
-      width: navigationWidth,
-      height: navigationHeight + layout.safeArea.bottom,
-      elevated: true,
-    });
-    const itemWidth = navigationWidth / Math.max(1, config.navigation.length);
-    config.navigation.forEach((item, index) => {
-      factory.button(bar, {
-        testId: `bottom-nav-${item.id}`,
-        label: item.label,
-        icon: item.icon,
-        x: index * itemWidth,
-        y: 0,
-        width: itemWidth,
-        height: navigationHeight,
-        tone: item.id === "dashboard" ? "primary" : "default",
-        onClick: (): void => { actions.selectNavigation(item.id); },
-      });
-    });
-  }
 }

@@ -9,6 +9,10 @@ import type {
 } from "./laya/LayaRuntime";
 import { PageStack } from "./navigation/PageStack";
 import type { GameRoute } from "./navigation/PageStack";
+import {
+  resolveDashboardNavigationIntent,
+  type DashboardNavigationIntent,
+} from "./navigation/DashboardNavigationStrategy";
 import { DeferredResizeCoordinator } from "./interactions/DeferredResizeCoordinator";
 import {
   resolveExpeditionEntryScreen,
@@ -301,7 +305,7 @@ export class GameShell {
     const browserWindow = getBrowserWindow();
     if (browserWindow !== null) {
       browserWindow.document.body.dataset.gameScreen = this.navigation.current().screen;
-      browserWindow.document.body.dataset.gameLayout = layout.isMobile ? "mobile" : "desktop";
+      browserWindow.document.body.dataset.gameLayout = layout.kind;
     }
   }
 
@@ -475,8 +479,7 @@ export class GameShell {
       layout,
       snapshot,
       {
-        selectAction: this.handleDashboardAction,
-        selectNavigation: this.handleBottomNavigation,
+        selectEntry: this.handleDashboardEntry,
       },
     );
   }
@@ -893,8 +896,7 @@ export class GameShell {
           void this.saveGame();
         },
         openSettings: (): void => {
-          this.navigation.push({ screen: "settings" });
-          this.render();
+          this.openSettings();
         },
         openRollback: (): void => {
           this.navigation.push({ screen: "rollback_confirm" });
@@ -990,79 +992,52 @@ export class GameShell {
     this.render();
   }
 
-  /**
-   * 处理指挥台行动入口。
-   */
-  private readonly handleDashboardAction = (action: UiOptionView): void => {
-    switch (action.id) {
-      case "story":
-        this.openStory();
-        return;
-      case "explore":
-        this.openExpedition();
-        return;
-      case "shelter_management":
-        this.navigation.push({ screen: "management_categories" });
-        break;
-      case "companions":
-        this.navigation.push({ screen: "companions" });
-        break;
-      case "warehouse":
-        this.navigation.push({ screen: "warehouse" });
-        break;
-      case "research":
-        this.navigation.push({ screen: "research" });
-        break;
-      case "crafting":
-        this.navigation.push({ screen: "crafting" });
-        break;
-      case "expedition":
-        this.openExpedition();
-        return;
-      case "history":
-        this.navigation.push({ screen: "history" });
-        break;
-      case "tutorial":
-        this.navigation.push({ screen: "tutorial" });
-        break;
-      case "save":
-        void this.saveGame();
-        return;
-      case "return_menu":
-        this.navigation.push({ screen: "return_menu_confirm" });
-        break;
-      default:
-        void this.performSupplyAction(action.id);
-        return;
-    }
+  /** 打开手机、电脑和功能菜单共用的设置页面。 */
+  private openSettings(): void {
+    this.navigation.push({ screen: "settings" });
     this.render();
-  };
+  }
 
   /**
-   * 处理手机底部五入口。
+   * 把指挥台行动和导航统一解析为无副作用意图。
    */
-  private readonly handleBottomNavigation = (navigationId: string): void => {
-    switch (navigationId) {
-      case "dashboard":
+  private readonly handleDashboardEntry = (entryId: string): void => {
+    const intent = resolveDashboardNavigationIntent(entryId);
+    if (intent !== null) {
+      this.executeDashboardNavigationIntent(intent);
+    }
+  };
+
+  /** 执行已解析的局内导航意图，并集中维护页面栈副作用。 */
+  private executeDashboardNavigationIntent(
+    intent: DashboardNavigationIntent,
+  ): void {
+    switch (intent.type) {
+      case "reset_dashboard":
         this.navigation.reset({ screen: "dashboard" });
         break;
-      case "story":
+      case "open_story":
         this.openStory();
         return;
-      case "explore":
+      case "open_expedition":
         this.openExpedition();
         return;
-      case "management":
-        this.navigation.push({ screen: "management_categories" });
+      case "push_screen":
+        if (intent.screen === "settings") {
+          this.openSettings();
+          return;
+        }
+        this.navigation.push({ screen: intent.screen });
         break;
-      case "supplies":
-        this.navigation.push({ screen: "supplies" });
-        break;
-      default:
+      case "save_game":
+        void this.saveGame();
+        return;
+      case "perform_supply_action":
+        void this.performSupplyAction(intent.actionId);
         return;
     }
     this.render();
-  };
+  }
 
   /**
    * 处理物资页中的保障行动。

@@ -102,10 +102,26 @@ function applyVisibilityFrameMode(
   runtime.Render.throttleMode = resolveThrottleMode(frameMode);
 }
 
-/** 返回当前 CSS 视口是否为横屏，不受 Laya 逻辑舞台尺寸影响。 */
-function isLandscapeViewport(documentRef: Document): boolean {
+/** 按当前 CSS 视口宽高返回方向，不受 Laya 逻辑舞台尺寸影响。 */
+export function resolveViewportOrientation(
+  documentRef: Document,
+): "landscape" | "portrait" {
   const windowRef = documentRef.defaultView;
-  return windowRef?.matchMedia("(orientation: landscape)").matches ?? false;
+  if (windowRef === null) {
+    return "portrait";
+  }
+  return windowRef.innerWidth > windowRef.innerHeight
+    ? "landscape"
+    : "portrait";
+}
+
+/** 把当前设备类型与视口方向同步到页面诊断数据。 */
+export function syncGameEnvironmentDataset(
+  documentRef: Document,
+  mobileEnvironment: boolean,
+): void {
+  documentRef.body.dataset.gameDevice = mobileEnvironment ? "mobile" : "desktop";
+  documentRef.body.dataset.gameOrientation = resolveViewportOrientation(documentRef);
 }
 
 /** 按移动端方向返回配置化设计尺寸，横屏时交换宽高。 */
@@ -139,7 +155,8 @@ export async function bootLayaEngine(
   const runtime = await loadLayaRuntime(config.engine, documentRef);
   runtime.Config.useRetinalCanvas = config.engine.retina_canvas;
   const mobileEnvironment = isMobileEnvironment(documentRef, config.responsive);
-  let mobileLandscape = mobileEnvironment && isLandscapeViewport(documentRef);
+  let mobileLandscape = mobileEnvironment &&
+    resolveViewportOrientation(documentRef) === "landscape";
   const screenMode = mobileEnvironment
     ? config.engine.mobile_screen_mode
     : config.engine.desktop_screen_mode;
@@ -161,10 +178,7 @@ export async function bootLayaEngine(
     backgroundColor: config.theme.background,
   });
   runtime.stage.bgColor = config.theme.background;
-  documentRef.body.dataset.gameDevice = mobileEnvironment ? "mobile" : "desktop";
-  documentRef.body.dataset.gameOrientation = mobileLandscape
-    ? "landscape"
-    : "portrait";
+  syncGameEnvironmentDataset(documentRef, mobileEnvironment);
 
   const orientationQuery = documentRef.defaultView?.matchMedia(
     "(orientation: landscape)",
@@ -172,7 +186,11 @@ export async function bootLayaEngine(
 
   /** 旋转手机后交换设计宽高，使触控尺寸和字号不随方向缩小。 */
   const handleOrientationChange = (): void => {
-    if (!mobileEnvironment || orientationQuery === null) {
+    if (orientationQuery === null) {
+      return;
+    }
+    syncGameEnvironmentDataset(documentRef, mobileEnvironment);
+    if (!mobileEnvironment) {
       return;
     }
     const nextLandscape = orientationQuery.matches;
@@ -182,9 +200,6 @@ export async function bootLayaEngine(
     mobileLandscape = nextLandscape;
     const nextSize = resolveDesignSize(config, true, mobileLandscape);
     runtime.stage.size(nextSize.width, nextSize.height);
-    documentRef.body.dataset.gameOrientation = mobileLandscape
-      ? "landscape"
-      : "portrait";
   };
 
   /** 在可见性变化时重新应用限能配置。 */

@@ -94,6 +94,7 @@ export interface CoverLayoutTokens {
 export interface DesktopLayoutTokens {
   readonly outer_padding: number;
   readonly header_height: number;
+  readonly header_navigation_width: number;
   readonly left_rail_width: number;
   readonly right_rail_width: number;
   readonly column_gap: number;
@@ -110,6 +111,7 @@ export interface DesktopLayoutTokens {
 export interface MobileLayoutTokens {
   readonly outer_padding: number;
   readonly header_height: number;
+  readonly header_navigation_width: number;
   readonly bottom_navigation_height: number;
   readonly panel_padding: number;
   readonly section_gap: number;
@@ -170,8 +172,7 @@ export interface SafeAreaInsets {
  * UI 使用的响应式配置。
  */
 export interface ResponsiveTokens {
-  readonly mobile_max_stage_width: number;
-  readonly compact_max_stage_height: number;
+  readonly desktop_min_stage_width: number;
   readonly mobile_max_css_short_edge: number;
   readonly resize_debounce_ms: number;
   readonly keyboard_resize_settle_ms: number;
@@ -206,13 +207,22 @@ export interface GameWebExitTokens {
   readonly verification_delay_ms: number;
 }
 
-/**
- * 底部导航项配置。
- */
+/** 局内导航允许出现的位置。 */
+export type NavigationPlacementToken =
+  | "mobile_bottom"
+  | "mobile_header"
+  | "desktop_header";
+
+/** 局内导航允许出现的游戏模式。 */
+export type NavigationModeToken = "single" | "multiplayer" | "story";
+
+/** 带位置和模式白名单的局内导航项。 */
 export interface NavigationToken {
   readonly id: string;
   readonly label: string;
   readonly icon: string;
+  readonly placements: readonly NavigationPlacementToken[];
+  readonly modes: readonly NavigationModeToken[];
 }
 
 /**

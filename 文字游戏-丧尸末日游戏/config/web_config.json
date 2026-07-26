@@ -18,8 +18,7 @@
     "idle_frame_mode": "slow"
   },
   "responsive": {
-    "mobile_max_stage_width": 900,
-    "compact_max_stage_height": 1050,
+    "desktop_min_stage_width": 1220,
     "mobile_max_css_short_edge": 1024,
     "resize_debounce_ms": 120,
     "keyboard_resize_settle_ms": 180,
@@ -36,7 +35,10 @@
       {"id": "mobile", "width": 390, "height": 844, "mobile": true, "touch": true, "device_scale_factor": 3},
       {"id": "large_mobile", "width": 430, "height": 932, "mobile": true, "touch": true, "device_scale_factor": 3},
       {"id": "mobile_landscape", "width": 844, "height": 390, "mobile": true, "touch": true, "device_scale_factor": 3},
-      {"id": "tablet", "width": 768, "height": 1024, "mobile": true, "touch": true, "device_scale_factor": 2}
+      {"id": "tablet", "width": 768, "height": 1024, "mobile": true, "touch": true, "device_scale_factor": 2},
+      {"id": "desktop_compact", "width": 700, "height": 900, "mobile": false, "touch": false, "device_scale_factor": 1},
+      {"id": "desktop_short", "width": 1024, "height": 600, "mobile": false, "touch": false, "device_scale_factor": 1},
+      {"id": "desktop_wide", "width": 2560, "height": 1080, "mobile": false, "touch": false, "device_scale_factor": 1}
     ]
   },
   "assets": {
@@ -171,6 +173,7 @@
     "desktop": {
       "outer_padding": 28,
       "header_height": 92,
+      "header_navigation_width": 390,
       "left_rail_width": 330,
       "right_rail_width": 390,
       "column_gap": 20,
@@ -183,6 +186,7 @@
     "mobile": {
       "outer_padding": 22,
       "header_height": 112,
+      "header_navigation_width": 124,
       "bottom_navigation_height": 104,
       "panel_padding": 22,
       "section_gap": 18,
@@ -234,11 +238,12 @@
     "scroll_settle_ms": 80
   },
   "navigation": [
-    {"id": "dashboard", "label": "指挥台", "icon": "▰"},
-    {"id": "story", "label": "剧情", "icon": "◈"},
-    {"id": "explore", "label": "探索", "icon": "⌖"},
-    {"id": "management", "label": "经营", "icon": "⚒"},
-    {"id": "supplies", "label": "物资", "icon": "▣"}
+    {"id": "dashboard", "label": "指挥台", "icon": "▰", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story"]},
+    {"id": "story", "label": "剧情模式", "icon": "◈", "placements": ["mobile_bottom", "desktop_header"], "modes": ["story"]},
+    {"id": "explore", "label": "探索", "icon": "⌖", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story"]},
+    {"id": "management", "label": "经营", "icon": "⚒", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story"]},
+    {"id": "supplies", "label": "物资", "icon": "▣", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story"]},
+    {"id": "settings", "label": "设置", "icon": "⚙", "placements": ["mobile_header", "desktop_header"], "modes": ["single", "multiplayer", "story"]}
   ],
   "actions": [
     {"id": "warehouse", "label": "避难所仓库", "style": "secondary", "icon": "▣"},
@@ -250,7 +255,7 @@
     {
       "id": "core",
       "label": "核心行动",
-      "action_ids": ["story", "explore", "shelter_management", "companions"]
+      "action_ids": ["explore", "shelter_management", "companions"]
     },
     {
       "id": "supplies",

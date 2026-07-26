@@ -48,12 +48,20 @@ export interface CoverMenuItemGeometry {
   readonly shape: "rectangle" | "parallelogram";
 }
 
+/** 桌面封面悬停简介面板的纯几何结果。 */
+export interface CoverDescriptionGeometry {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 /** 根据当前响应式布局选择桌面 PNG 或轻量手机封面。 */
 export function resolveCoverArtwork(
   config: GameUiConfig,
   layout: ResponsiveLayout,
 ): string {
-  return layout.isMobile ? config.assets.mobile_cover : config.assets.cover;
+  return layout.usesCompactUi ? config.assets.mobile_cover : config.assets.cover;
 }
 
 /**
@@ -144,7 +152,23 @@ export function resolveCoverMenuItemGeometry(
     y: menuTop + row * (config.controls.button_height + menuLayout.menu_row_gap),
     width: menuLayout.menu_width,
     height: config.controls.button_height,
-    shape: layout.isMobile ? "rectangle" : "parallelogram",
+    shape: layout.usesCompactUi ? "rectangle" : "parallelogram",
+  };
+}
+
+/**
+ * 根据配置化桌面封面标尺计算悬停简介面板几何。
+ */
+export function resolveCoverDescriptionGeometry(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+): CoverDescriptionGeometry {
+  const menuLayout = resolveCoverMenuLayout(config, layout);
+  return {
+    x: layout.safeArea.left + menuLayout.description_left,
+    y: layout.safeArea.top + menuLayout.description_top,
+    width: menuLayout.description_width,
+    height: menuLayout.description_height,
   };
 }
 
@@ -175,7 +199,7 @@ export class CoverPage implements PageView {
     this.renderArtwork(runtime, factory, config, layout);
     this.renderScrim(factory, config, layout);
     this.renderBrand(factory, config, layout, brand);
-    this.hoverIntent = layout.isMobile
+    this.hoverIntent = layout.usesCompactUi
       ? null
       : this.createDescriptionIntent(factory, config, layout, actions);
     this.renderMenu(
@@ -316,7 +340,7 @@ export class CoverPage implements PageView {
         ...geometry,
         tone: "primary",
         disabled: item.disabled,
-        skin: layout.isMobile ? undefined : desktopSkin,
+        skin: layout.usesCompactUi ? undefined : desktopSkin,
         onClick: item.action,
       });
       if (this.hoverIntent !== null) {
@@ -339,12 +363,10 @@ export class CoverPage implements PageView {
     actions: CoverPageActions,
   ): DelayedHoverIntent<CoverMenuDescription> {
     const menuLayout = resolveCoverMenuLayout(config, layout);
+    const geometry = resolveCoverDescriptionGeometry(config, layout);
     const panel = factory.panel(this.root, {
       testId: "menu-description",
-      x: layout.safeArea.left + menuLayout.description_left,
-      y: layout.safeArea.top + menuLayout.description_top,
-      width: menuLayout.description_width,
-      height: menuLayout.description_height,
+      ...geometry,
       translucent: true,
     });
     panel.visible = false;
@@ -439,10 +461,10 @@ function resolveCoverMenuLayout(
   config: GameUiConfig,
   layout: ResponsiveLayout,
 ): CoverMenuLayoutTokens {
-  if (layout.isMobile && layout.isLandscape) {
+  if (layout.usesCompactUi && layout.isLandscape) {
     return config.layout.cover.mobile_landscape;
   }
-  return layout.isMobile
+  return layout.usesCompactUi
     ? config.layout.cover.mobile
     : config.layout.cover.desktop;
 }

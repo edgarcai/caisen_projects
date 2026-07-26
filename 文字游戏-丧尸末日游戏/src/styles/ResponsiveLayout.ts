@@ -1,15 +1,26 @@
 import type { GameUiConfig, SafeAreaInsets } from "./GameTheme";
 import { isMobileEnvironment } from "../services/DeviceCapabilityResolver";
 
+/** 响应式界面的三个稳定布局等级。 */
+export type ResponsiveLayoutKind = "mobile" | "compact" | "desktop";
+
+/** 纯布局计算所需的舞台、设备和安全区快照。 */
+export interface ResponsiveLayoutMetrics {
+  readonly stageWidth: number;
+  readonly stageHeight: number;
+  readonly isMobileDevice: boolean;
+  readonly safeArea: SafeAreaInsets;
+}
+
 /**
  * 当前舞台对应的响应式页面几何信息。
  */
 export interface ResponsiveLayout {
   readonly stageWidth: number;
   readonly stageHeight: number;
-  readonly isMobile: boolean;
+  readonly kind: ResponsiveLayoutKind;
+  readonly usesCompactUi: boolean;
   readonly isLandscape: boolean;
-  readonly isCompact: boolean;
   readonly safeArea: SafeAreaInsets;
   readonly outerPadding: number;
   readonly contentLeft: number;
@@ -62,7 +73,84 @@ function parseInset(value: string, fallback: number): number {
 }
 
 /**
- * 根据舞台尺寸和 Web 配置计算手机或桌面布局。
+ * 根据设备类型和安全区内可用宽度解析唯一的响应式布局等级。
+ */
+export function resolveResponsiveLayoutKind(
+  availableStageWidth: number,
+  isMobileDevice: boolean,
+  desktopMinimumStageWidth: number,
+): ResponsiveLayoutKind {
+  if (isMobileDevice) {
+    return "mobile";
+  }
+  return availableStageWidth < desktopMinimumStageWidth
+    ? "compact"
+    : "desktop";
+}
+
+/**
+ * 根据显式舞台指标执行无浏览器副作用的响应式几何计算。
+ */
+export function resolveResponsiveLayoutFromMetrics(
+  metrics: ResponsiveLayoutMetrics,
+  config: GameUiConfig,
+): ResponsiveLayout {
+  const availableStageWidth = Math.max(
+    0,
+    metrics.stageWidth - metrics.safeArea.left - metrics.safeArea.right,
+  );
+  const kind = resolveResponsiveLayoutKind(
+    availableStageWidth,
+    metrics.isMobileDevice,
+    config.responsive.desktop_min_stage_width,
+  );
+  const usesCompactUi = kind !== "desktop";
+  const layout = usesCompactUi ? config.layout.mobile : config.layout.desktop;
+  const outerPadding = layout.outer_padding;
+  const headerHeight = layout.header_height;
+  const footerHeight = usesCompactUi
+    ? config.layout.mobile.bottom_navigation_height
+    : config.layout.desktop.bottom_bar_height;
+  const panelPadding = layout.panel_padding;
+  const sectionGap = layout.section_gap;
+  const horizontalInsets =
+    metrics.safeArea.left + metrics.safeArea.right + outerPadding * 2;
+  const verticalInsets =
+    metrics.safeArea.top +
+    metrics.safeArea.bottom +
+    outerPadding * 2 +
+    headerHeight +
+    footerHeight;
+  return {
+    stageWidth: metrics.stageWidth,
+    stageHeight: metrics.stageHeight,
+    kind,
+    usesCompactUi,
+    isLandscape: metrics.stageWidth > metrics.stageHeight,
+    safeArea: metrics.safeArea,
+    outerPadding,
+    contentLeft: metrics.safeArea.left + outerPadding,
+    contentTop: metrics.safeArea.top + outerPadding + headerHeight,
+    contentWidth: Math.max(
+      config.controls.minimum_touch_size,
+      metrics.stageWidth - horizontalInsets,
+    ),
+    contentHeight: Math.max(
+      config.controls.minimum_touch_size,
+      metrics.stageHeight - verticalInsets,
+    ),
+    headerHeight,
+    footerHeight,
+    panelPadding,
+    sectionGap,
+    optionColumns: usesCompactUi
+      ? config.layout.page.mobile_option_columns
+      : config.layout.page.desktop_option_columns,
+  };
+}
+
+/**
+ * 根据设备能力、舞台尺寸和配置计算手机、紧凑或桌面布局。
  */
 export function resolveResponsiveLayout(
   stageWidth: number,
@@ -78,50 +166,14 @@ export function resolveResponsiveLayout(
       stageHeight,
     );
   const browserDocument = (globalThis as { document?: Document }).document;
-  const isMobile =
-    (browserDocument !== undefined &&
-      isMobileEnvironment(browserDocument, config.responsive)) ||
-    stageWidth <= config.responsive.mobile_max_stage_width;
-  const isCompact = stageHeight <= config.responsive.compact_max_stage_height;
-  const layout = isMobile ? config.layout.mobile : config.layout.desktop;
-  const outerPadding = layout.outer_padding;
-  const headerHeight = layout.header_height;
-  const footerHeight = isMobile
-    ? config.layout.mobile.bottom_navigation_height
-    : config.layout.desktop.bottom_bar_height;
-  const panelPadding = layout.panel_padding;
-  const sectionGap = layout.section_gap;
-  const horizontalInsets =
-    resolvedSafeArea.left + resolvedSafeArea.right + outerPadding * 2;
-  const verticalInsets =
-    resolvedSafeArea.top +
-    resolvedSafeArea.bottom +
-    outerPadding * 2 +
-    headerHeight +
-    footerHeight;
-  return {
+  const isMobileDevice = browserDocument !== undefined &&
+    isMobileEnvironment(browserDocument, config.responsive);
+  return resolveResponsiveLayoutFromMetrics({
     stageWidth,
     stageHeight,
-    isMobile,
-    isLandscape: stageWidth > stageHeight,
-    isCompact,
     safeArea: resolvedSafeArea,
-    outerPadding,
-    contentLeft: resolvedSafeArea.left + outerPadding,
-    contentTop: resolvedSafeArea.top + outerPadding + headerHeight,
-    contentWidth: Math.max(config.controls.minimum_touch_size, stageWidth - horizontalInsets),
-    contentHeight: Math.max(
-      config.controls.minimum_touch_size,
-      stageHeight - verticalInsets,
-    ),
-    headerHeight,
-    footerHeight,
-    panelPadding,
-    sectionGap,
-    optionColumns: isMobile
-      ? config.layout.page.mobile_option_columns
-      : config.layout.page.desktop_option_columns,
-  };
+    isMobileDevice,
+  }, config);
 }
 
 /**

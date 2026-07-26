@@ -19,6 +19,40 @@ export interface PageView {
   destroy(): void;
 }
 
+/** 二级页面表面在舞台中的纯几何结果。 */
+export interface PageScaffoldGeometry {
+  readonly pageLeft: number;
+  readonly pageTop: number;
+  readonly pageWidth: number;
+  readonly pageHeight: number;
+}
+
+/**
+ * 在安全区内容范围内计算二级页面表面位置和尺寸。
+ */
+export function resolvePageScaffoldGeometry(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+): PageScaffoldGeometry {
+  const pageWidth = Math.min(
+    layout.contentWidth,
+    config.layout.page.max_content_width,
+  );
+  const pageLeft =
+    layout.contentLeft + (layout.contentWidth - pageWidth) / 2;
+  const pageTop = layout.usesCompactUi
+    ? layout.safeArea.top + config.layout.mobile.sheet_top_margin
+    : layout.safeArea.top + layout.outerPadding;
+  const pageBottom =
+    layout.stageHeight - layout.safeArea.bottom - layout.outerPadding;
+  const minimumPageHeight =
+    config.layout.page.header_height +
+    config.layout.page.footer_height +
+    config.controls.minimum_touch_size;
+  const pageHeight = Math.max(minimumPageHeight, pageBottom - pageTop);
+  return { pageLeft, pageTop, pageWidth, pageHeight };
+}
+
 /**
  * 二级页面共享的标题栏和可滚动内容区域。
  */
@@ -51,21 +85,8 @@ export class PageScaffold implements PageView {
       layout.stageHeight,
       config.theme.scrim,
     );
-    const pageWidth = Math.min(
-      layout.contentWidth,
-      config.layout.page.max_content_width,
-    );
-    const pageLeft = (layout.stageWidth - pageWidth) / 2;
-    const pageTop = layout.isMobile
-      ? layout.safeArea.top + config.layout.mobile.sheet_top_margin
-      : layout.safeArea.top + layout.outerPadding;
-    const pageBottom =
-      layout.stageHeight - layout.safeArea.bottom - layout.outerPadding;
-    const minimumPageHeight =
-      config.layout.page.header_height +
-      config.layout.page.footer_height +
-      config.controls.minimum_touch_size;
-    const pageHeight = Math.max(minimumPageHeight, pageBottom - pageTop);
+    const { pageLeft, pageTop, pageWidth, pageHeight } =
+      resolvePageScaffoldGeometry(config, layout);
     const surface = factory.panel(this.root, {
       testId: `${testId}-surface`,
       x: pageLeft,

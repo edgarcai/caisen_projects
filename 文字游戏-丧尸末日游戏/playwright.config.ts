@@ -33,7 +33,6 @@ interface QualityConfig {
 
 interface WebTestConfig {
   responsive: {
-    mobile_max_stage_width: number;
     quality_viewports: QualityViewport[];
   };
   quality_assurance: QualityConfig;

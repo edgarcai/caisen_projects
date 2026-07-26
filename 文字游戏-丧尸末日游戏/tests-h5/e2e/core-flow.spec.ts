@@ -44,6 +44,7 @@ interface BrowserGameDebugHandle {
   getCurrentScreen(): string;
   getNodeBounds(nodeName: string): DebugNodeBounds | null;
   getSnapshot(): {
+    readonly mode: "single" | "multiplayer" | "story" | null;
     readonly activePlayer: { readonly name: string } | null;
     readonly clock: { readonly turnLabel: string } | null;
     readonly storyPrompt: { readonly id: string } | null;
@@ -58,11 +59,23 @@ interface BrowserGameDebugHandle {
   };
 }
 
+type GameLayoutKind = "mobile" | "compact" | "desktop";
+type TestGameMode = "single" | "story";
+
 /** 等待 Laya 页面栈进入指定稳定页面。 */
 async function waitForScreen(page: Page, screen: string): Promise<void> {
   await expect.poll(async () => page.evaluate(() =>
     document.body.dataset.gameScreen ?? null,
   )).toBe(screen);
+}
+
+/** 读取并校验页面公布的三态响应式布局标识。 */
+async function readGameLayout(page: Page): Promise<GameLayoutKind> {
+  const layout = await page.evaluate(() => document.body.dataset.gameLayout ?? null);
+  if (layout !== "mobile" && layout !== "compact" && layout !== "desktop") {
+    throw new Error(`游戏布局标识无效：${String(layout)}`);
+  }
+  return layout;
 }
 
 /** 读取页面组合根暴露的只读诊断接口。 */
@@ -214,12 +227,18 @@ async function hoverLayaNode(page: Page, nodeName: string): Promise<void> {
   await page.mouse.move(position.x, position.y);
 }
 
-/** 打开一局全新的单人游戏，验证通讯过场后停留在指挥台。 */
-async function startSingleGame(page: Page, playerName: string): Promise<void> {
-  await clickLayaNode(page, "menu-new-game");
+/** 按指定入口打开新游戏，并验证通讯过场后停留在指挥台。 */
+async function startGame(
+  page: Page,
+  mode: TestGameMode,
+  playerName: string,
+): Promise<void> {
+  const menuNode = mode === "story" ? "menu-story" : "menu-new-game";
+  const placeholder = mode === "story" ? "剧情模式 1" : "新的游戏 1";
+  await clickLayaNode(page, menuNode);
   await waitForScreen(page, "name_input");
   await clickLayaNode(page, "player-name-1");
-  const input = page.getByPlaceholder("新的游戏 1", { exact: true });
+  const input = page.getByPlaceholder(placeholder, { exact: true });
   await expect(input).toBeVisible();
   await input.fill(playerName);
   await input.press("Enter");
@@ -227,6 +246,26 @@ async function startSingleGame(page: Page, playerName: string): Promise<void> {
   await waitForScreen(page, "connection");
   expect(await readLayaNodeBounds(page, "page-connection-title")).not.toBeNull();
   await waitForScreen(page, "dashboard");
+}
+
+/** 打开一局普通单人游戏。 */
+async function startSingleGame(page: Page, playerName: string): Promise<void> {
+  await startGame(page, "single", playerName);
+}
+
+/** 打开一局剧情模式游戏。 */
+async function startStoryGame(page: Page, playerName: string): Promise<void> {
+  await startGame(page, "story", playerName);
+}
+
+/** 根据三态布局返回当前剧情入口的稳定节点名。 */
+function storyEntryNode(layout: GameLayoutKind): string {
+  return layout === "desktop" ? "dashboard-story" : "bottom-nav-story";
+}
+
+/** 根据三态布局返回当前探索入口的稳定节点名。 */
+function explorationEntryNode(layout: GameLayoutKind): string {
+  return layout === "desktop" ? "dashboard-action-explore" : "bottom-nav-explore";
 }
 
 test.beforeEach(async ({ page }) => {
@@ -239,22 +278,22 @@ test.beforeEach(async ({ page }) => {
   await waitForScreen(page, "menu");
 });
 
-test("封面到首个剧情结果使用真实 Canvas 完成闭环", async ({ page }) => {
+test("剧情模式从封面到首个剧情结果使用真实 Canvas 完成闭环", async ({ page }) => {
   const runtimeErrors: string[] = [];
   page.on("pageerror", (error) => {
     runtimeErrors.push(error.message);
   });
 
-  await startSingleGame(page, "测试所长");
-  expect((await readDebugSnapshot(page)).activePlayer?.name).toBe("测试所长");
+  await startStoryGame(page, "测试所长");
+  const startedSnapshot = await readDebugSnapshot(page);
+  expect(startedSnapshot.activePlayer?.name).toBe("测试所长");
+  expect(startedSnapshot.mode).toBe("story");
 
-  const mobileLayout = await page.evaluate(() =>
-    document.body.dataset.gameLayout === "mobile",
-  );
-  await clickLayaNode(
-    page,
-    mobileLayout ? "bottom-nav-story" : "dashboard-action-story",
-  );
+  const layout = await readGameLayout(page);
+  const storyNode = storyEntryNode(layout);
+  expect(await readLayaNodeBounds(page, storyNode)).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "dashboard-mission")).not.toBeNull();
+  await clickLayaNode(page, storyNode);
   await waitForScreen(page, "story");
   await clickScrollableLayaNode(
     page,
@@ -267,6 +306,34 @@ test("封面到首个剧情结果使用真实 Canvas 完成闭环", async ({ pag
   expect(snapshot.storyPrompt?.id).toBe("money_and_secrets");
   expect(snapshot.clock?.turnLabel).toBe("第 1 回合");
   expect(runtimeErrors).toEqual([]);
+});
+
+test("普通模式隐藏剧情任务并可从标题栏设置返回指挥台", async ({ page }) => {
+  await startSingleGame(page, "生存所长");
+
+  const snapshot = await readDebugSnapshot(page);
+  expect(snapshot.mode).toBe("single");
+  expect(await readLayaNodeBounds(page, "dashboard-story")).toBeNull();
+  expect(await readLayaNodeBounds(page, "bottom-nav-story")).toBeNull();
+  expect(await readLayaNodeBounds(page, "dashboard-mission")).toBeNull();
+
+  const settingsBounds = await readLayaNodeBounds(page, "dashboard-settings");
+  expect(settingsBounds).not.toBeNull();
+  expect(settingsBounds?.x).toBeGreaterThanOrEqual(0);
+  expect(settingsBounds?.y).toBeGreaterThanOrEqual(0);
+  expect((settingsBounds?.x ?? 0) + (settingsBounds?.width ?? 0)).toBeLessThanOrEqual(
+    settingsBounds?.stageWidth ?? 0,
+  );
+  expect((settingsBounds?.y ?? 0) + (settingsBounds?.height ?? 0)).toBeLessThanOrEqual(
+    settingsBounds?.stageHeight ?? 0,
+  );
+
+  await clickLayaNode(page, "dashboard-settings");
+  await waitForScreen(page, "settings");
+  expect(await readLayaNodeBounds(page, "page-settings")).not.toBeNull();
+  await clickLayaNode(page, "page-settings-back");
+  await waitForScreen(page, "dashboard");
+  expect(await readLayaNodeBounds(page, "dashboard-settings")).not.toBeNull();
 });
 
 test("ESC 显式存档可在刷新后从封面恢复", async ({ page }) => {
@@ -292,7 +359,7 @@ test("ESC 显式存档可在刷新后从封面恢复", async ({ page }) => {
 
 test("六项封面入口、鸣谢空页与剧情模式姓名页可达", async ({
   page,
-}, testInfo) => {
+}) => {
   const menuNodes = [
     "menu-new-game",
     "menu-load-game",
@@ -305,7 +372,7 @@ test("六项封面入口、鸣谢空页与剧情模式姓名页可达", async ({
     expect(await readLayaNodeBounds(page, nodeName)).not.toBeNull();
   }
 
-  if (testInfo.project.name === "desktop") {
+  if (await readGameLayout(page) === "desktop") {
     expect(await readLayaNodeBounds(page, "menu-description")).toBeNull();
     await hoverLayaNode(page, "menu-story");
     await expect.poll(async () =>
@@ -332,7 +399,7 @@ test("Escape 功能菜单逐层覆盖并保留指挥台显示树", async ({ page
 
   await page.keyboard.press("Escape");
   await waitForScreen(page, "function_menu");
-  expect(await readLayaNodeBounds(page, "dashboard-action-story")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "dashboard-settings")).not.toBeNull();
 
   await clickScrollableLayaNode(
     page,
@@ -354,12 +421,7 @@ test("Escape 功能菜单逐层覆盖并保留指挥台显示树", async ({ page
 
 test("远征从整备、事件到安全返程完成闭环", async ({ page }) => {
   await startSingleGame(page, "远征所长");
-  const mobileLayout = await page.evaluate(() =>
-    document.body.dataset.gameLayout === "mobile",
-  );
-  const exploreNode = mobileLayout
-    ? "bottom-nav-explore"
-    : "dashboard-action-explore";
+  const exploreNode = explorationEntryNode(await readGameLayout(page));
   await clickLayaNode(page, exploreNode);
   await waitForScreen(page, "expedition_prepare");
 
@@ -398,6 +460,33 @@ test("真实手机能力使用移动布局且关键入口满足触控尺寸", as
     qualityConfig.minimum_touch_css_px,
   );
   expect(exitButton?.y).toBeGreaterThan(firstButton?.y ?? 0);
+
+  await startSingleGame(page, "触控所长");
+  const settingsButton = await readCssNodeBounds(page, "dashboard-settings");
+  expect(settingsButton).not.toBeNull();
+  expect(settingsButton?.width).toBeGreaterThanOrEqual(
+    qualityConfig.minimum_touch_css_px,
+  );
+  expect(settingsButton?.height).toBeGreaterThanOrEqual(
+    qualityConfig.minimum_touch_css_px,
+  );
+});
+
+test("700x900 桌面视口使用 compact 指挥台与底部导航", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop_compact", "仅验证配置化 700x900 紧凑桌面");
+
+  expect(await page.evaluate(() => document.body.dataset.gameDevice)).toBe("desktop");
+  expect(await readGameLayout(page)).toBe("compact");
+  await startSingleGame(page, "紧凑所长");
+
+  expect(await readGameLayout(page)).toBe("compact");
+  expect(await readLayaNodeBounds(page, "dashboard-mobile-scroll")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "mobile-bottom-navigation")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "bottom-nav-explore")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "dashboard-settings")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "dashboard-right-rail")).toBeNull();
 });
 
 test("手机软键盘尺寸变化不会清空姓名或夺走输入焦点", async ({ page }) => {

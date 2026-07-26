@@ -110,7 +110,7 @@ function resolveNodeBounds(
   nodeName: string,
 ): GameDebugNodeBounds | null {
   const node = findDisplayNode(runtime, stage, nodeName);
-  if (node === null || !node.visible) {
+  if (node === null || !isDisplayNodeHierarchyVisible(node, stage)) {
     return null;
   }
   const origin = node.localToGlobal(new runtime.Point(0, 0), true, stage);
@@ -122,4 +122,26 @@ function resolveNodeBounds(
     stageWidth: stage.width,
     stageHeight: stage.height,
   };
+}
+
+/**
+ * 检查显示节点到指定根节点的完整父链是否可见且仍然相连。
+ */
+export function isDisplayNodeHierarchyVisible(
+  node: Laya.Sprite,
+  root: Laya.Sprite,
+): boolean {
+  let current: Laya.Sprite | null = node;
+  while (current !== null) {
+    if (!current.visible) {
+      return false;
+    }
+    if (current === root) {
+      return true;
+    }
+    current = (
+      current as unknown as { readonly parent: Laya.Sprite | null }
+    ).parent;
+  }
+  return false;
 }

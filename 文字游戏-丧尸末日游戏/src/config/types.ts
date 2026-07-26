@@ -59,8 +59,7 @@ export interface QualityViewport {
 
 /** 响应式断点与质量视口配置。 */
 export interface ResponsiveConfig {
-  readonly mobile_max_stage_width: number;
-  readonly compact_max_stage_height: number;
+  readonly desktop_min_stage_width: number;
   readonly mobile_max_css_short_edge: number;
   readonly resize_debounce_ms: number;
   readonly keyboard_resize_settle_ms: number;
@@ -186,6 +185,7 @@ export interface CoverLayoutConfig {
 export interface DesktopLayoutConfig {
   readonly outer_padding: number;
   readonly header_height: number;
+  readonly header_navigation_width: number;
   readonly left_rail_width: number;
   readonly right_rail_width: number;
   readonly column_gap: number;
@@ -200,6 +200,7 @@ export interface DesktopLayoutConfig {
 export interface MobileLayoutConfig {
   readonly outer_padding: number;
   readonly header_height: number;
+  readonly header_navigation_width: number;
   readonly bottom_navigation_height: number;
   readonly panel_padding: number;
   readonly section_gap: number;
@@ -252,11 +253,22 @@ export interface WebExitConfig {
   readonly verification_delay_ms: number;
 }
 
-/** 一个稳定的底部导航入口。 */
+/** 局内导航允许出现的位置。 */
+export type NavigationPlacement =
+  | "mobile_bottom"
+  | "mobile_header"
+  | "desktop_header";
+
+/** 局内导航允许出现的游戏模式。 */
+export type NavigationGameMode = "single" | "multiplayer" | "story";
+
+/** 一个稳定且带位置、模式白名单的局内导航入口。 */
 export interface NavigationConfig {
   readonly id: string;
   readonly label: string;
   readonly icon: string;
+  readonly placements: readonly NavigationPlacement[];
+  readonly modes: readonly NavigationGameMode[];
 }
 
 /** 指挥台的配置化行动分组。 */

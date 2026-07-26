@@ -44,6 +44,7 @@ export interface ButtonSpec {
   readonly height: number;
   readonly tone?: UiTone;
   readonly icon?: string;
+  readonly iconPlacement?: "inline" | "stacked";
   readonly disabled?: boolean;
   readonly shape?: "rectangle" | "parallelogram";
   readonly skin?: ButtonSkinSpec;
@@ -403,7 +404,10 @@ export class UiFactory {
     parent: LayaNodeLike,
     spec: ButtonSpec,
   ): LayaTextLike {
-    const iconPrefix = spec.icon === undefined ? "" : `${spec.icon}  `;
+    const iconSeparator = spec.iconPlacement === "stacked" ? "\n" : "  ";
+    const iconPrefix = spec.icon === undefined
+      ? ""
+      : `${spec.icon}${iconSeparator}`;
     return this.text(parent, {
       testId: `${spec.testId}-label`,
       text: `${iconPrefix}${spec.label}`,
@@ -418,7 +422,7 @@ export class UiFactory {
       bold: true,
       align: "center",
       valign: "middle",
-      wordWrap: spec.wordWrap ?? false,
+      wordWrap: spec.wordWrap ?? spec.iconPlacement === "stacked",
     });
   }
 

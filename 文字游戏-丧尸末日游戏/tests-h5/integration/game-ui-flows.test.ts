@@ -25,7 +25,7 @@ function requireAction(snapshot: GameUiSnapshot, actionId: string): UiOptionView
 describe("H5 剧情、战斗与探索命令流", () => {
   it("剧情锁定选择不修改状态，合法选择推进任务且检查点前不自动存档", () => {
     const harness = buildH5Harness();
-    harness.adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
+    harness.adapter.execute({ type: "start_game", mode: "story", playerNames: ["白菜"] });
     const state = requireState(harness.application);
     requirePlayer(state).food = 0;
     const lockedPrompt = harness.adapter.getSnapshot().storyPrompt;
@@ -52,7 +52,7 @@ describe("H5 剧情、战斗与探索命令流", () => {
 
   it("首领路线显示战斗快照，胜利后清空战斗并推进主线", () => {
     const harness = buildH5Harness();
-    harness.adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
+    harness.adapter.execute({ type: "start_game", mode: "story", playerNames: ["白菜"] });
     const state = requireState(harness.application);
     state.story.current_scene_id = "rail_butcher";
     state.story.chapter_id = "chapter_1_hunger_speaks";
@@ -92,7 +92,7 @@ describe("H5 剧情、战斗与探索命令流", () => {
 
   it("成功撤退后的已结束战斗不阻塞经营视图", () => {
     const harness = buildH5Harness();
-    harness.adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
+    harness.adapter.execute({ type: "start_game", mode: "story", playerNames: ["白菜"] });
     const state = requireState(harness.application);
     state.story.current_scene_id = "rail_butcher";
     state.story.chapter_id = "chapter_1_hunger_speaks";
