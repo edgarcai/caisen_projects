@@ -48,11 +48,11 @@ class QualityGateTests(unittest.TestCase):
                         )
         self.assertEqual([], non_ascii)
 
-    def test_concept_art_is_expected_png_size(self) -> None:
-        """主菜单概念图必须存在，并具有配置声明的 PNG 尺寸。"""
+    def test_cover_art_is_expected_png_size(self) -> None:
+        """正式封面图必须存在，并具有配置声明的 PNG 尺寸。"""
 
         config = ConfigLoader.load(CONFIG_PATH)
-        image_path = config.resolve_path("concept_art")
+        image_path = config.resolve_path("cover_art")
         window = config.section("window")
         dimensions = validate_png(
             image_path,
@@ -109,10 +109,65 @@ class QualityGateTests(unittest.TestCase):
     def test_native_tk_buttons_are_replaced_by_cross_platform_widgets(self) -> None:
         """界面不得重新使用会在 macOS Aqua 下丢失背景色的原生按钮。"""
 
-        ui_source = (PROJECT_ROOT / "apocalypse_game" / "ui.py").read_text(
-            encoding="utf-8"
+        ui_source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (PROJECT_ROOT / "apocalypse_game").glob("ui*.py")
         )
         self.assertNotIn("tk.Button(", ui_source)
+
+    def test_ui_contains_no_modal_or_secondary_windows(self) -> None:
+        """所有二级交互必须在主窗口页面栈内完成，不得恢复模态弹窗。"""
+
+        ui_source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (PROJECT_ROOT / "apocalypse_game").glob("ui*.py")
+        )
+        forbidden_tokens = (
+            "messagebox",
+            "simpledialog",
+            "tk.Toplevel",
+            "grab_set",
+            "wait_window",
+        )
+        for token in forbidden_tokens:
+            self.assertNotIn(token, ui_source)
+
+    def test_battle_page_has_no_blocking_loop(self) -> None:
+        """战斗界面必须由按钮逐回合驱动，不能在 UI 回调中阻塞循环。"""
+
+        ui_path = PROJECT_ROOT / "apocalypse_game" / "ui.py"
+        tree = ast.parse(ui_path.read_text(encoding="utf-8"), filename=str(ui_path))
+        battle_method = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "_run_battle"
+        )
+        self.assertFalse(
+            any(
+                isinstance(node, (ast.While, ast.For))
+                for node in ast.walk(battle_method)
+            )
+        )
+
+    def test_cover_has_only_large_title_and_plain_menu_labels(self) -> None:
+        """封面配置不得重新加入简介、页脚、入口图标或小字副标题。"""
+
+        config = ConfigLoader.load(CONFIG_PATH)
+        menu = config.section("menu")
+        self.assertNotIn("subtitle", config.section("game"))
+        self.assertNotIn("hint", menu)
+        self.assertNotIn("footer", menu)
+        self.assertNotIn("presentations", menu)
+        self.assertEqual(
+            {"避难所", "余烬纪元"},
+            {
+                config.value("interface.cover.title"),
+                config.value("interface.cover.subtitle"),
+            },
+        )
+        self.assertTrue(
+            all("subtitle" not in action for action in config.data["actions"])
+        )
 
     def _contrast_ratio(self, first: str, second: str) -> float:
         """按照 WCAG 相对亮度公式计算两个十六进制颜色的对比度。"""

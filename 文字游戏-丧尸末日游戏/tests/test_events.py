@@ -145,16 +145,47 @@ class ExplorationEventTests(unittest.TestCase):
         with self.assertRaises(GameApplicationError):
             application.resolve_exploration("elder", "leave")
 
+    def test_cancelling_thief_event_applies_configured_prelude_atomically(self) -> None:
+        """小偷现身后撤离仍应扣款，并显示由 pre_result 格式化的文案。"""
+
+        application = self._build_application(
+            QueueRandomSource(integers=[7], choice_indexes=[3])
+        )
+        application.state.active_player.coins = 20
+        prompt = application.prepare_exploration("city_a")
+
+        report = application.cancel_exploration()
+
+        self.assertEqual("thief", prompt.event_id)
+        self.assertEqual(13, application.state.active_player.coins)
+        self.assertEqual(
+            (
+                "他们先摸走了你钱袋中的7枚金币。",
+                application.config.text("exploration_abandoned"),
+            ),
+            report.messages[:2],
+        )
+        self.assertEqual(1, application.state.turn_number)
+        self.assertIsNone(application.state.pending_exploration)
+
     def test_failed_event_requirement_does_not_consume_turn(self) -> None:
-        """事件分支资源不足时应保持状态并且不推进回合。"""
+        """资源不足时应锁定原事件，不推进回合也不允许重抽。"""
 
         application = self._build_application(QueueRandomSource(choice_indexes=[1]))
         application.state.active_player.food = 0
         prompt = application.prepare_exploration("city_a")
         report = application.resolve_exploration(prompt.event_id, "help")
-        self.assertTrue(report.state_changed)
+        self.assertFalse(report.state_changed)
         self.assertEqual(0, application.state.turn_number)
-        self.assertIsNone(application.state.pending_exploration)
+        self.assertIsNotNone(application.state.pending_exploration)
+        self.assertEqual(
+            prompt.event_id,
+            application.state.pending_exploration.event_id,
+        )
+        self.assertEqual(
+            prompt,
+            application.prepare_exploration("city_b"),
+        )
 
     def test_event_effects_commit_atomically(self) -> None:
         """后续效果无效时，先前效果不得残留在真实状态中。"""

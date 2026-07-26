@@ -55,6 +55,27 @@ class ExplorationEventService:
             raise EventError("未知探索事件：{}".format(event_id))
         return self._build_prompt(event)
 
+    def apply_prelude(self, event_id: str, state: GameState) -> Optional[str]:
+        """原子应用事件开场效果，并返回配置化的开场结果文案。"""
+
+        event = self._config.events.get(event_id)
+        if event is None:
+            raise EventError("未知探索事件：{}".format(event_id))
+        effects = event.get("pre_effects", [])
+        result_template = event.get("pre_result")
+        if not effects and result_template is None:
+            return None
+
+        working_state = copy.deepcopy(state)
+        tokens = self._apply_effects(effects, working_state)
+        message = (
+            self._format_result(event_id, result_template, tokens)
+            if result_template is not None
+            else None
+        )
+        self._commit_state(working_state, state)
+        return message
+
     @staticmethod
     def _build_prompt(event: Mapping[str, Any]) -> EventPrompt:
         """把一个事件配置转换为不可变的界面提示对象。"""
@@ -99,20 +120,30 @@ class ExplorationEventService:
         result_template = resolved_payload.get("result")
         if not isinstance(result_template, str):
             raise EventError("事件 {} 缺少结果文案".format(event_id))
+        result_message = self._format_result(event_id, result_template, tokens)
+        pre_result = event.get("pre_result")
+        if pre_result:
+            result_message = "{} {}".format(
+                self._format_result(event_id, pre_result, tokens),
+                result_message,
+            )
+        self._commit_state(working_state, state)
+        return EventResolution(message=result_message, applied=True)
+
+    @staticmethod
+    def _format_result(
+        event_id: str,
+        template: str,
+        tokens: Mapping[str, int],
+    ) -> str:
+        """用已结算变量格式化事件文案，并统一转换格式错误。"""
+
         try:
-            result_message = result_template.format(**tokens)
-            pre_result = event.get("pre_result")
-            if pre_result:
-                result_message = "{} {}".format(
-                    pre_result.format(**tokens),
-                    result_message,
-                )
+            return template.format(**tokens)
         except (KeyError, ValueError, IndexError) as error:
             raise EventError(
                 "事件 {} 文案缺少变量：{}".format(event_id, error)
             ) from error
-        self._commit_state(working_state, state)
-        return EventResolution(message=result_message, applied=True)
 
     def _resolve_choice(
         self,

@@ -11,6 +11,14 @@ coverage.xml
 htmlcov/
 build/
 dist/
+dist-h5/
+node_modules/
+playwright-report/
+test-results/
+coverage/
+artifacts/qa/
+public/assets/
+public/config/
 *.egg-info/
 *.log
 saves/

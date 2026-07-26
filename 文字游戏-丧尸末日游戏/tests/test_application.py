@@ -77,12 +77,41 @@ class ApplicationTests(unittest.TestCase):
         self.assertEqual(0, state.turn_number)
         self.assertEqual(6, state.clock.hour)
 
+    def test_full_targets_do_not_consume_supplies_or_turns(self) -> None:
+        """生命、饥饿或耐久已在最佳值时不得浪费物资和回合。"""
+
+        self.application.start_new_game(["白菜"], "single")
+        state = self.application.state
+        limits = self.application.config.section("rules")["limits"]
+        state.active_player.food = 100
+        state.active_player.medical_supplies = 100
+        state.active_player.parts = 100
+        state.active_player.hunger = 0
+        state.active_player.health = limits["player_max_health"]
+        state.shelter.group_hunger = 0
+        state.shelter.health = limits["shelter_max_health"]
+
+        for action_id in (
+            "use_food",
+            "use_medicine",
+            "feed_shelter",
+            "repair_shelter",
+        ):
+            with self.subTest(action_id=action_id):
+                before = state.to_dict()
+                report = self.application.perform_action(action_id)
+                self.assertFalse(report.state_changed)
+                self.assertEqual(before, state.to_dict())
+
     def test_multiplayer_rotates_after_successful_action(self) -> None:
         """本地双人模式应在一次有效行动后切换当前所长。"""
 
         self.application.start_new_game(["白菜", "豪菜"], "multiplayer")
         state = self.application.state
         state.active_player.food = 5
+        state.active_player.hunger = self.application.config.section("rules")["items"][
+            "player_food"
+        ]["hunger_reduction"]
         self.assertEqual("白菜", state.active_player.name)
         self.application.perform_action("use_food")
         self.assertEqual("豪菜", state.active_player.name)
@@ -99,6 +128,27 @@ class ApplicationTests(unittest.TestCase):
 
         with self.assertRaises(GameApplicationError):
             self.application.start_new_game(["白菜", "白菜"], "multiplayer")
+
+    def test_multiplayer_player_defeat_reports_broken_command_chain(self) -> None:
+        """任一多人所长倒下时应宣告双人指挥链中断，而非全员死亡。"""
+
+        self.application.start_new_game(["甲", "乙"], "multiplayer")
+        state = self.application.state
+        state.players[0].health = 0
+
+        report = self.application.resolve_story_choice(
+            "last_pot_of_porridge",
+            "give_up_share",
+        )
+
+        expected_message = self.application.config.text(
+            "game_over_player_multiplayer",
+            player_name="甲",
+        )
+        self.assertTrue(report.game_over)
+        self.assertEqual(expected_message, report.messages[-1])
+        self.assertEqual(100, state.players[1].health)
+        self.assertNotIn("最后的指挥者", expected_message)
 
     def test_game_over_thresholds_keep_fixed_priority(self) -> None:
         """避难所耐久失败应优先于玩家和饥饿失败。"""

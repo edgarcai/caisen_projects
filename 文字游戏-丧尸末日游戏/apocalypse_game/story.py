@@ -47,9 +47,13 @@ class StoryService:
             chapter["chapter_id"]: chapter for chapter in self._story["chapters"]
         }
         self._bosses = {boss["boss_id"]: boss for boss in self._story["bosses"]}
+        self._facilities = {
+            facility["facility_id"]: facility for facility in self._story["facilities"]
+        }
         self._endings = {
             ending["ending_id"]: ending for ending in self._story["endings"]
         }
+        self._requirement_display = self._story["requirement_display"]
 
     def create_story_state(self) -> StoryState:
         """根据剧情默认配置创建一份互不共享可变容器的新状态。"""
@@ -93,7 +97,7 @@ class StoryService:
         entry_requirements = scene.get("entry_requirements", [])
         entry_available = self.requirements_met(entry_requirements, state)
         entry_reason = (
-            "" if entry_available else self._locked_reason(entry_requirements)
+            "" if entry_available else self._locked_reason(entry_requirements, state)
         )
         route_choice_id = self._selected_boss_choice(state, scene["scene_id"])
         choices: List[StoryChoice] = []
@@ -104,10 +108,11 @@ class StoryService:
             locked_reason = ""
             if route_choice_id is not None and choice["choice_id"] != route_choice_id:
                 available = False
-                locked_reason = "本次首领战已经确定了另一条战术路线"
+                locked_reason = self._format_requirement("boss_route_selected")
             elif not available:
                 locked_reason = entry_reason or self._locked_reason(
-                    choice.get("requirements", [])
+                    choice.get("requirements", []),
+                    state,
                 )
             choices.append(
                 StoryChoice(
@@ -181,9 +186,12 @@ class StoryService:
         scene = self._scene(scene_id)
         choice = self._choice(scene, choice_id)
         if not self.requirements_met(scene.get("entry_requirements", []), state):
-            return self._locked_resolution(scene.get("entry_requirements", []))
+            return self._locked_resolution(
+                scene.get("entry_requirements", []),
+                state,
+            )
         if not self.requirements_met(choice.get("requirements", []), state):
-            return self._locked_resolution(choice.get("requirements", []))
+            return self._locked_resolution(choice.get("requirements", []), state)
 
         boss_id = choice.get("boss_id") or scene.get("boss_id")
         if boss_id is not None:
@@ -541,37 +549,176 @@ class StoryService:
     def _locked_resolution(
         self,
         requirements: Sequence[Mapping[str, Any]],
+        state: GameState,
     ) -> StoryResolution:
         """构造不会修改状态或消耗回合的锁定选择报告。"""
 
         return StoryResolution(
-            messages=("条件不足：{}".format(self._locked_reason(requirements)),),
+            messages=(
+                self._format_requirement(
+                    "locked_message",
+                    reason=self._locked_reason(requirements, state),
+                ),
+            ),
             applied=False,
             consumes_turn=False,
         )
 
-    def _locked_reason(self, requirements: Sequence[Mapping[str, Any]]) -> str:
-        """把配置化条件转换为简短中文锁定提示。"""
+    def _locked_reason(
+        self,
+        requirements: Sequence[Mapping[str, Any]],
+        state: GameState,
+    ) -> str:
+        """递归生成只包含当前未满足条件的配置化锁定提示。"""
 
         if not requirements:
-            return "剧情前置条件尚未达成"
-        requirement = requirements[0]
+            return self._format_requirement("empty")
+        unmet_requirements = [
+            requirement
+            for requirement in requirements
+            if not self.requirements_met([requirement], state)
+        ]
+        if not unmet_requirements:
+            return self._format_requirement("empty")
+        descriptions = [
+            self._describe_requirement(requirement, state)
+            for requirement in unmet_requirements
+        ]
+        if len(descriptions) == 1:
+            return descriptions[0]
+        return self._format_requirement(
+            "all_of",
+            requirements=self._requirement_display["separators"]["all_of"].join(
+                descriptions
+            ),
+        )
+
+    def _describe_requirement(
+        self,
+        requirement: Mapping[str, Any],
+        state: GameState,
+    ) -> str:
+        """把一个叶子或组合条件转换为玩家可执行的中文说明。"""
+
         requirement_type = requirement["type"]
-        descriptions = {
-            "scene_completed": "需要先完成前一项主线任务",
-            "flag": "需要此前作出特定选择",
-            "flag_absent": "此前的选择已经关闭这条路线",
-            "key_item": "缺少关键线索或物品",
-            "any_key_item": "缺少可替代的关键线索",
-            "boss_resolved": "需要先解决当前首领",
-            "boss_outcome_any": "首领处理方式不符合这条路线",
-            "facility_level": "避难所设施等级不足",
-            "any_of": "至少需要满足其中一个准备条件",
-            "all_of": "需要满足全部准备条件",
-        }
+        if requirement_type in {"all_of", "any_of"}:
+            nested_requirements = requirement["requirements"]
+            if requirement_type == "all_of":
+                nested_requirements = [
+                    nested
+                    for nested in nested_requirements
+                    if not self.requirements_met([nested], state)
+                ]
+            descriptions = [
+                self._describe_requirement(nested, state)
+                for nested in nested_requirements
+            ]
+            separator = self._requirement_display["separators"][requirement_type]
+            return self._format_requirement(
+                requirement_type,
+                requirements=separator.join(descriptions),
+            )
         if requirement_type in {"attribute", "computed_attribute"}:
-            return "资源、能力或伙伴信任尚未达到要求"
-        return descriptions.get(requirement_type, "剧情条件尚未满足")
+            return self._format_numeric_requirement(
+                requirement_type,
+                self._display_name("target_names", requirement["target"]),
+                requirement,
+            )
+        if requirement_type == "facility_level":
+            facility = self._facilities[requirement["facility_id"]]
+            return self._format_numeric_requirement(
+                requirement_type,
+                facility["name"],
+                requirement,
+            )
+        if requirement_type == "scene_completed":
+            return self._format_requirement(
+                requirement_type,
+                scene_name=self._scenes[requirement["scene_id"]]["title"],
+            )
+        if requirement_type in {"flag", "flag_absent"}:
+            return self._format_requirement(
+                requirement_type,
+                flag_name=self._display_name("flag_names", requirement["flag_id"]),
+            )
+        if requirement_type == "key_item":
+            return self._format_requirement(
+                requirement_type,
+                key_item_name=self._display_name(
+                    "key_item_names", requirement["key_item_id"]
+                ),
+            )
+        if requirement_type == "any_key_item":
+            item_names = [
+                self._display_name("key_item_names", key_item_id)
+                for key_item_id in requirement["key_item_ids"]
+            ]
+            return self._format_requirement(
+                requirement_type,
+                key_item_names=self._requirement_display["separators"]["items"].join(
+                    item_names
+                ),
+            )
+        if requirement_type == "boss_resolved":
+            return self._format_requirement(
+                requirement_type,
+                boss_name=self._bosses[requirement["boss_id"]]["name"],
+            )
+        if requirement_type == "boss_outcome_any":
+            outcome_names = [
+                self._display_name("boss_outcome_names", outcome)
+                for outcome in requirement["outcomes"]
+            ]
+            return self._format_requirement(
+                requirement_type,
+                boss_name=self._bosses[requirement["boss_id"]]["name"],
+                outcome_names=self._requirement_display["separators"]["items"].join(
+                    outcome_names
+                ),
+            )
+        raise StoryError("不支持的剧情条件说明：{}".format(requirement_type))
+
+    def _format_numeric_requirement(
+        self,
+        template_name: str,
+        target_name: str,
+        requirement: Mapping[str, Any],
+    ) -> str:
+        """使用配置中的目标名、运算符和阈值格式化数值条件。"""
+
+        operator_name = self._requirement_display["operators"][
+            requirement.get("operator", "gte")
+        ]
+        return self._format_requirement(
+            template_name,
+            target_name=target_name,
+            operator_name=operator_name,
+            value=requirement["value"],
+            facility_name=target_name,
+        )
+
+    def _display_name(self, collection_name: str, identifier: str) -> str:
+        """从经过校验的配置目录中读取稳定 ID 的玩家可见名称。"""
+
+        names = self._requirement_display[collection_name]
+        try:
+            return names[identifier]
+        except KeyError as error:
+            raise StoryError("剧情条件缺少显示名称：{}".format(identifier)) from error
+
+    def _format_requirement(self, template_name: str, **values: Any) -> str:
+        """格式化经配置层校验的锁定原因模板。"""
+
+        template = self._requirement_display["templates"][template_name]
+        try:
+            return template.format(**values)
+        except (KeyError, ValueError, IndexError) as error:
+            raise StoryError(
+                "剧情条件模板 {} 无法格式化：{}".format(
+                    template_name,
+                    error,
+                )
+            ) from error
 
     def _secret_hint(
         self,

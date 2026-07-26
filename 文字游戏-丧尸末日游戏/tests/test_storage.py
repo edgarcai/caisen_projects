@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from apocalypse_game.config import ConfigLoader
+from apocalypse_game.domain import PendingExplorationState
 from apocalypse_game.infrastructure import JsonSaveRepository
 from apocalypse_game.ports import SaveDataError
 from tests.helpers import (
@@ -32,6 +33,23 @@ class JsonSaveRepositoryTests(unittest.TestCase):
 
         self._temporary_directory.cleanup()
 
+    @staticmethod
+    def _start_rail_butcher_battle(application) -> None:
+        """通过公开剧情用例推进至铁轨屠夫战。"""
+
+        route = (
+            ("last_pot_of_porridge", "share_rations"),
+            ("money_and_secrets", "decrypt_ledger"),
+            ("doctor_in_the_rain", "medical_rescue"),
+            ("rail_butcher", "call_his_name"),
+        )
+        for scene_id, choice_id in route:
+            report = application.resolve_story_choice(scene_id, choice_id)
+            if not report.state_changed:
+                raise AssertionError("测试路线未能推进剧情")
+        if application.state.battle is None:
+            raise AssertionError("测试路线未能启动首领战")
+
     def test_save_and_load_round_trip(self) -> None:
         """保存后读取应完整恢复玩家、避难所、时钟与模式。"""
 
@@ -44,6 +62,58 @@ class JsonSaveRepositoryTests(unittest.TestCase):
         application.state = None
         application.load_game()
         self.assertEqual(expected, application.state.to_dict())
+
+    def test_retreated_battle_and_pending_exploration_round_trip(self) -> None:
+        """撤退整备期应同时保存待探索事件与 Boss 剩余生命。"""
+
+        application = build_test_application(
+            self.save_path,
+            QueueRandomSource(integers=[1]),
+        )
+        application.start_new_game(["白菜"], "single")
+        self._start_rail_butcher_battle(application)
+
+        application.perform_combat_action("retreat")
+        retreated_battle = application.state.battle
+        self.assertTrue(retreated_battle.finished)
+        self.assertTrue(retreated_battle.retreated)
+        self.assertLess(retreated_battle.health, retreated_battle.max_health)
+        retreated_health = retreated_battle.health
+        prompt = application.prepare_exploration("city_a")
+
+        application.save_game()
+        application.state = None
+        application.load_game()
+
+        restored_battle = application.state.battle
+        restored_pending = application.state.pending_exploration
+        self.assertIsNotNone(restored_battle)
+        self.assertTrue(restored_battle.finished)
+        self.assertTrue(restored_battle.retreated)
+        self.assertEqual(retreated_health, restored_battle.health)
+        self.assertIsNotNone(restored_pending)
+        self.assertEqual(prompt.event_id, restored_pending.event_id)
+        self.assertEqual("city_a", restored_pending.city_id)
+
+        application.cancel_exploration()
+        application.resolve_story_choice("rail_butcher", "call_his_name")
+        self.assertFalse(application.state.battle.finished)
+        self.assertFalse(application.state.battle.retreated)
+        self.assertEqual(retreated_health, application.state.battle.health)
+
+    def test_active_battle_and_pending_exploration_are_rejected(self) -> None:
+        """进行中的首领战仍不得与待结算探索同时入档。"""
+
+        application = build_test_application(self.save_path, QueueRandomSource())
+        application.start_new_game(["白菜"], "single")
+        self._start_rail_butcher_battle(application)
+        application.state.pending_exploration = PendingExplorationState(
+            city_id="city_a",
+            event_id="bank",
+        )
+
+        with self.assertRaises(SaveDataError):
+            application.save_game()
 
     def test_second_save_creates_backup(self) -> None:
         """覆盖现有存档前应保留最近一次备份。"""

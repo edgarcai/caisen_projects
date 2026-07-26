@@ -176,18 +176,26 @@ class GameRules:
         """按固定优先级构造单一来源的失败结局对象。"""
 
         if state.shelter.health <= 0:
-            return self._failure_ending("shelter")
+            return self._failure_ending("shelter", state.mode)
         for player in state.players:
             if player.health <= 0:
-                return self._failure_ending("player_health", player_name=player.name)
+                return self._failure_ending(
+                    "player_health",
+                    state.mode,
+                    player_name=player.name,
+                )
             if player.hunger >= self._limits["player_hunger_game_over"]:
-                return self._failure_ending("player_hunger", player_name=player.name)
+                return self._failure_ending(
+                    "player_hunger",
+                    state.mode,
+                    player_name=player.name,
+                )
         if state.shelter.group_hunger >= self._limits["group_hunger_game_over"]:
-            return self._failure_ending("group_hunger")
+            return self._failure_ending("group_hunger", state.mode)
         if state.shelter.activity <= self._limits["activity_min_game_over"]:
-            return self._failure_ending("activity_low")
+            return self._failure_ending("activity_low", state.mode)
         if state.shelter.activity >= self._limits["activity_max_game_over"]:
-            return self._failure_ending("activity_high")
+            return self._failure_ending("activity_high", state.mode)
         return None
 
     def _modifier(self, state: GameState, target: str) -> int:
@@ -197,17 +205,23 @@ class GameRules:
             return 0
         return self._modifiers.passive_modifier(state, target)
 
-    def combat_failure(self, player_name: str) -> EndingState:
-        """为 Boss 战中倒下的当前所长构造配置化失败结局。"""
+    def combat_failure(self, player_name: str, mode: str) -> EndingState:
+        """按当前模式为 Boss 战中倒下的所长构造配置化失败结局。"""
 
-        return self._failure_ending("combat", player_name=player_name)
+        return self._failure_ending("combat", mode, player_name=player_name)
 
-    def _failure_ending(self, failure_id: str, **values: str) -> EndingState:
-        """根据失败配置创建一致的结局标识、类型与中文文案。"""
+    def _failure_ending(
+        self,
+        failure_id: str,
+        mode: str,
+        **values: str,
+    ) -> EndingState:
+        """根据失败类型和游戏模式创建单一来源的结局对象。"""
 
         failure = self._failure_endings[failure_id]
+        text_key = failure.get("mode_text_keys", {}).get(mode, failure["text_key"])
         return EndingState(
             ending_id=failure["ending_id"],
             outcome="failure",
-            message=self._config.text(failure["text_key"], **values),
+            message=self._config.text(text_key, **values),
         )

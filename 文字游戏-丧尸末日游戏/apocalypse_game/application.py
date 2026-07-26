@@ -192,6 +192,8 @@ class GameApplication:
         boss_id = working.battle.boss_id
         report = self._combat.perform_action(working, action_id)
         messages = list(report.messages)
+        if not report.state_changed:
+            return ActionReport.from_messages(messages, state_changed=False)
         if not report.finished:
             self._rules.normalize(working)
             self._store_state(working)
@@ -217,7 +219,10 @@ class GameApplication:
         working.battle = None
         working.pending_exploration = None
         fallen_player = min(working.players, key=lambda player: player.health)
-        working.ending = self._rules.combat_failure(fallen_player.name)
+        working.ending = self._rules.combat_failure(
+            fallen_player.name,
+            working.mode,
+        )
         if not messages or messages[-1] != working.ending.message:
             messages.append(working.ending.message)
         self._store_state(working)
@@ -276,13 +281,12 @@ class GameApplication:
             )
         working = copy.deepcopy(current)
         resolution = self._events.resolve(event_id, choice_id, working)
-        working.pending_exploration = None
         if not resolution.applied:
-            self._store_state(working)
             return ActionReport.from_messages(
                 [resolution.message],
-                state_changed=True,
+                state_changed=False,
             )
+        working.pending_exploration = None
         return self._commit_action(
             working,
             [resolution.message],
@@ -290,16 +294,22 @@ class GameApplication:
         )
 
     def cancel_exploration(self) -> ActionReport:
-        """放弃已经抽取的事件、清除待结算状态并消耗探索回合。"""
+        """结算事件开场效果后放弃机会，清除待结算状态并消耗回合。"""
 
         current = self._require_playable_state()
-        if current.pending_exploration is None:
+        pending = current.pending_exploration
+        if pending is None:
             raise GameApplicationError(self.config.text("no_pending_event"))
         working = copy.deepcopy(current)
+        messages: List[str] = []
+        prelude_message = self._events.apply_prelude(pending.event_id, working)
+        if prelude_message is not None:
+            messages.append(prelude_message)
+        messages.append(self.config.text("exploration_abandoned"))
         working.pending_exploration = None
         return self._commit_action(
             working,
-            [self.config.text("exploration_abandoned")],
+            messages,
             consumes_turn=True,
         )
 
@@ -361,6 +371,11 @@ class GameApplication:
         item = self.config.section("rules")["items"]["player_food"]
         player = working.active_player
         cost = self._adjusted_cost(item["cost"], working)
+        if player.hunger <= 0:
+            return ActionReport.from_messages(
+                [self.config.text("food_not_needed", player_name=player.name)],
+                state_changed=False,
+            )
         if player.food < cost:
             return ActionReport.from_messages(
                 [self.config.text("food_failed", cost=cost)],
@@ -385,6 +400,11 @@ class GameApplication:
         item = self.config.section("rules")["items"]["medical_supplies"]
         player = working.active_player
         cost = item["cost"]
+        if player.health >= self._rules.limits["player_max_health"]:
+            return ActionReport.from_messages(
+                [self.config.text("medicine_not_needed", player_name=player.name)],
+                state_changed=False,
+            )
         if player.medical_supplies < cost:
             return ActionReport.from_messages(
                 [self.config.text("medicine_failed", cost=cost)],
@@ -413,6 +433,11 @@ class GameApplication:
         item = self.config.section("rules")["items"]["shelter_food"]
         player = working.active_player
         cost = self._adjusted_cost(item["cost"], working)
+        if working.shelter.group_hunger <= 0:
+            return ActionReport.from_messages(
+                [self.config.text("shelter_food_not_needed")],
+                state_changed=False,
+            )
         if player.food < cost:
             return ActionReport.from_messages(
                 [self.config.text("shelter_food_failed", cost=cost)],
@@ -439,6 +464,11 @@ class GameApplication:
         item = self.config.section("rules")["items"]["shelter_repair"]
         player = working.active_player
         cost = item["parts_cost"]
+        if working.shelter.health >= self._rules.limits["shelter_max_health"]:
+            return ActionReport.from_messages(
+                [self.config.text("repair_not_needed")],
+                state_changed=False,
+            )
         if player.parts < cost:
             return ActionReport.from_messages(
                 [self.config.text("repair_failed", cost=cost)],

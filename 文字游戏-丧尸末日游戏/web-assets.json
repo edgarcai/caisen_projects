@@ -1,0 +1,28 @@
+{
+  "copies": [
+    {
+      "source": "assets/cover_art.png",
+      "target": "public/assets/cover_art.png"
+    },
+    {
+      "source": "config/game_config.json",
+      "target": "public/config/game_config.json"
+    },
+    {
+      "source": "config/story.json",
+      "target": "public/config/story.json"
+    },
+    {
+      "source": "config/events.json",
+      "target": "public/config/events.json"
+    },
+    {
+      "source": "config/save_migrations/v1_to_v2.json",
+      "target": "public/config/save_migrations/v1_to_v2.json"
+    },
+    {
+      "source": "config/web_config.json",
+      "target": "public/config/web_config.json"
+    }
+  ]
+}

@@ -67,18 +67,18 @@ def build_application(config_path: Optional[Path] = None) -> GameApplication:
 
 
 def check_project(config_path: Optional[Path] = None) -> int:
-    """无窗口检查配置、事件引用和概念图资源是否可读取。"""
+    """无窗口检查配置、事件引用和正式封面资源是否可读取。"""
 
     try:
         application = build_application(config_path)
         config = application.config
-        image_path = config.resolve_path("concept_art")
+        image_path = config.resolve_path("cover_art")
         window = config.section("window")
         validate_png(image_path, window["image_width"], window["image_height"])
     except (ConfigError, AssetError, OSError) as error:
         print("项目自检失败：{}".format(error), file=sys.stderr)
         return 1
-    print("项目自检通过：配置、事件引用与概念图均可读取。")
+    print("项目自检通过：配置、事件引用与正式封面均可读取。")
     return 0
 
 

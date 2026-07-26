@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "engine": {
+    "name": "LayaAir",
+    "version": "3.4.0",
+    "design_width": 750,
+    "design_height": 1334,
+    "scale_mode": "fixedauto",
+    "desktop_screen_mode": "none",
+    "mobile_screen_mode": "vertical",
+    "align_horizontal": "center",
+    "align_vertical": "middle",
+    "retina_canvas": false,
+    "active_frame_mode": "fast",
+    "idle_frame_mode": "slow"
+  },
+  "responsive": {
+    "mobile_max_stage_width": 900,
+    "compact_max_stage_height": 1050,
+    "safe_area_fallback": {
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
+    },
+    "quality_viewports": [
+      {"id": "desktop", "width": 1440, "height": 900},
+      {"id": "mobile", "width": 390, "height": 844},
+      {"id": "small_mobile", "width": 360, "height": 640},
+      {"id": "tablet", "width": 768, "height": 1024}
+    ]
+  },
+  "assets": {
+    "cover": "assets/cover_art.png",
+    "cover_width": 1280,
+    "cover_height": 720
+  },
+  "theme": {
+    "background": "#071014",
+    "background_soft": "#0b151a",
+    "panel": "#111d22",
+    "panel_elevated": "#18272d",
+    "panel_translucent": "#132127e8",
+    "primary": "#d8873f",
+    "primary_hover": "#efa05b",
+    "primary_pressed": "#b9652c",
+    "on_primary": "#ffffff",
+    "secondary": "#20343c",
+    "secondary_hover": "#2d4c56",
+    "danger": "#7a3533",
+    "text": "#f4f5ef",
+    "muted_text": "#a6b2aa",
+    "accent": "#dfc36f",
+    "health": "#80b86b",
+    "hunger": "#cf8d54",
+    "warning": "#ef9850",
+    "error": "#ef725e",
+    "border": "#304148",
+    "border_active": "#d57a36",
+    "overlay": "#071014d9",
+    "scrim": "#020608b8"
+  },
+  "typography": {
+    "font_family": "PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif",
+    "cover_title_size": 72,
+    "cover_subtitle_size": 42,
+    "page_title_size": 36,
+    "section_title_size": 28,
+    "body_size": 30,
+    "body_line_height": 44,
+    "control_size": 28,
+    "caption_size": 22,
+    "stat_size": 22
+  },
+  "motion": {
+    "page_transition_ms": 220,
+    "button_press_ms": 90,
+    "cover_drift_ms": 18000,
+    "toast_duration_ms": 2600,
+    "reduced_motion": false
+  },
+  "controls": {
+    "minimum_touch_size": 84,
+    "button_height": 88,
+    "compact_button_height": 84,
+    "button_slant": 22,
+    "button_gap": 14,
+    "button_horizontal_padding": 26,
+    "max_player_name_characters": 18,
+    "focus_border_width": 3,
+    "scroll_step": 84,
+    "drag_threshold": 8
+  },
+  "layout": {
+    "cover": {
+      "content_left": 54,
+      "content_top": 100,
+      "menu_top": 300,
+      "menu_width": 340,
+      "menu_step_x": 28,
+      "menu_gap": 18,
+      "image_dark_edge_ratio": 0.58,
+      "image_dark_solid_ratio": 0.55,
+      "image_dark_fade_steps": 96
+    },
+    "desktop": {
+      "outer_padding": 28,
+      "header_height": 92,
+      "left_rail_width": 330,
+      "right_rail_width": 390,
+      "column_gap": 20,
+      "panel_padding": 24,
+      "section_gap": 18,
+      "bottom_bar_height": 74,
+      "mission_height": 220,
+      "log_min_height": 320
+    },
+    "mobile": {
+      "outer_padding": 22,
+      "header_height": 112,
+      "bottom_navigation_height": 104,
+      "panel_padding": 22,
+      "section_gap": 18,
+      "mission_height": 300,
+      "resource_bar_height": 22,
+      "quick_action_columns": 2,
+      "sheet_top_margin": 96
+    },
+    "page": {
+      "max_content_width": 1180,
+      "header_height": 96,
+      "footer_height": 104,
+      "body_padding": 28,
+      "option_gap": 16,
+      "desktop_option_columns": 2,
+      "mobile_option_columns": 1
+    }
+  },
+  "storage": {
+    "key": "shelter-embers-save-v2",
+    "settings_key": "shelter-embers-settings-v1",
+    "schema_version": 2,
+    "auto_save": true,
+    "backup_slots": 2
+  },
+  "quality_assurance": {
+    "base_url": "http://127.0.0.1:4173",
+    "web_server_command": "npm run preview",
+    "server_timeout_ms": 120000,
+    "action_timeout_ms": 10000,
+    "navigation_timeout_ms": 30000,
+    "screenshot_directory": "artifacts/qa",
+    "trace_mode": "retain-on-failure"
+  },
+  "navigation": [
+    {"id": "dashboard", "label": "指挥台", "icon": "▰"},
+    {"id": "story", "label": "剧情", "icon": "◈"},
+    {"id": "explore", "label": "探索", "icon": "⌖"},
+    {"id": "management", "label": "经营", "icon": "⚒"},
+    {"id": "supplies", "label": "物资", "icon": "▣"}
+  ],
+  "action_groups": [
+    {
+      "id": "core",
+      "label": "核心行动",
+      "action_ids": ["story", "explore", "shelter_management", "companions"]
+    },
+    {
+      "id": "supplies",
+      "label": "基地保障",
+      "action_ids": ["use_food", "use_medicine", "feed_shelter", "repair_shelter"]
+    },
+    {
+      "id": "system",
+      "label": "系统",
+      "action_ids": ["tutorial", "save", "return_menu"]
+    }
+  ],
+  "texts": {
+    "loading": "正在接入 B-17 指挥链路…",
+    "load_failed": "游戏资源加载失败，请刷新页面后重试。",
+    "start_single": "新的游戏",
+    "start_load": "游玩存档",
+    "start_multiplayer": "多人游戏",
+    "name_submit": "进入避难所",
+    "back": "返回",
+    "continue": "继续",
+    "confirm": "确定",
+    "cancel": "取消",
+    "close": "关闭",
+    "save": "保存进度",
+    "no_save": "当前浏览器还没有存档。",
+    "auto_saved": "进度已自动保存",
+    "storage_unavailable": "浏览器禁止本地存储，本次进度只能保留到页面关闭。",
+    "portrait_hint": "旋转设备可获得更舒适的阅读空间",
+    "offline_ready": "资源已就绪，可以离线继续游玩",
+    "option_intelligence_title": "【选项情报】",
+    "option_intelligence_format": "• {label}：{details}",
+    "option_intelligence_separator": "\n"
+  }
+}

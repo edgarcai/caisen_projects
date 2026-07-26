@@ -638,8 +638,9 @@ class JsonSaveRepository:
                 state.pending_exploration.event_id,
                 "pending_exploration.event_id",
             )
-        if state.battle is not None and state.pending_exploration is not None:
-            raise SaveDataError("不能同时存在 Boss 战和待结算探索")
+        battle_in_progress = state.battle is not None and not state.battle.finished
+        if battle_in_progress and state.pending_exploration is not None:
+            raise SaveDataError("不能同时存在进行中的 Boss 战和待结算探索")
 
         if state.ending is not None:
             self._require_non_empty_string(state.ending.ending_id, "ending.ending_id")

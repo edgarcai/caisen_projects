@@ -178,6 +178,28 @@ class CombatTests(unittest.TestCase):
                     self.assertTrue(state.battle.finished)
                     self.assertTrue(state.battle.retreated)
 
+    def test_full_health_cannot_waste_battle_medicine(self) -> None:
+        """战斗中生命已满时医疗行动应锁定，且伪造请求不改变状态。"""
+
+        application = self._build_application()
+        self._prepare_boss(application, "rail_butcher")
+        state = application.state
+        state.active_player.health = 100
+        state.active_player.medical_supplies = 100
+        medicine = next(
+            action
+            for action in application.combat_actions()
+            if action.action_id == "medicine"
+        )
+        self.assertFalse(medicine.available)
+        self.assertTrue(medicine.unavailable_reason)
+        before = state.to_dict()
+
+        report = application.perform_combat_action("medicine")
+
+        self.assertFalse(report.state_changed)
+        self.assertEqual(before, state.to_dict())
+
     def test_active_battle_save_and_load_round_trip(self) -> None:
         """战斗中的 Boss 生命、回合、专注与剧情路线必须完整读回。"""
 

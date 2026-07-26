@@ -461,6 +461,7 @@ class CombatReport:
     finished: bool
     victory: bool
     retreated: bool
+    state_changed: bool = True
 
 
 @dataclass(frozen=True)

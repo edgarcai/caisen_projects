@@ -7,7 +7,7 @@ from calendar import monthrange
 from dataclasses import dataclass, field
 from pathlib import Path
 from string import Formatter
-from typing import Any, Dict, List, Mapping, Set
+from typing import Any, Dict, List, Mapping, Sequence, Set
 
 
 PLAYER_EFFECT_FIELDS = frozenset(
@@ -40,6 +40,18 @@ SHELTER_EFFECT_FIELDS = frozenset(
         "game_consoles",
     }
 )
+STORY_EFFECT_FIELDS = frozenset({"humanity", "evidence", "infection_pressure"})
+STORY_COMPUTED_TARGETS = frozenset(
+    {
+        "active_player.combat_power",
+        "story.key_item_count",
+        "story.active_companion_count",
+        "story.average_trust",
+        "story.total_companion_trust",
+        "story.boss_count",
+    }
+)
+STORY_COMPARISON_OPERATORS = frozenset({"gte", "lte", "gt", "lt", "eq", "neq"})
 
 
 def _is_integer(value: Any) -> bool:
@@ -290,6 +302,7 @@ class ConfigLoader:
             "save_migration_v1_to_v2",
             "save",
             "concept_art",
+            "cover_art",
         ):
             if not isinstance(paths.get(path_key), str) or not paths[path_key]:
                 raise ConfigError("paths.{} 必须是非空相对路径".format(path_key))
@@ -306,6 +319,11 @@ class ConfigLoader:
             if not isinstance(rules.get(rule_name), Mapping):
                 raise ConfigError("rules.{} 必须是对象".format(rule_name))
         cls._validate_player_counts(rules["player_counts"], data["mode_labels"])
+        cls._validate_failure_endings(
+            rules["failure_endings"],
+            data["texts"],
+            set(rules["player_counts"]),
+        )
         cls._validate_time_rules(rules["time"])
         cls._validate_numeric_tree(rules["limits"], "rules.limits")
         cls._validate_numeric_tree(rules["turn_costs"], "rules.turn_costs")
@@ -365,14 +383,8 @@ class ConfigLoader:
                 raise ConfigError("行动 {} 缺少中文标签".format(action_id))
             if action.get("style") not in {"primary", "secondary", "danger"}:
                 raise ConfigError("行动 {} 的样式无效".format(action_id))
-            for presentation_field in ("icon", "subtitle"):
-                if not isinstance(action.get(presentation_field), str):
-                    raise ConfigError(
-                        "行动 {} 缺少界面字段 {}".format(
-                            action_id,
-                            presentation_field,
-                        )
-                    )
+            if not isinstance(action.get("icon"), str):
+                raise ConfigError("行动 {} 缺少界面图标".format(action_id))
         cls._validate_interface_config(data, action_ids)
 
     @classmethod
@@ -404,7 +416,7 @@ class ConfigLoader:
                 raise ConfigError("按钮样式 {} 必须使用十六进制颜色".format(style_id))
 
         interface = data["interface"]
-        for section_name in ("layout", "buttons", "dashboard"):
+        for section_name in ("layout", "buttons", "cover", "pages", "dashboard"):
             if not isinstance(interface.get(section_name), Mapping):
                 raise ConfigError("interface.{} 必须是对象".format(section_name))
         cls._validate_numeric_tree(interface["layout"], "interface.layout")
@@ -418,14 +430,19 @@ class ConfigLoader:
                 for axis in ("width", "height")
             ):
                 raise ConfigError("按钮尺寸 {} 无效".format(size_id))
+            font_size = size.get("font_size")
+            if font_size is not None and (not _is_integer(font_size) or font_size <= 0):
+                raise ConfigError("按钮尺寸 {} 的字体大小无效".format(size_id))
         required_button_metrics = {
             "border_width",
             "accent_width",
             "icon_center_x",
             "text_without_icon_x",
             "text_with_icon_x",
+            "parallelogram_text_x",
             "subtitle_offset",
             "prompt_right_padding",
+            "parallelogram_slant",
         }
         for metric_name in required_button_metrics:
             if not _is_integer(buttons.get(metric_name)) or buttons[metric_name] < 0:
@@ -434,6 +451,25 @@ class ConfigLoader:
                 )
         if not isinstance(buttons.get("prompt_symbol"), str):
             raise ConfigError("interface.buttons.prompt_symbol 必须是字符串")
+        slant = buttons["parallelogram_slant"]
+        if slant <= 0 or any(slant * 2 >= size["width"] for size in sizes.values()):
+            raise ConfigError(
+                "interface.buttons.parallelogram_slant 必须为小于所有按钮半宽的正整数"
+            )
+        text_x = buttons["parallelogram_text_x"]
+        if text_x <= slant or any(
+            text_x >= size["width"] - slant for size in sizes.values()
+        ):
+            raise ConfigError("interface.buttons.parallelogram_text_x 必须位于斜边之间")
+
+        cls._validate_cover_config(data)
+        cls._validate_pages_config(data)
+        menu = data["menu"]
+        menu_keys = {"new_game", "load_game", "multiplayer"}
+        if set(menu) != menu_keys or not all(
+            isinstance(menu[key], str) and menu[key] for key in menu_keys
+        ):
+            raise ConfigError("menu 必须只配置三个非空主菜单标签")
 
         groups = interface.get("action_groups")
         if not isinstance(groups, list) or not groups:
@@ -543,19 +579,223 @@ class ConfigLoader:
             ):
                 raise ConfigError("资源状态条警告与危险阈值顺序无效")
 
-        presentations = data["menu"].get("presentations")
-        menu_option_ids = {"new_game", "load_game", "multiplayer"}
-        if (
-            not isinstance(presentations, Mapping)
-            or set(presentations) != menu_option_ids
+    @classmethod
+    def _validate_cover_config(cls, data: Mapping[str, Any]) -> None:
+        """验证封面图定位、双行标题、错位菜单和渐变遮罩配置。"""
+
+        cover = data["interface"]["cover"]
+        for text_key in ("title", "subtitle"):
+            if not isinstance(cover.get(text_key), str) or not cover[text_key]:
+                raise ConfigError(
+                    "interface.cover.{} 必须是非空字符串".format(text_key)
+                )
+
+        coordinate_keys = {
+            "art_x",
+            "art_y",
+            "title_x",
+            "title_y",
+            "subtitle_x",
+            "subtitle_y",
+            "menu_start_x",
+            "menu_start_y",
+            "fallback_text_x",
+            "fallback_text_y",
+        }
+        for coordinate_key in coordinate_keys:
+            value = cover.get(coordinate_key)
+            if not _is_integer(value) or value < 0:
+                raise ConfigError(
+                    "interface.cover.{} 必须是非负整数".format(coordinate_key)
+                )
+        for step_key in ("menu_step_x", "menu_step_y"):
+            value = cover.get(step_key)
+            if not _is_integer(value) or value <= 0:
+                raise ConfigError("interface.cover.{} 必须是正整数".format(step_key))
+        for size_key in (
+            "title_size",
+            "subtitle_size",
+            "fallback_text_size",
+            "fallback_wrap_length",
+            "resize_debounce_ms",
         ):
-            raise ConfigError("menu.presentations 必须完整配置三个主菜单入口")
-        for option_id, presentation in presentations.items():
-            if not isinstance(presentation, Mapping) or not all(
-                isinstance(presentation.get(field_name), str)
-                for field_name in ("icon", "subtitle")
+            value = cover.get(size_key)
+            if not _is_integer(value) or value <= 0:
+                raise ConfigError("interface.cover.{} 必须是正整数".format(size_key))
+
+        anchors = {"n", "ne", "e", "se", "s", "sw", "w", "nw", "center"}
+        for anchor_key in (
+            "art_anchor",
+            "title_anchor",
+            "subtitle_anchor",
+            "menu_anchor",
+            "fallback_text_anchor",
+        ):
+            if cover.get(anchor_key) not in anchors:
+                raise ConfigError(
+                    "interface.cover.{} 不是有效的 Tk 锚点".format(anchor_key)
+                )
+        for color_key in (
+            "fallback_background",
+            "title_color",
+            "subtitle_color",
+            "overlay_color",
+            "fallback_text_color",
+        ):
+            if not _is_hex_color(cover.get(color_key)):
+                raise ConfigError(
+                    "interface.cover.{} 必须是十六进制颜色".format(color_key)
+                )
+        if cover.get("menu_button_shape") not in {"rectangle", "parallelogram"}:
+            raise ConfigError("interface.cover.menu_button_shape 无效")
+
+        window = data["window"]
+        window_width = window.get("width")
+        if not _is_integer(window_width):
+            raise ConfigError("window.width 必须是整数")
+        start_x = cover.get("overlay_start_x")
+        end_x = cover.get("overlay_end_x")
+        if (
+            not _is_integer(start_x)
+            or not _is_integer(end_x)
+            or start_x < 0
+            or end_x <= start_x
+            or end_x > window_width
+        ):
+            raise ConfigError("interface.cover 遮罩渐变范围无效")
+        for opacity_key in ("overlay_start_opacity", "overlay_end_opacity"):
+            opacity = cover.get(opacity_key)
+            if not _is_integer(opacity) or not 0 <= opacity <= 255:
+                raise ConfigError(
+                    "interface.cover.{} 必须是 0 至 255 的整数".format(opacity_key)
+                )
+        if cover["overlay_start_opacity"] <= cover["overlay_end_opacity"]:
+            raise ConfigError("interface.cover 遮罩必须从左侧深色渐变到右侧透明")
+
+    @classmethod
+    def _validate_pages_config(cls, data: Mapping[str, Any]) -> None:
+        """验证主窗口内页面的尺寸、坐标、颜色、文案和经营分类。"""
+
+        pages = data["interface"]["pages"]
+        positive_metrics = {
+            "content_width",
+            "content_height",
+            "header_height",
+            "body_padding",
+            "section_gap",
+            "option_gap",
+            "option_columns",
+            "option_max_visible_rows",
+            "input_width",
+            "notice_accent_width",
+        }
+        for metric_name in positive_metrics:
+            value = pages.get(metric_name)
+            if not _is_integer(value) or value <= 0:
+                raise ConfigError("interface.pages.{} 必须是正整数".format(metric_name))
+        for metric_name in (
+            "horizontal_padding",
+            "vertical_padding",
+            "title_x",
+            "title_y",
+            "back_x",
+            "back_y",
+        ):
+            value = pages.get(metric_name)
+            if not _is_integer(value) or value < 0:
+                raise ConfigError(
+                    "interface.pages.{} 必须是非负整数".format(metric_name)
+                )
+        window = data["window"]
+        if (
+            pages["content_width"] > window["width"]
+            or pages["content_height"] > window["height"]
+        ):
+            raise ConfigError("interface.pages 内容尺寸不能超过主窗口")
+        if (
+            pages["title_x"] > pages["content_width"]
+            or pages["back_x"] > pages["content_width"]
+        ):
+            raise ConfigError("interface.pages 标题或返回按钮横坐标超出内容区域")
+        if (
+            pages["title_y"] > pages["header_height"]
+            or pages["back_y"] > pages["header_height"]
+        ):
+            raise ConfigError("interface.pages 标题或返回按钮纵坐标超出页头")
+
+        for color_key in (
+            "background",
+            "panel",
+            "body_background",
+            "title_color",
+            "text_color",
+            "muted_text_color",
+            "border_color",
+            "error_color",
+            "success_color",
+        ):
+            if not _is_hex_color(pages.get(color_key)):
+                raise ConfigError(
+                    "interface.pages.{} 必须是十六进制颜色".format(color_key)
+                )
+        for label_key in (
+            "back_label",
+            "continue_label",
+            "cancel_label",
+            "confirm_label",
+            "close_label",
+        ):
+            if not isinstance(pages.get(label_key), str) or not pages[label_key]:
+                raise ConfigError(
+                    "interface.pages.{} 必须是非空字符串".format(label_key)
+                )
+
+        template_fields = {
+            "option_details_block_format": {"body", "details"},
+            "option_detail_format": {"label", "description"},
+        }
+        for template_key, expected_fields in template_fields.items():
+            template = pages.get(template_key)
+            if not isinstance(template, str) or not template:
+                raise ConfigError(
+                    "interface.pages.{} 必须是非空字符串".format(template_key)
+                )
+            try:
+                actual_fields = {
+                    field_name
+                    for _, field_name, _, _ in Formatter().parse(template)
+                    if field_name is not None
+                }
+            except ValueError as error:
+                raise ConfigError(
+                    "interface.pages.{} 文案格式无效".format(template_key)
+                ) from error
+            if actual_fields != expected_fields:
+                raise ConfigError(
+                    "interface.pages.{} 占位符必须为 {}".format(
+                        template_key,
+                        "、".join(sorted(expected_fields)),
+                    )
+                )
+
+        categories = pages.get("management_categories")
+        if not isinstance(categories, list) or not categories:
+            raise ConfigError("interface.pages.management_categories 必须是非空列表")
+        category_ids: Set[str] = set()
+        for category in categories:
+            if not isinstance(category, Mapping):
+                raise ConfigError("经营类别必须是对象")
+            category_id = category.get("id")
+            label = category.get("label")
+            if (
+                not isinstance(category_id, str)
+                or not category_id
+                or category_id in category_ids
             ):
-                raise ConfigError("主菜单入口 {} 的展示配置无效".format(option_id))
+                raise ConfigError("经营类别 ID 必须存在且不能重复")
+            if not isinstance(label, str) or not label:
+                raise ConfigError("经营类别 {} 缺少标签".format(category_id))
+            category_ids.add(category_id)
 
     @staticmethod
     def _mapping_value(data: Mapping[str, Any], dotted_path: Any) -> Any:
@@ -590,6 +830,50 @@ class ConfigLoader:
                 raise ConfigError("模式 {} 的玩家数量范围无效".format(mode))
             if not isinstance(mode_labels.get(mode), str):
                 raise ConfigError("模式 {} 缺少显示文案".format(mode))
+
+    @staticmethod
+    def _validate_failure_endings(
+        failures: Mapping[str, Any],
+        texts: Mapping[str, Any],
+        modes: Set[str],
+    ) -> None:
+        """校验失败结局的默认文案与可选模式文案映射。"""
+
+        required_failure_ids = {
+            "shelter",
+            "player_health",
+            "player_hunger",
+            "group_hunger",
+            "activity_low",
+            "activity_high",
+            "combat",
+        }
+        if set(failures) != required_failure_ids:
+            raise ConfigError("rules.failure_endings 必须完整配置所有失败类型")
+        for failure_id, failure in failures.items():
+            if not isinstance(failure, Mapping):
+                raise ConfigError("失败结局 {} 必须是对象".format(failure_id))
+            ending_id = failure.get("ending_id")
+            text_key = failure.get("text_key")
+            if not isinstance(ending_id, str) or not ending_id:
+                raise ConfigError("失败结局 {} 缺少 ending_id".format(failure_id))
+            if not isinstance(text_key, str) or not isinstance(
+                texts.get(text_key), str
+            ):
+                raise ConfigError("失败结局 {} 引用未知文案".format(failure_id))
+            mode_text_keys = failure.get("mode_text_keys", {})
+            if not isinstance(mode_text_keys, Mapping):
+                raise ConfigError(
+                    "失败结局 {} 的 mode_text_keys 必须是对象".format(failure_id)
+                )
+            for mode, mode_text_key in mode_text_keys.items():
+                if mode not in modes or not isinstance(texts.get(mode_text_key), str):
+                    raise ConfigError(
+                        "失败结局 {} 的模式文案无效：{}".format(
+                            failure_id,
+                            mode,
+                        )
+                    )
 
     @staticmethod
     def _validate_time_rules(time_rules: Mapping[str, Any]) -> None:
@@ -645,7 +929,13 @@ class ConfigLoader:
 
         if data.get("schema_version") != 1:
             raise ConfigError("不支持的剧情配置版本")
-        required_mappings = ("defaults", "world", "trade", "recruitment")
+        required_mappings = (
+            "defaults",
+            "world",
+            "trade",
+            "recruitment",
+            "requirement_display",
+        )
         required_lists = (
             "chapters",
             "companions",
@@ -675,6 +965,22 @@ class ConfigLoader:
         cls._unique_story_ids(data["trades"], "trade_id")
         cls._unique_story_ids(data["recruits"], "recruit_id")
         cls._unique_story_ids(data["discoveries"], "discovery_id")
+        attribute_targets = cls._story_attribute_targets(companion_ids)
+        writable_targets = attribute_targets | {
+            "facility.{}".format(facility_id) for facility_id in facility_ids
+        }
+        battle_effect_targets = {
+            "battle.{}.starting_health_percent".format(boss_id) for boss_id in boss_ids
+        }
+        boss_outcomes = {
+            boss["boss_id"]: {
+                outcome
+                for outcome in boss.get("possible_outcomes", [])
+                if isinstance(outcome, str)
+            }
+            for boss in data["bosses"]
+            if isinstance(boss.get("possible_outcomes"), list)
+        }
 
         defaults = data["defaults"]
         story_defaults = defaults.get("story_state")
@@ -726,6 +1032,10 @@ class ConfigLoader:
             cls._validate_story_requirements(
                 scene.get("entry_requirements", []),
                 "场景 {}".format(scene_id),
+                attribute_targets,
+                scene_ids,
+                facility_ids,
+                boss_outcomes,
             )
             choices = scene.get("choices")
             if not isinstance(choices, list) or not 2 <= len(choices) <= 3:
@@ -741,10 +1051,16 @@ class ConfigLoader:
                 cls._validate_story_requirements(
                     choice.get("requirements", []),
                     "剧情选择 {}".format(choice_id),
+                    attribute_targets,
+                    scene_ids,
+                    facility_ids,
+                    boss_outcomes,
                 )
                 cls._validate_story_effects(
                     choice.get("effects", []),
                     "剧情选择 {}".format(choice_id),
+                    writable_targets,
+                    battle_effect_targets,
                 )
                 next_scene_id = choice.get("next_scene_id")
                 if next_scene_id is not None and next_scene_id not in scene_ids:
@@ -785,6 +1101,14 @@ class ConfigLoader:
                 raise ConfigError("隐藏发现引用了不存在的选择")
 
         for facility in data["facilities"]:
+            cls._validate_story_requirements(
+                facility.get("unlock_requirements", []),
+                "设施 {}".format(facility["facility_id"]),
+                attribute_targets,
+                scene_ids,
+                facility_ids,
+                boss_outcomes,
+            )
             max_level = facility.get("max_level")
             levels = facility.get("levels")
             if not _is_integer(max_level) or max_level < 1:
@@ -798,14 +1122,44 @@ class ConfigLoader:
                 ):
                     raise ConfigError("设施建造时长必须是正整数")
         for job in data["jobs"]:
+            cls._validate_story_requirements(
+                job.get("requirements", []),
+                "工作 {}".format(job["job_id"]),
+                attribute_targets,
+                scene_ids,
+                facility_ids,
+                boss_outcomes,
+            )
             if not _is_integer(job.get("duration_hours")) or job["duration_hours"] < 1:
                 raise ConfigError("工作时长必须是正整数")
+        for trade in data["trades"]:
+            cls._validate_story_requirements(
+                trade.get("unlock_requirements", []),
+                "交易 {}".format(trade["trade_id"]),
+                attribute_targets,
+                scene_ids,
+                facility_ids,
+                boss_outcomes,
+            )
+        for recruit in data["recruits"]:
+            cls._validate_story_requirements(
+                recruit.get("requirements", []),
+                "招募 {}".format(recruit["recruit_id"]),
+                attribute_targets,
+                scene_ids,
+                facility_ids,
+                boss_outcomes,
+            )
         for ending in data["endings"]:
             if not isinstance(ending.get("body"), str) or not ending["body"]:
                 raise ConfigError("结局缺少完整正文")
             cls._validate_story_requirements(
                 ending.get("requirements", []),
                 "结局 {}".format(ending["ending_id"]),
+                attribute_targets,
+                scene_ids,
+                facility_ids,
+                boss_outcomes,
             )
 
         for companion in data["companions"]:
@@ -814,6 +1168,178 @@ class ConfigLoader:
                 raise ConfigError("伙伴招募场景不存在")
         if set(story_defaults.get("boss_outcomes", {})) - boss_ids:
             raise ConfigError("默认 Boss 结果包含未知 ID")
+        cls._validate_requirement_display(data)
+
+    @classmethod
+    def _validate_requirement_display(cls, data: Mapping[str, Any]) -> None:
+        """校验锁定原因的配置化模板、运算符、分隔符与名称目录。"""
+
+        display = data["requirement_display"]
+        mapping_names = (
+            "templates",
+            "separators",
+            "operators",
+            "target_names",
+            "flag_names",
+            "key_item_names",
+            "boss_outcome_names",
+        )
+        for mapping_name in mapping_names:
+            values = display.get(mapping_name)
+            if not isinstance(values, Mapping) or not values:
+                raise ConfigError(
+                    "requirement_display.{} 必须是非空对象".format(mapping_name)
+                )
+            if not all(
+                isinstance(key, str) and key and isinstance(value, str) and value
+                for key, value in values.items()
+            ):
+                raise ConfigError(
+                    "requirement_display.{} 必须使用非空字符串键值".format(mapping_name)
+                )
+
+        template_fields = {
+            "locked_message": {"reason"},
+            "empty": set(),
+            "all_of": {"requirements"},
+            "any_of": {"requirements"},
+            "attribute": {"target_name", "operator_name", "value"},
+            "computed_attribute": {"target_name", "operator_name", "value"},
+            "scene_completed": {"scene_name"},
+            "flag": {"flag_name"},
+            "flag_absent": {"flag_name"},
+            "key_item": {"key_item_name"},
+            "any_key_item": {"key_item_names"},
+            "boss_resolved": {"boss_name"},
+            "boss_outcome_any": {"boss_name", "outcome_names"},
+            "facility_level": {"facility_name", "operator_name", "value"},
+            "boss_route_selected": set(),
+        }
+        templates = display["templates"]
+        for template_name, expected_fields in template_fields.items():
+            template = templates.get(template_name)
+            if not isinstance(template, str) or not template:
+                raise ConfigError(
+                    "requirement_display.templates.{} 必须是非空字符串".format(
+                        template_name
+                    )
+                )
+            cls._validate_format_fields(
+                template,
+                expected_fields,
+                "requirement_display.templates.{}".format(template_name),
+            )
+
+        required_separators = {"all_of", "any_of", "items"}
+        if set(display["separators"]) != required_separators:
+            raise ConfigError("requirement_display.separators 字段不完整")
+        required_operators = {"gte", "lte", "gt", "lt", "eq", "neq"}
+        if set(display["operators"]) != required_operators:
+            raise ConfigError("requirement_display.operators 字段不完整")
+
+        leaves: List[Mapping[str, Any]] = []
+        for scene in data["scenes"]:
+            leaves.extend(
+                cls._flatten_story_requirements(scene.get("entry_requirements", []))
+            )
+            for choice in scene["choices"]:
+                leaves.extend(
+                    cls._flatten_story_requirements(choice.get("requirements", []))
+                )
+        for ending in data["endings"]:
+            leaves.extend(
+                cls._flatten_story_requirements(ending.get("requirements", []))
+            )
+
+        for requirement in leaves:
+            requirement_type = requirement["type"]
+            if requirement_type in {"attribute", "computed_attribute"}:
+                cls._require_display_name(
+                    display["target_names"],
+                    requirement.get("target"),
+                    "条件目标",
+                )
+            elif requirement_type in {"flag", "flag_absent"}:
+                cls._require_display_name(
+                    display["flag_names"],
+                    requirement.get("flag_id"),
+                    "剧情状态",
+                )
+            elif requirement_type == "key_item":
+                cls._require_display_name(
+                    display["key_item_names"],
+                    requirement.get("key_item_id"),
+                    "关键线索",
+                )
+            elif requirement_type == "any_key_item":
+                for key_item_id in requirement.get("key_item_ids", []):
+                    cls._require_display_name(
+                        display["key_item_names"],
+                        key_item_id,
+                        "关键线索",
+                    )
+            elif requirement_type == "boss_outcome_any":
+                for outcome in requirement.get("outcomes", []):
+                    cls._require_display_name(
+                        display["boss_outcome_names"],
+                        outcome,
+                        "Boss 结果",
+                    )
+
+    @staticmethod
+    def _flatten_story_requirements(
+        requirements: Sequence[Mapping[str, Any]],
+    ) -> List[Mapping[str, Any]]:
+        """把 any_of/all_of 条件树展平为可校验的叶子条件列表。"""
+
+        leaves: List[Mapping[str, Any]] = []
+        for requirement in requirements:
+            if requirement.get("type") in {"any_of", "all_of"}:
+                leaves.extend(
+                    ConfigLoader._flatten_story_requirements(
+                        requirement.get("requirements", [])
+                    )
+                )
+            else:
+                leaves.append(requirement)
+        return leaves
+
+    @staticmethod
+    def _require_display_name(
+        names: Mapping[str, Any],
+        identifier: Any,
+        label: str,
+    ) -> None:
+        """要求锁定提示引用的稳定 ID 具有非空中文名称。"""
+
+        if not isinstance(identifier, str) or not isinstance(
+            names.get(identifier), str
+        ):
+            raise ConfigError("{} {} 缺少显示名称".format(label, identifier))
+
+    @staticmethod
+    def _validate_format_fields(
+        template: str,
+        expected_fields: Set[str],
+        location: str,
+    ) -> None:
+        """校验配置化模板的格式语法与占位符集合。"""
+
+        try:
+            actual_fields = {
+                field_name
+                for _, field_name, _, _ in Formatter().parse(template)
+                if field_name is not None
+            }
+        except ValueError as error:
+            raise ConfigError("{} 文案格式无效".format(location)) from error
+        if actual_fields != expected_fields:
+            raise ConfigError(
+                "{} 占位符必须为 {}".format(
+                    location,
+                    "、".join(sorted(expected_fields)) or "空集合",
+                )
+            )
 
     @staticmethod
     def _unique_story_ids(
@@ -839,8 +1365,12 @@ class ConfigLoader:
         cls,
         requirements: Any,
         location: str,
+        attribute_targets: Set[str],
+        scene_ids: Set[str],
+        facility_ids: Set[str],
+        boss_outcomes: Mapping[str, Set[str]],
     ) -> None:
-        """递归校验剧情条件使用已支持的类型与基本字段。"""
+        """递归校验剧情条件的类型、必需字段、白名单与引用。"""
 
         allowed_types = {
             "attribute",
@@ -869,29 +1399,145 @@ class ConfigLoader:
             if requirement_type in {"any_of", "all_of"}:
                 nested = requirement.get("requirements")
                 if not isinstance(nested, list) or not nested:
-                    raise ConfigError("any_of 必须包含非空 requirements")
-                cls._validate_story_requirements(nested, location)
+                    raise ConfigError(
+                        "{} 必须包含非空 requirements".format(requirement_type)
+                    )
+                cls._validate_story_requirements(
+                    nested,
+                    location,
+                    attribute_targets,
+                    scene_ids,
+                    facility_ids,
+                    boss_outcomes,
+                )
+                continue
+            if requirement_type in {"attribute", "computed_attribute"}:
+                target = requirement.get("target")
+                allowed_targets = (
+                    attribute_targets
+                    if requirement_type == "attribute"
+                    else STORY_COMPUTED_TARGETS
+                )
+                if not isinstance(target, str) or target not in allowed_targets:
+                    raise ConfigError(
+                        "{} 的 {} 目标无效：{}".format(
+                            location,
+                            requirement_type,
+                            target,
+                        )
+                    )
+                cls._validate_numeric_story_requirement(requirement, location)
+                continue
+            if requirement_type == "facility_level":
+                facility_id = requirement.get("facility_id")
+                if facility_id not in facility_ids:
+                    raise ConfigError(
+                        "{} 引用了未知设施：{}".format(location, facility_id)
+                    )
+                cls._validate_numeric_story_requirement(requirement, location)
+                continue
+            if requirement_type == "scene_completed":
+                if requirement.get("scene_id") not in scene_ids:
+                    raise ConfigError("{} 引用了未知场景".format(location))
+                continue
+            if requirement_type in {"flag", "flag_absent"}:
+                cls._require_non_empty_string(
+                    requirement.get("flag_id"),
+                    "{} 的 flag_id".format(location),
+                )
+                continue
+            if requirement_type == "key_item":
+                cls._require_non_empty_string(
+                    requirement.get("key_item_id"),
+                    "{} 的 key_item_id".format(location),
+                )
+                continue
+            if requirement_type == "any_key_item":
+                key_item_ids = requirement.get("key_item_ids")
+                if not isinstance(key_item_ids, list) or not key_item_ids:
+                    raise ConfigError(
+                        "{} 的 key_item_ids 必须是非空列表".format(location)
+                    )
+                for key_item_id in key_item_ids:
+                    cls._require_non_empty_string(
+                        key_item_id,
+                        "{} 的 key_item_ids 条目".format(location),
+                    )
+                continue
+            if requirement_type == "boss_resolved":
+                if requirement.get("boss_id") not in boss_outcomes:
+                    raise ConfigError("{} 引用了未知 Boss".format(location))
+                continue
+            if requirement_type == "boss_outcome_any":
+                boss_id = requirement.get("boss_id")
+                outcomes = requirement.get("outcomes")
+                if boss_id not in boss_outcomes:
+                    raise ConfigError("{} 引用了未知 Boss".format(location))
+                if (
+                    not isinstance(outcomes, list)
+                    or not outcomes
+                    or not all(
+                        isinstance(outcome, str) and outcome for outcome in outcomes
+                    )
+                    or not set(outcomes).issubset(boss_outcomes[boss_id])
+                ):
+                    raise ConfigError("{} 的 Boss 结果列表无效".format(location))
 
     @staticmethod
-    def _validate_story_effects(effects: Any, location: str) -> None:
-        """校验剧情数值效果的目标、操作和固定或随机数值。"""
+    def _story_attribute_targets(companion_ids: Set[str]) -> Set[str]:
+        """构造与 StateOperations 可读写状态完全一致的剧情属性目标集。"""
 
-        allowed_roots = {
-            "player",
-            "shelter",
-            "story",
-            "companion",
-            "battle",
-            "rules",
+        targets = {
+            "player.{}".format(field_name) for field_name in PLAYER_EFFECT_FIELDS
         }
+        targets.update(
+            "shelter.{}".format(field_name) for field_name in SHELTER_EFFECT_FIELDS
+        )
+        targets.update(
+            "story.{}".format(field_name) for field_name in STORY_EFFECT_FIELDS
+        )
+        targets.update(
+            "companion.{}.trust".format(companion_id) for companion_id in companion_ids
+        )
+        return targets
+
+    @staticmethod
+    def _validate_numeric_story_requirement(
+        requirement: Mapping[str, Any],
+        location: str,
+    ) -> None:
+        """校验数值剧情条件声明了可支持运算符与真正整数阈值。"""
+
+        operator = requirement.get("operator")
+        if operator not in STORY_COMPARISON_OPERATORS:
+            raise ConfigError("{} 的条件运算符无效：{}".format(location, operator))
+        if not _is_integer(requirement.get("value")):
+            raise ConfigError("{} 的条件阈值必须是整数".format(location))
+
+    @staticmethod
+    def _require_non_empty_string(value: Any, location: str) -> None:
+        """要求一个配置必需字段是非空字符串。"""
+
+        if not isinstance(value, str) or not value:
+            raise ConfigError("{} 必须是非空字符串".format(location))
+
+    @staticmethod
+    def _validate_story_effects(
+        effects: Any,
+        location: str,
+        writable_targets: Set[str],
+        battle_effect_targets: Set[str],
+    ) -> None:
+        """校验剧情效果只写入领域服务精确支持的状态目标。"""
+
         if not isinstance(effects, list):
             raise ConfigError("{} 的 effects 必须是列表".format(location))
         for effect in effects:
             if not isinstance(effect, Mapping):
                 raise ConfigError("{} 的效果必须是对象".format(location))
             target = effect.get("target")
-            if not isinstance(target, str) or target.split(".")[0] not in allowed_roots:
-                raise ConfigError("{} 的效果目标无效".format(location))
+            if target not in writable_targets and target not in battle_effect_targets:
+                raise ConfigError("{} 的效果目标无效：{}".format(location, target))
             if effect.get("operation") not in {"add", "subtract", "set"}:
                 raise ConfigError("{} 的效果操作无效".format(location))
             amount = effect.get("amount")
@@ -903,6 +1549,11 @@ class ConfigLoader:
             )
             if not (_is_integer(amount) or valid_range):
                 raise ConfigError("{} 的效果数值无效".format(location))
+            if "limit_to_available" in effect and (
+                not isinstance(effect["limit_to_available"], bool)
+                or effect["operation"] != "subtract"
+            ):
+                raise ConfigError("{} 的可用量限制无效".format(location))
 
     @classmethod
     def _validate_event_config(cls, data: Mapping[str, Any]) -> None:

@@ -158,6 +158,7 @@ DEFAULT_TEXTS: Mapping[str, str] = {
     "focus": "你屏住呼吸观察弱点，下一次攻击将获得专注加成。",
     "medicine": "你消耗{cost}份医疗用品，恢复{healed}点生命。",
     "medicine_failed": "医疗用品不足，需要至少{cost}份。",
+    "medicine_not_needed": "当前所长生命值已满，无需消耗医疗用品。",
     "boss_attack": "{boss_name}发动攻击，你受到{damage}点伤害。",
     "boss_special": "{special_text}你受到{damage}点伤害。",
     "guard_reduced": "防御生效，本次伤害由{raw_damage}降低至{damage}。",
@@ -294,7 +295,14 @@ class CombatService:
                 action.get("requirements", []),
                 state,
             )
-            reason = "" if available else self._unavailable_reason(action)
+            if (
+                action["action_id"] == "medicine"
+                and state.active_player.health >= self._rules["player_max_health"]
+            ):
+                available = False
+                reason = self._text("medicine_not_needed")
+            else:
+                reason = "" if available else self._unavailable_reason(action)
             result.append(
                 CombatAction(
                     action_id=action["action_id"],
@@ -323,8 +331,20 @@ class CombatService:
                     False,
                     False,
                     False,
+                    state_changed=False,
                 )
             raise CombatError(self._text("invalid_action", action_id=action_id))
+        if (
+            action_id == "medicine"
+            and state.active_player.health >= self._rules["player_max_health"]
+        ):
+            return CombatReport(
+                (self._text("medicine_not_needed"),),
+                False,
+                False,
+                False,
+                state_changed=False,
+            )
 
         working_state = copy.deepcopy(state)
         messages = self._perform_on_working_state(working_state, action)

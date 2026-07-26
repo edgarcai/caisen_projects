@@ -53,6 +53,89 @@
       "maximum_choices_per_scene": 3
     }
   },
+  "requirement_display": {
+    "templates": {
+      "locked_message": "条件不足：{reason}",
+      "empty": "剧情前置条件尚未达成",
+      "all_of": "需要同时满足：{requirements}",
+      "any_of": "需要满足任一条件：{requirements}",
+      "attribute": "{target_name}{operator_name} {value}",
+      "computed_attribute": "{target_name}{operator_name} {value}",
+      "scene_completed": "先完成主线【{scene_name}】",
+      "flag": "达成剧情状态【{flag_name}】",
+      "flag_absent": "保持剧情状态【{flag_name}】未发生",
+      "key_item": "持有关键线索【{key_item_name}】",
+      "any_key_item": "持有任一关键线索：{key_item_names}",
+      "boss_resolved": "解决首领【{boss_name}】",
+      "boss_outcome_any": "以指定方式解决【{boss_name}】：{outcome_names}",
+      "facility_level": "{facility_name}等级{operator_name} {value}",
+      "boss_route_selected": "本次首领战已经确定了另一条战术路线"
+    },
+    "separators": {
+      "all_of": "；并且 ",
+      "any_of": "；或者 ",
+      "items": "、"
+    },
+    "operators": {
+      "gte": "至少需要",
+      "lte": "最多允许",
+      "gt": "必须高于",
+      "lt": "必须低于",
+      "eq": "必须等于",
+      "neq": "不能等于"
+    },
+    "target_names": {
+      "player.food": "食物",
+      "player.intelligence": "智力",
+      "player.parts": "零件",
+      "player.medical_supplies": "医疗用品",
+      "player.agility": "敏捷",
+      "player.antidotes": "解毒剂",
+      "shelter.population": "避难所人数",
+      "shelter.health": "避难所耐久",
+      "shelter.activity": "避难所活跃度",
+      "story.evidence": "证据",
+      "story.humanity": "人性",
+      "story.infection_pressure": "感染压力",
+      "story.total_companion_trust": "伙伴总信任",
+      "companion.haocai.trust": "豪菜信任",
+      "companion.yangguan.trust": "阳关信任",
+      "companion.linlan.trust": "林岚信任",
+      "active_player.combat_power": "当前所长战斗力"
+    },
+    "flag_names": {
+      "xiaoman_joined": "小满已加入",
+      "linlan_joined": "林岚已加入",
+      "yangguan_exiled": "阳关已被放逐",
+      "secret_ending_locked": "秘密结局已锁定",
+      "everyone_home": "全员已归队",
+      "final_reversal": "最终逆转已启动",
+      "city_awakening": "城市觉醒已启动",
+      "final_evacuate": "最终撤离方案",
+      "final_shepherd": "牧羊人方案",
+      "guardian_preserved": "守望者已保留"
+    },
+    "key_item_names": {
+      "dawn_ledger": "晨曦计划账本",
+      "lu_badge": "陆沉的消防员铭牌",
+      "crown_core": "无冕王核心",
+      "guardian_truth": "守望者真相",
+      "hive_memory": "群巢记忆索引",
+      "yg07_record": "YG-07完整病历",
+      "maintenance_key": "白塔维护密钥",
+      "counter_frequency": "逆向疏散频率"
+    },
+    "boss_outcome_names": {
+      "killed": "击杀",
+      "spared": "宽恕",
+      "awakened": "唤醒",
+      "destroyed": "摧毁",
+      "neutralized": "中和",
+      "linked": "连接",
+      "guardian_preserved": "保留守望者",
+      "hive_bridge": "建立群巢桥接"
+    }
+  },
   "chapters": [
     {
       "chapter_id": "chapter_1_hunger_speaks",
@@ -1262,6 +1345,7 @@
       "focus": "你屏住呼吸观察弱点，下一次攻击将获得专注加成。",
       "medicine": "你消耗{cost}份医疗用品，恢复{healed}点生命。",
       "medicine_failed": "医疗用品不足，需要至少{cost}份。",
+      "medicine_not_needed": "当前所长生命值已满，无需消耗医疗用品。",
       "boss_attack": "{boss_name}发动攻击，你受到{damage}点伤害。",
       "boss_special": "{special_text}你受到{damage}点伤害。",
       "guard_reduced": "防御生效，本次伤害由{raw_damage}降低至{damage}。",

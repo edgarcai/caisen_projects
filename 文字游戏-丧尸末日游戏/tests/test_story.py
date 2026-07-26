@@ -131,7 +131,7 @@ class StoryApplicationTests(unittest.TestCase):
             choice for choice in prompt.choices if choice.choice_id == "share_rations"
         )
         self.assertFalse(share_choice.available)
-        self.assertTrue(share_choice.locked_reason)
+        self.assertEqual("食物至少需要 6", share_choice.locked_reason)
         before_choice = state.to_dict()
 
         report = self.application.resolve_story_choice(
@@ -140,7 +140,37 @@ class StoryApplicationTests(unittest.TestCase):
         )
         self.assertFalse(report.state_changed)
         self.assertFalse(report.game_over)
+        self.assertEqual(("条件不足：食物至少需要 6",), report.messages)
         self.assertEqual(before_choice, state.to_dict())
+
+    def test_locked_reason_recursively_describes_any_and_all_requirements(self) -> None:
+        """嵌套任一与全部条件应逐层显示具体目标、运算符和阈值。"""
+
+        state = self.application.state
+        self._move_to_scene(
+            self.application,
+            "chorus_matriarch",
+            ["the_city_starts_singing"],
+        )
+        state.active_player.parts = 0
+        state.active_player.intelligence = 0
+        state.story.flags = []
+        state.companion("haocai").trust = 0
+
+        prompt = self.application.current_story_prompt()
+        retune_choice = next(
+            choice
+            for choice in prompt.choices
+            if choice.choice_id == "retune_frequency"
+        )
+
+        self.assertFalse(retune_choice.available)
+        self.assertEqual(
+            "需要满足任一条件："
+            "需要同时满足：达成剧情状态【小满已加入】；并且 零件至少需要 15；或者 "
+            "需要同时满足：智力至少需要 150；并且 豪菜信任至少需要 1",
+            retune_choice.locked_reason,
+        )
 
     def test_story_choice_updates_companion_trust_and_status(self) -> None:
         """救援伙伴的剧情效果必须同时更新信任度和加入状态。"""

@@ -4,261 +4,30 @@ from __future__ import annotations
 
 import re
 import tkinter as tk
-from pathlib import Path
-from tkinter import messagebox, simpledialog
+from functools import partial
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from apocalypse_game.application import GameApplication, GameApplicationError
 from apocalypse_game.combat import CombatError
-from apocalypse_game.config import ConfigError, GameConfig
+from apocalypse_game.config import ConfigError
+from apocalypse_game.cover_renderer import CoverRenderer
 from apocalypse_game.domain import ActionReport, EventPrompt, StoryPrompt
 from apocalypse_game.events import EventError
 from apocalypse_game.ports import SaveDataError
 from apocalypse_game.shelter import ShelterManagementError
 from apocalypse_game.story import StoryError
+from apocalypse_game.ui_navigation import PageStack
+from apocalypse_game.ui_pages import (
+    BasePage,
+    BattlePage,
+    ConfirmPage,
+    EndingPage,
+    InputPage,
+    MessagePage,
+    PageOption,
+    SelectionPage,
+)
 from apocalypse_game.widgets import GameButton, GameButtonFactory, StatusMeter
-
-try:
-    from PIL import Image, ImageOps, ImageTk
-except ImportError:  # pragma: no cover - 仅在未安装可选图像依赖时触发
-    Image = None
-    ImageOps = None
-    ImageTk = None
-
-
-class ChoiceDialog:
-    """显示一个可配置按钮列表并返回用户选择的标识。"""
-
-    def __init__(
-        self,
-        parent: tk.Misc,
-        title: str,
-        prompt: str,
-        options: Sequence[Tuple[str, str]],
-        config: GameConfig,
-        columns: int = 1,
-    ) -> None:
-        """创建模态选择窗口，但把等待行为留给 ``show``。"""
-
-        self._result: Optional[str] = None
-        self._window = tk.Toplevel(parent)
-        self._window.title(title)
-        self._window.transient(parent)
-        self._window.grab_set()
-        self._window.resizable(False, False)
-        theme = config.section("theme")
-        fonts = config.section("fonts")
-        button_factory = GameButtonFactory(
-            config.section("button_styles"),
-            fonts,
-            config.section("interface")["buttons"],
-        )
-        self._window.configure(bg=theme["panel"])
-
-        label = tk.Label(
-            self._window,
-            text=prompt,
-            bg=theme["panel"],
-            fg=theme["text"],
-            font=(fonts["family"], fonts["body_size"]),
-            justify="left",
-            wraplength=460,
-        )
-        label.grid(row=0, column=0, columnspan=max(columns, 1), padx=24, pady=(22, 16))
-
-        for index, (option_id, option_label) in enumerate(options):
-            row = 1 + index // columns
-            column = index % columns
-            button = button_factory.create(
-                parent=self._window,
-                text=option_label,
-                command=lambda selected=option_id: self._select(selected),
-                style="secondary",
-                size="choice",
-                show_prompt=False,
-            )
-            button.grid(row=row, column=column, padx=8, pady=7, sticky="ew")
-
-        self._window.protocol("WM_DELETE_WINDOW", self._cancel)
-        self._window.update_idletasks()
-        x_position = parent.winfo_rootx() + max(
-            0,
-            (parent.winfo_width() - self._window.winfo_width()) // 2,
-        )
-        y_position = parent.winfo_rooty() + max(
-            0,
-            (parent.winfo_height() - self._window.winfo_height()) // 2,
-        )
-        self._window.geometry("+{}+{}".format(x_position, y_position))
-
-    def show(self) -> Optional[str]:
-        """等待模态窗口关闭，并返回选中标识或 ``None``。"""
-
-        self._window.wait_window()
-        return self._result
-
-    def _select(self, option_id: str) -> None:
-        """记录选择结果并关闭窗口。"""
-
-        self._result = option_id
-        self._window.destroy()
-
-    def _cancel(self) -> None:
-        """在用户关闭窗口时返回取消结果。"""
-
-        self._result = None
-        self._window.destroy()
-
-
-class RichChoiceDialog:
-    """用滚动正文和带说明的按钮列表展示长剧情或经营选项。"""
-
-    def __init__(
-        self,
-        parent: tk.Misc,
-        title: str,
-        body: str,
-        options: Sequence[Tuple[str, str, str, bool]],
-        config: GameConfig,
-        allow_cancel: bool = True,
-    ) -> None:
-        """创建可缩放的富文本模态窗口，并按可用状态绘制选择按钮。"""
-
-        self._result: Optional[str] = None
-        self._allow_cancel = allow_cancel
-        self._window = tk.Toplevel(parent)
-        self._window.title(title)
-        self._window.transient(parent)
-        self._window.grab_set()
-        theme = config.section("theme")
-        fonts = config.section("fonts")
-        window = config.section("window")
-        button_factory = GameButtonFactory(
-            config.section("button_styles"),
-            fonts,
-            config.section("interface")["buttons"],
-        )
-        self._window.configure(bg=theme["panel"])
-        self._window.geometry(
-            "{}x{}".format(window["dialog_width"], window["dialog_height"])
-        )
-        self._window.minsize(
-            window["dialog_width"] // 2,
-            window["dialog_height"] // 2,
-        )
-        self._window.grid_columnconfigure(0, weight=1)
-        self._window.grid_rowconfigure(0, weight=1)
-
-        container = tk.Frame(self._window, bg=theme["panel"], padx=22, pady=18)
-        container.grid(row=0, column=0, sticky="nsew")
-        container.grid_columnconfigure(0, weight=1)
-        container.grid_rowconfigure(0, weight=2)
-        container.grid_rowconfigure(1, weight=3)
-
-        body_frame = tk.Frame(container, bg=theme["panel_alt"])
-        body_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 14))
-        body_frame.grid_columnconfigure(0, weight=1)
-        body_frame.grid_rowconfigure(0, weight=1)
-        body_widget = tk.Text(
-            body_frame,
-            bg=theme["panel_alt"],
-            fg=theme["text"],
-            relief="flat",
-            wrap="word",
-            padx=16,
-            pady=14,
-            font=(fonts["family"], fonts["body_size"]),
-        )
-        body_scrollbar = tk.Scrollbar(body_frame, command=body_widget.yview)
-        body_widget.configure(yscrollcommand=body_scrollbar.set)
-        body_widget.grid(row=0, column=0, sticky="nsew")
-        body_scrollbar.grid(row=0, column=1, sticky="ns")
-        body_widget.insert("1.0", body)
-        body_widget.configure(state="disabled")
-
-        option_canvas = tk.Canvas(
-            container,
-            bg=theme["panel"],
-            highlightthickness=0,
-        )
-        option_scrollbar = tk.Scrollbar(
-            container,
-            command=option_canvas.yview,
-        )
-        option_canvas.configure(yscrollcommand=option_scrollbar.set)
-        option_canvas.grid(row=1, column=0, sticky="nsew")
-        option_scrollbar.grid(row=1, column=1, sticky="ns")
-        option_frame = tk.Frame(option_canvas, bg=theme["panel"])
-        option_window = option_canvas.create_window(
-            (0, 0), anchor="nw", window=option_frame
-        )
-        option_frame.bind(
-            "<Configure>",
-            lambda event: option_canvas.configure(
-                scrollregion=option_canvas.bbox("all")
-            ),
-        )
-        option_canvas.bind(
-            "<Configure>",
-            lambda event: option_canvas.itemconfigure(option_window, width=event.width),
-        )
-        option_frame.grid_columnconfigure(0, weight=1)
-        for row, (option_id, label, description, available) in enumerate(options):
-            card = tk.Frame(
-                option_frame,
-                bg=theme["panel_alt"],
-                highlightbackground=theme["border"],
-                highlightthickness=1,
-                padx=10,
-                pady=8,
-            )
-            card.grid(row=row, column=0, sticky="ew", pady=5, padx=(0, 8))
-            card.grid_columnconfigure(1, weight=1)
-            button = button_factory.create(
-                parent=card,
-                text=label,
-                command=lambda selected=option_id: self._select(selected),
-                state="normal" if available else "disabled",
-                style="secondary",
-                size="dialog",
-                show_prompt=available,
-            )
-            button.grid(row=0, column=0, sticky="w", padx=(0, 12))
-            description_label = tk.Label(
-                card,
-                text=description,
-                bg=theme["panel_alt"],
-                fg=theme["muted_text"],
-                justify="left",
-                anchor="w",
-                wraplength=window["dialog_wrap_length"] // 2,
-                font=(fonts["family"], fonts["small_size"]),
-            )
-            description_label.grid(row=0, column=1, sticky="ew")
-
-        self._window.protocol("WM_DELETE_WINDOW", self._cancel)
-        self._window.bind("<Escape>", lambda event: self._cancel())
-
-    def show(self) -> Optional[str]:
-        """等待窗口关闭并返回用户选择的稳定英文 ID。"""
-
-        self._window.wait_window()
-        return self._result
-
-    def _select(self, option_id: str) -> None:
-        """记录选项并关闭模态窗口。"""
-
-        self._result = option_id
-        self._window.destroy()
-
-    def _cancel(self) -> None:
-        """按调用方策略允许关闭窗口，或用响铃提示必须作出选择。"""
-
-        if not self._allow_cancel:
-            self._window.bell()
-            return
-        self._result = None
-        self._window.destroy()
 
 
 class GameWindow:
@@ -278,7 +47,8 @@ class GameWindow:
             self._fonts,
             self._interface["buttons"],
         )
-        self._concept_image = None
+        self._page_stack = PageStack(root)
+        self._cover_renderer: Optional[CoverRenderer] = None
         self._log_widget: Optional[tk.Text] = None
         self._time_label: Optional[tk.Label] = None
         self._mode_label: Optional[tk.Label] = None
@@ -290,9 +60,32 @@ class GameWindow:
         self._player_meters: Dict[str, StatusMeter] = {}
         self._shelter_meters: Dict[str, StatusMeter] = {}
         self._action_buttons: Dict[str, GameButton] = {}
+        self._battle_page: Optional[BattlePage] = None
         self._log_history: List[str] = []
         self._configure_root()
         self.show_main_menu()
+
+    @property
+    def page_stack(self) -> PageStack:
+        """返回主窗口页面栈，供集成测试和外层宿主读取导航状态。"""
+
+        return self._page_stack
+
+    def _clear_dashboard_widget_references(self) -> None:
+        """清理仪表盘和战斗页的 Tk 引用，避免访问已销毁组件。"""
+
+        self._log_widget = None
+        self._time_label = None
+        self._mode_label = None
+        self._active_player_label = None
+        self._campaign_label = None
+        self._story_status_label = None
+        self._player_values = {}
+        self._shelter_values = {}
+        self._player_meters = {}
+        self._shelter_meters = {}
+        self._action_buttons = {}
+        self._battle_page = None
 
     def _configure_root(self) -> None:
         """根据配置设置窗口标题、尺寸、最小尺寸与背景色。"""
@@ -305,61 +98,52 @@ class GameWindow:
         self._root.configure(bg=self._theme["background"])
 
     def show_main_menu(self) -> None:
-        """清空当前页面并绘制包含三个指定选项的主菜单。"""
+        """展示全屏封面以及左侧向右下错位的三个主菜单入口。"""
 
-        self._clear_root()
+        self._clear_dashboard_widget_references()
         self._log_history = []
+        cover = self._interface["cover"]
+        window = self._config.section("window")
+        page = tk.Frame(self._root, bg=cover["fallback_background"])
         canvas = tk.Canvas(
-            self._root,
-            bg=self._theme["background"],
+            page,
+            width=window["width"],
+            height=window["height"],
+            bg=cover["fallback_background"],
             highlightthickness=0,
         )
         canvas.pack(fill="both", expand=True)
-        self._root.update_idletasks()
-        width = max(self._root.winfo_width(), self._config.section("window")["width"])
-        height = max(
-            self._root.winfo_height(), self._config.section("window")["height"]
+        renderer = CoverRenderer(
+            canvas=canvas,
+            image_path=self._config.resolve_path("cover_art"),
+            cover_config=cover,
+            font_family=self._fonts["family"],
+            fallback_message=self._config.text("concept_fallback"),
         )
-        self._draw_menu_background(canvas, width, height)
+        renderer.render(window["width"], window["height"])
+        self._cover_renderer = renderer
+        page.bind(
+            "<Destroy>",
+            partial(self._on_menu_page_destroyed, renderer),
+            add="+",
+        )
 
-        game = self._config.section("game")
         menu = self._config.section("menu")
         canvas.create_text(
-            70,
-            96,
-            anchor="w",
-            text=game["title"],
-            fill=self._theme["text"],
-            font=(self._fonts["family"], self._fonts["title_size"], "bold"),
+            cover["title_x"],
+            cover["title_y"],
+            anchor=cover["title_anchor"],
+            text=cover["title"],
+            fill=cover["title_color"],
+            font=(self._fonts["family"], cover["title_size"], "bold"),
         )
         canvas.create_text(
-            72,
-            145,
-            anchor="w",
-            text=game["subtitle"],
-            fill=self._theme["accent"],
-            font=(self._fonts["family"], self._fonts["subtitle_size"]),
-        )
-
-        panel_width = 360
-        panel_x = width - panel_width - 64
-        panel_y = 155
-        canvas.create_rectangle(
-            panel_x,
-            panel_y,
-            panel_x + panel_width,
-            panel_y + 430,
-            fill=self._theme["overlay"],
-            outline=self._theme["border"],
-            width=1,
-        )
-        canvas.create_text(
-            panel_x + 34,
-            panel_y + 48,
-            anchor="w",
-            text=menu["hint"],
-            fill=self._theme["muted_text"],
-            font=(self._fonts["family"], self._fonts["body_size"]),
+            cover["subtitle_x"],
+            cover["subtitle_y"],
+            anchor=cover["subtitle_anchor"],
+            text=cover["subtitle"],
+            fill=cover["subtitle_color"],
+            font=(self._fonts["family"], cover["subtitle_size"], "bold"),
         )
 
         options = (
@@ -367,158 +151,128 @@ class GameWindow:
             ("load_game", menu["load_game"], self._load_game),
             ("multiplayer", menu["multiplayer"], self._start_multiplayer_game),
         )
+        self._menu_buttons: Dict[str, GameButton] = {}
+        self._menu_button_positions: Dict[str, tuple[int, int]] = {}
         for index, (option_id, label, command) in enumerate(options):
-            presentation = menu["presentations"][option_id]
             button = self._make_button(
                 parent=canvas,
                 text=label,
                 command=command,
                 style="primary" if index == 0 else "secondary",
                 size="menu",
-                icon=presentation["icon"],
-                subtitle=presentation["subtitle"],
+                show_prompt=False,
+                shape=cover["menu_button_shape"],
             )
+            button_x = cover["menu_start_x"] + index * cover["menu_step_x"]
+            button_y = cover["menu_start_y"] + index * cover["menu_step_y"]
             canvas.create_window(
-                panel_x + panel_width // 2,
-                panel_y + 118 + index * 82,
+                button_x,
+                button_y,
+                anchor=cover["menu_anchor"],
                 window=button,
             )
+            self._menu_buttons[option_id] = button
+            self._menu_button_positions[option_id] = (button_x, button_y)
+        self._page_stack.reset("menu", page)
 
-        story = tk.Message(
-            canvas,
-            text=game["story"],
-            width=560,
-            bg=self._theme["overlay"],
-            fg=self._theme["muted_text"],
-            font=(self._fonts["family"], self._fonts["body_size"]),
-            justify="left",
-            padx=20,
-            pady=16,
-        )
-        canvas.create_window(70, height - 165, anchor="w", window=story)
-        canvas.create_text(
-            width - 64,
-            height - 32,
-            anchor="e",
-            text=menu["footer"],
-            fill=self._theme["muted_text"],
-            font=(self._fonts["family"], self._fonts["small_size"]),
-        )
+    def _on_menu_page_destroyed(
+        self,
+        renderer: CoverRenderer,
+        _event: tk.Event,
+    ) -> None:
+        """封面页销毁时取消其重绘任务，并释放窗口级渲染器引用。"""
 
-    def _draw_menu_background(self, canvas: tk.Canvas, width: int, height: int) -> None:
-        """加载项目概念图，读取失败时绘制不阻塞启动的低资源背景。"""
-
-        image_path = self._config.resolve_path("concept_art")
-        try:
-            self._concept_image = self._load_image(image_path, width, height)
-            canvas.create_image(0, 0, anchor="nw", image=self._concept_image)
-            canvas.create_rectangle(
-                0,
-                0,
-                width,
-                height,
-                fill=self._theme["background"],
-                stipple="gray50",
-                outline="",
-            )
-        except (OSError, tk.TclError, ValueError):
-            self._concept_image = None
-            canvas.create_rectangle(
-                0,
-                0,
-                width,
-                height,
-                fill=self._theme["background"],
-                outline="",
-            )
-            canvas.create_oval(
-                60,
-                70,
-                380,
-                390,
-                fill="#5b3028",
-                outline="",
-            )
-            canvas.create_rectangle(
-                0,
-                height * 0.58,
-                width,
-                height,
-                fill="#11191c",
-                outline="",
-            )
-
-    @staticmethod
-    def _load_image(image_path: Path, width: int, height: int):
-        """优先借助 Pillow 等比裁切概念图，否则使用 Tk 原生加载。"""
-
-        if Image is not None and ImageOps is not None and ImageTk is not None:
-            with Image.open(str(image_path)) as source:
-                resampling = getattr(Image, "Resampling", Image).LANCZOS
-                fitted = ImageOps.fit(
-                    source.convert("RGB"), (width, height), method=resampling
-                )
-                return ImageTk.PhotoImage(fitted)
-        return tk.PhotoImage(file=str(image_path))
+        renderer.dispose()
+        if self._cover_renderer is renderer:
+            self._cover_renderer = None
 
     def _start_single_game(self) -> None:
-        """询问所长姓名并创建单人新游戏。"""
+        """在主窗口输入页收集姓名，并创建单人新游戏。"""
 
         dialogs = self._config.section("dialogs")
-        name = simpledialog.askstring(
-            dialogs["new_game_title"],
-            dialogs["player_name_prompt"],
-            initialvalue=dialogs["default_player_name"],
+        page: InputPage
+
+        def submit_player_name(name: str) -> None:
+            """提交单人姓名；领域校验失败时保留输入内容。"""
+
+            try:
+                report = self._application.start_new_game([name], "single")
+            except GameApplicationError as error:
+                page.show_error(str(error))
+                return
+            self._open_game_screen(report)
+            self._show_message(
+                dialogs["info_title"],
+                self._config.section("game")["story"],
+            )
+
+        page = InputPage(
             parent=self._root,
+            button_factory=self._button_factory,
+            theme=self._theme,
+            fonts=self._fonts,
+            title=dialogs["new_game_title"],
+            prompt=dialogs["player_name_prompt"],
+            initial_value=dialogs["default_player_name"],
+            on_submit=submit_player_name,
+            on_back=self._page_stack.pop,
+            page_config=self._interface["pages"],
         )
-        if name is None:
-            return
-        try:
-            report = self._application.start_new_game([name], "single")
-        except GameApplicationError as error:
-            self._show_error(str(error))
-            return
-        self._open_game_screen(report)
-        messagebox.showinfo(
-            dialogs["info_title"],
-            self._config.section("game")["story"],
-            parent=self._root,
+        self._page_stack.push(
+            "single_player_input",
+            page,
+            back_handler=page.back_handler,
         )
 
     def _start_multiplayer_game(self) -> None:
-        """收集两名所长姓名并创建本地轮流合作游戏。"""
+        """在主窗口输入页收集两名所长姓名并创建合作游戏。"""
 
         dialogs = self._config.section("dialogs")
-        raw_names = simpledialog.askstring(
-            dialogs["multiplayer_title"],
-            dialogs["multiplayer_prompt"],
-            initialvalue=dialogs["default_multiplayer_names"],
+        page: InputPage
+
+        def submit_player_names(raw_names: str) -> None:
+            """拆分双人姓名，并把校验问题显示在当前输入页。"""
+
+            names = [
+                name.strip() for name in re.split("[,，]", raw_names) if name.strip()
+            ]
+            try:
+                report = self._application.start_new_game(names, "multiplayer")
+            except GameApplicationError as error:
+                page.show_error(str(error))
+                return
+            self._open_game_screen(report)
+            self._show_message(
+                dialogs["info_title"],
+                self._config.section("game")["tutorial"],
+            )
+
+        page = InputPage(
             parent=self._root,
+            button_factory=self._button_factory,
+            theme=self._theme,
+            fonts=self._fonts,
+            title=dialogs["multiplayer_title"],
+            prompt=dialogs["multiplayer_prompt"],
+            initial_value=dialogs["default_multiplayer_names"],
+            on_submit=submit_player_names,
+            on_back=self._page_stack.pop,
+            page_config=self._interface["pages"],
         )
-        if raw_names is None:
-            return
-        names = [name.strip() for name in re.split("[,，]", raw_names) if name.strip()]
-        try:
-            report = self._application.start_new_game(names, "multiplayer")
-        except GameApplicationError as error:
-            self._show_error(str(error))
-            return
-        self._open_game_screen(report)
-        messagebox.showinfo(
-            dialogs["info_title"],
-            self._config.section("game")["tutorial"],
-            parent=self._root,
+        self._page_stack.push(
+            "multiplayer_input",
+            page,
+            back_handler=page.back_handler,
         )
 
     def _load_game(self) -> None:
-        """读取现有本地存档，并在缺失或损坏时给出明确反馈。"""
+        """读取本地存档，并在主窗口消息页反馈缺失或损坏。"""
 
         dialogs = self._config.section("dialogs")
         if not self._application.has_save():
-            messagebox.showinfo(
+            self._show_message(
                 dialogs["load_title"],
                 self._config.text("no_save"),
-                parent=self._root,
             )
             return
         try:
@@ -531,17 +285,11 @@ class GameWindow:
     def _open_game_screen(self, initial_report: ActionReport) -> None:
         """构建状态面板、行动按钮和日志，并展示初始报告。"""
 
-        self._clear_root()
-        self._player_values = {}
-        self._shelter_values = {}
-        self._player_meters = {}
-        self._shelter_meters = {}
-        self._action_buttons = {}
+        self._clear_dashboard_widget_references()
         self._log_history = []
 
         layout = self._interface["layout"]
         container = tk.Frame(self._root, bg=self._theme["background"])
-        container.pack(fill="both", expand=True)
         container.grid_columnconfigure(0, weight=0, minsize=layout["stats_width"])
         container.grid_columnconfigure(1, weight=1)
         container.grid_columnconfigure(2, weight=0, minsize=layout["action_width"])
@@ -551,6 +299,7 @@ class GameWindow:
         self._build_stats_column(container)
         self._build_log_panel(container)
         self._build_action_column(container)
+        self._page_stack.reset("dashboard", container)
         self._consume_report(initial_report)
 
     def _build_header(self, parent: tk.Widget) -> None:
@@ -891,8 +640,7 @@ class GameWindow:
                     style=action["style"],
                     size=group["button_size"],
                     icon=action["icon"],
-                    subtitle=action["subtitle"],
-                    show_prompt=bool(action["subtitle"]),
+                    show_prompt=False,
                 )
                 button.grid(
                     row=index // group["columns"],
@@ -920,19 +668,17 @@ class GameWindow:
                 self._show_companions()
                 return
             if action_id == "tutorial":
-                messagebox.showinfo(
+                self._show_message(
                     self._config.section("dialogs")["info_title"],
                     self._config.section("game")["tutorial"],
-                    parent=self._root,
                 )
                 return
             if action_id == "save":
                 report = self._application.save_game()
                 self._consume_report(report)
-                messagebox.showinfo(
+                self._show_message(
                     self._config.section("dialogs")["save_title"],
-                    report.messages[0],
-                    parent=self._root,
+                    "\n".join(report.messages),
                 )
                 return
             if action_id == "return_menu":
@@ -951,7 +697,7 @@ class GameWindow:
             self._show_error(str(error))
 
     def _show_story_task(self) -> None:
-        """展示当前长篇主线；若战斗进行中则直接进入战斗面板。"""
+        """打开当前主线页面；进行中的首领战会优先恢复战斗页。"""
 
         state = self._application.state
         if state is not None and state.battle is not None and not state.battle.finished:
@@ -959,138 +705,218 @@ class GameWindow:
             return
         prompt = self._application.current_story_prompt()
         if prompt is None:
-            messagebox.showinfo(
+            self._show_message(
                 self._config.section("dialogs")["story_title"],
                 self._config.text("story_complete"),
-                parent=self._root,
             )
             return
-        choice_id = self._ask_story_choice(prompt)
-        if choice_id is None:
-            return
-        report = self._application.resolve_story_choice(
-            prompt.scene_id,
-            choice_id,
-        )
-        self._consume_report(report)
-        state = self._application.state
-        if (
-            state is not None
-            and state.battle is not None
-            and not state.battle.finished
-            and not state.ended
-        ):
-            self._run_battle()
+        self._ask_story_choice(prompt)
 
-    def _ask_story_choice(self, prompt: StoryPrompt) -> Optional[str]:
-        """用滚动剧情窗口展示正文、目标、可选路线和锁定原因。"""
+    def _ask_story_choice(self, prompt: StoryPrompt) -> None:
+        """在独立剧情页展示正文、目标、路线和锁定原因。"""
 
-        body = "{}\n\n【{}】\n{}\n\n当前目标：{}".format(
-            prompt.chapter_title,
-            prompt.title,
-            prompt.body,
-            prompt.objective,
+        body = self._config.text(
+            "story_page_body",
+            chapter_title=prompt.chapter_title,
+            title=prompt.title,
+            body=prompt.body,
+            objective=prompt.objective,
         )
         options = [
-            (
-                choice.choice_id,
-                choice.label,
-                "可执行"
-                if choice.available
-                else "锁定：{}".format(choice.locked_reason),
-                choice.available,
+            PageOption(
+                option_id=choice.choice_id,
+                label=choice.label,
+                description=(
+                    ""
+                    if choice.available
+                    else self._config.text(
+                        "page_choice_locked",
+                        reason=choice.locked_reason,
+                    )
+                ),
+                enabled=choice.available,
+                style="primary" if choice.available else "secondary",
             )
             for choice in prompt.choices
         ]
-        return RichChoiceDialog(
-            self._root,
-            self._config.section("dialogs")["story_choice_title"],
-            body,
-            options,
-            self._config,
-        ).show()
+        page = SelectionPage(
+            parent=self._root,
+            button_factory=self._button_factory,
+            theme=self._theme,
+            fonts=self._fonts,
+            title=self._config.section("dialogs")["story_choice_title"],
+            body=body,
+            options=options,
+            on_submit=lambda choice_id: self._resolve_story_choice(
+                prompt,
+                choice_id,
+            ),
+            on_back=self._page_stack.pop,
+            page_config=self._interface["pages"],
+        )
+        self._page_stack.push(
+            "story_choice",
+            page,
+            back_handler=page.back_handler,
+        )
+
+    def _resolve_story_choice(self, prompt: StoryPrompt, choice_id: str) -> None:
+        """结算一条剧情路线，并转入战斗、结局或指挥台。"""
+
+        try:
+            report = self._application.resolve_story_choice(
+                prompt.scene_id,
+                choice_id,
+            )
+        except (GameApplicationError, StoryError, CombatError, ConfigError) as error:
+            self._show_error(str(error))
+            return
+        self._consume_report(report)
+        state = self._application.state
+        if state is None or state.ended:
+            return
+        if state.battle is not None and not state.battle.finished:
+            self._run_battle()
+            return
+        self._page_stack.pop_to("dashboard")
 
     def _run_battle(self) -> None:
-        """循环展示可中断、可保存、可读档恢复的 Boss 战斗面板。"""
+        """展示非阻塞战斗页，每次按钮点击只结算一个战斗回合。"""
 
-        dialogs = self._config.section("dialogs")
-        while True:
-            state = self._application.state
-            if (
-                state is None
-                or state.ended
-                or state.battle is None
-                or state.battle.finished
-            ):
-                return
-            battle = state.battle
-            actions = self._application.combat_actions()
-            options = [
-                (
-                    action.action_id,
-                    action.label,
-                    (
-                        action.description
-                        if action.available
-                        else action.unavailable_reason
-                    ),
-                    action.available,
-                )
-                for action in actions
-            ]
-            options.append(
-                (
-                    "save_battle",
-                    "保存战斗进度",
-                    "当前首领生命、回合、玩家与战术状态都会写入存档。",
-                    True,
-                )
+        state = self._application.state
+        if (
+            state is None
+            or state.ended
+            or state.battle is None
+            or state.battle.finished
+        ):
+            self._battle_page = None
+            self._page_stack.pop_to("dashboard")
+            return
+        battle = state.battle
+        actions = [
+            PageOption(
+                option_id=action.action_id,
+                label=action.label,
+                description=(
+                    action.description
+                    if action.available
+                    else action.unavailable_reason
+                ),
+                enabled=action.available,
+                style="primary" if action.available else "secondary",
             )
-            body = (
-                "【{}】\n\n回合：{}\n首领生命：{}/{}\n行动所长：{}\n"
-                "所长生命：{}\n\n关闭窗口可以暂停战斗，之后点击“剧情任务”继续。"
-            ).format(
-                battle.boss_name,
-                battle.round_number,
-                battle.health,
-                battle.max_health,
-                state.active_player.name,
-                state.active_player.health,
+            for action in self._application.combat_actions()
+        ]
+        actions.append(
+            PageOption(
+                option_id="save_battle",
+                label=self._config.text("battle_save_label"),
+                description=self._config.text("battle_save_description"),
+                style="secondary",
             )
-            action_id = RichChoiceDialog(
-                self._root,
-                dialogs["battle_title"],
-                body,
-                options,
-                self._config,
-            ).show()
-            if action_id is None:
-                return
+        )
+        body = self._config.text(
+            "battle_page_body",
+            boss_name=battle.boss_name,
+            round_number=battle.round_number,
+            boss_health=battle.health,
+            boss_max_health=battle.max_health,
+            player_name=state.active_player.name,
+            player_health=state.active_player.health,
+        )
+        page = BattlePage(
+            parent=self._root,
+            button_factory=self._button_factory,
+            theme=self._theme,
+            fonts=self._fonts,
+            title=self._config.section("dialogs")["battle_title"],
+            body=body,
+            actions=actions,
+            on_submit=self._handle_battle_action,
+            on_back=self._leave_battle_page,
+            page_config=self._interface["pages"],
+        )
+        self._battle_page = page
+        if self._page_stack.current_page_id == "battle":
+            self._page_stack.replace(
+                "battle",
+                page,
+                back_handler=page.back_handler,
+            )
+            return
+        self._page_stack.pop_to("dashboard")
+        self._page_stack.push(
+            "battle",
+            page,
+            back_handler=page.back_handler,
+        )
+
+    def _leave_battle_page(self) -> None:
+        """退出当前战斗视图并清理页面引用，领域战斗仍可稍后恢复。"""
+
+        self._battle_page = None
+        self._page_stack.pop()
+
+    def _handle_battle_action(self, action_id: str) -> None:
+        """执行保存或单个战斗行动，并刷新当前战况页面。"""
+
+        try:
             if action_id == "save_battle":
-                save_report = self._application.save_game()
-                self._consume_report(save_report)
-                continue
-            self._consume_report(self._application.perform_combat_action(action_id))
+                report = self._application.save_game()
+                self._consume_report(report)
+                if (
+                    self._battle_page is not None
+                    and self._battle_page.winfo_exists()
+                    and self._page_stack.current_frame is self._battle_page
+                ):
+                    self._battle_page.show_notice("\n".join(report.messages))
+                return
+            report = self._application.perform_combat_action(action_id)
+        except (GameApplicationError, StoryError, CombatError, SaveDataError) as error:
+            self._show_error(str(error))
+            return
+        self._consume_report(report)
+        state = self._application.state
+        if state is None or state.ended:
+            self._battle_page = None
+            return
+        if state.battle is not None and not state.battle.finished:
+            self._run_battle()
+            return
+        self._battle_page = None
+        self._page_stack.pop_to("dashboard")
 
     def _show_shelter_management(self) -> None:
-        """分两步展示经营类别和对应的设施、工作、交易或招募计划。"""
+        """打开经营类别页，项目页返回时仍保留类别选择页。"""
 
-        dialogs = self._config.section("dialogs")
-        category_id = ChoiceDialog(
-            self._root,
-            dialogs["shelter_management_title"],
-            "想处理哪一类避难所事务？",
-            (
-                ("facility", "设施升级"),
-                ("job", "安排工作"),
-                ("trade", "幸存者交易"),
-                ("recruit", "人员招募"),
-            ),
-            self._config,
+        categories = self._interface["pages"]["management_categories"]
+        options = [
+            PageOption(option_id=category["id"], label=category["label"])
+            for category in categories
+        ]
+        page = SelectionPage(
+            parent=self._root,
+            button_factory=self._button_factory,
+            theme=self._theme,
+            fonts=self._fonts,
+            title=self._config.section("dialogs")["shelter_management_title"],
+            body=self._config.text("management_category_prompt"),
+            options=options,
+            on_submit=self._show_management_options,
+            on_back=self._page_stack.pop,
             columns=2,
-        ).show()
-        if category_id is None:
-            return
+            page_config=self._interface["pages"],
+        )
+        self._page_stack.push(
+            "management_categories",
+            page,
+            back_handler=page.back_handler,
+        )
+
+    def _show_management_options(self, category_id: str) -> None:
+        """按经营类别打开对应设施、工作、交易或招募项目页。"""
+
         options = self._application.management_options()
         selected_options = [
             option
@@ -1098,106 +924,265 @@ class GameWindow:
             if option.category == category_id
             or (category_id == "trade" and option.category.startswith("trade_"))
         ]
-        rich_options = [
-            (
-                "{}|{}".format(option.category, option.option_id),
-                option.label,
-                option.description
-                if option.available
-                else "锁定：{}".format(option.description),
-                option.available,
+        page_options = [
+            PageOption(
+                option_id="{}|{}".format(option.category, option.option_id),
+                label=option.label,
+                description=(
+                    option.description
+                    if option.available
+                    else self._config.text(
+                        "page_choice_locked",
+                        reason=option.description,
+                    )
+                ),
+                enabled=option.available,
+                style="primary" if option.available else "secondary",
             )
             for option in selected_options
         ]
-        selected = RichChoiceDialog(
-            self._root,
-            dialogs["shelter_management_title"],
-            self._application.shelter_overview(),
-            rich_options,
-            self._config,
-        ).show()
-        if selected is None:
+        page = SelectionPage(
+            parent=self._root,
+            button_factory=self._button_factory,
+            theme=self._theme,
+            fonts=self._fonts,
+            title=self._config.section("dialogs")["shelter_management_title"],
+            body=self._application.shelter_overview(),
+            options=page_options,
+            on_submit=self._perform_management_choice,
+            on_back=self._page_stack.pop,
+            page_config=self._interface["pages"],
+        )
+        self._page_stack.push(
+            "management_options",
+            page,
+            back_handler=page.back_handler,
+        )
+
+    def _perform_management_choice(self, selected: str) -> None:
+        """执行选中的经营项目，并在结算后回到指挥台。"""
+
+        try:
+            category, option_id = selected.split("|", 1)
+            report = self._application.perform_management(category, option_id)
+        except (
+            ValueError,
+            GameApplicationError,
+            ShelterManagementError,
+            ConfigError,
+        ) as error:
+            self._show_error(str(error))
             return
-        category, option_id = selected.split("|", 1)
-        self._consume_report(self._application.perform_management(category, option_id))
+        self._consume_report(report)
+        state = self._application.state
+        if state is not None and not state.ended:
+            self._page_stack.pop_to("dashboard")
 
     def _show_companions(self) -> None:
-        """在滚动档案窗口展示伙伴状态、信任和逐步解锁的秘密。"""
+        """在主窗口独立档案页展示伙伴状态、信任和秘密。"""
 
-        RichChoiceDialog(
-            self._root,
+        self._show_message(
             self._config.section("dialogs")["companion_title"],
             self._application.companion_summary(),
-            (("close", "关闭档案", "返回避难所行动面板。", True),),
-            self._config,
-        ).show()
+        )
 
     def _explore(self) -> None:
-        """依次完成城市选择、事件展示、分支选择与行动结算。"""
+        """打开城市选择页，或直接恢复存档中的待结算探索事件。"""
 
         dialogs = self._config.section("dialogs")
-        city_options = [(city["id"], city["name"]) for city in self._config.cities()]
-        city_id = ChoiceDialog(
-            self._root,
-            dialogs["city_title"],
-            dialogs["city_prompt"],
-            city_options,
-            self._config,
+        state = self._application.state
+        if state is not None and state.pending_exploration is not None:
+            prompt = self._application.prepare_exploration(
+                state.pending_exploration.city_id
+            )
+            self._ask_event_choice(prompt, replace_current=False)
+            return
+        city_options = [
+            PageOption(option_id=city["id"], label=city["name"])
+            for city in self._config.cities()
+        ]
+        page = SelectionPage(
+            parent=self._root,
+            button_factory=self._button_factory,
+            theme=self._theme,
+            fonts=self._fonts,
+            title=dialogs["city_title"],
+            body=dialogs["city_prompt"],
+            options=city_options,
+            on_submit=self._prepare_exploration,
+            on_back=self._page_stack.pop,
             columns=2,
-        ).show()
-        if city_id is None:
+            page_config=self._interface["pages"],
+        )
+        self._page_stack.push(
+            "exploration_city",
+            page,
+            back_handler=page.back_handler,
+        )
+
+    def _prepare_exploration(self, city_id: str) -> None:
+        """抽取并锁定城市事件，再以替换方式进入事件页面。"""
+
+        try:
+            prompt = self._application.prepare_exploration(city_id)
+        except (GameApplicationError, EventError, ConfigError) as error:
+            self._show_error(str(error))
             return
-        prompt = self._application.prepare_exploration(city_id)
-        choice_id = self._ask_event_choice(prompt)
-        if prompt.choices and choice_id is None:
-            self._append_log(prompt.title)
-            self._append_log(prompt.intro)
-            self._consume_report(self._application.cancel_exploration())
+        self._ask_event_choice(prompt, replace_current=True)
+
+    def _ask_event_choice(
+        self,
+        prompt: EventPrompt,
+        replace_current: bool,
+    ) -> None:
+        """在事件页展示介绍；有分支时选择，无分支时确认继续。"""
+
+        body = self._config.text(
+            "event_page_body",
+            title=prompt.title,
+            intro=prompt.intro,
+        )
+
+        def cancel() -> None:
+            """从事件页返回时执行一次有代价的谨慎撤离。"""
+
+            self._cancel_exploration(prompt)
+
+        if prompt.choices:
+            page = SelectionPage(
+                parent=self._root,
+                button_factory=self._button_factory,
+                theme=self._theme,
+                fonts=self._fonts,
+                title=self._config.section("dialogs")["event_choice_title"],
+                body=body,
+                options=[
+                    PageOption(
+                        option_id=choice.choice_id,
+                        label=choice.label,
+                    )
+                    for choice in prompt.choices
+                ],
+                on_submit=lambda choice_id: self._resolve_exploration(
+                    prompt,
+                    choice_id,
+                ),
+                on_back=cancel,
+                columns=1,
+                page_config=self._interface["pages"],
+            )
+        else:
+            page = MessagePage(
+                parent=self._root,
+                button_factory=self._button_factory,
+                theme=self._theme,
+                fonts=self._fonts,
+                title=prompt.title,
+                body=body,
+                on_submit=lambda: self._resolve_exploration(prompt, None),
+                on_back=cancel,
+                page_config=self._interface["pages"],
+            )
+        if replace_current:
+            self._page_stack.replace(
+                "exploration_event",
+                page,
+                back_handler=page.back_handler,
+            )
             return
-        report = self._application.resolve_exploration(prompt.event_id, choice_id)
+        self._page_stack.push(
+            "exploration_event",
+            page,
+            back_handler=page.back_handler,
+        )
+
+    def _resolve_exploration(
+        self,
+        prompt: EventPrompt,
+        choice_id: Optional[str],
+    ) -> None:
+        """结算已锁定探索事件，并在完成后回到指挥台。"""
+
+        try:
+            report = self._application.resolve_exploration(
+                prompt.event_id,
+                choice_id,
+            )
+        except (GameApplicationError, EventError, ConfigError) as error:
+            self._show_error(str(error))
+            return
+        if not report.state_changed:
+            current_page = self._page_stack.current_frame
+            message = "\n".join(report.messages)
+            if isinstance(current_page, BasePage):
+                current_page.show_error(message)
+            else:
+                self._show_error(message)
+            return
         self._append_log(prompt.title)
         self._append_log(prompt.intro)
         self._consume_report(report)
+        state = self._application.state
+        if state is not None and not state.ended:
+            self._page_stack.pop_to("dashboard")
 
-    def _ask_event_choice(self, prompt: EventPrompt) -> Optional[str]:
-        """展示探索事件介绍，并在需要时返回玩家选择。"""
+    def _cancel_exploration(self, prompt: EventPrompt) -> None:
+        """撤离已抽取事件，清理待结算状态并只消耗一次行动。"""
 
-        if not prompt.choices:
-            messagebox.showinfo(prompt.title, prompt.intro, parent=self._root)
-            return None
-        options = [(choice.choice_id, choice.label) for choice in prompt.choices]
-        return ChoiceDialog(
-            self._root,
-            self._config.section("dialogs")["event_choice_title"],
-            "{}\n\n{}".format(prompt.title, prompt.intro),
-            options,
-            self._config,
-            columns=1,
-        ).show()
+        try:
+            report = self._application.cancel_exploration()
+        except (GameApplicationError, EventError, ConfigError) as error:
+            self._show_error(str(error))
+            return
+        self._append_log(prompt.title)
+        self._append_log(prompt.intro)
+        self._consume_report(report)
+        state = self._application.state
+        if state is not None and not state.ended:
+            self._page_stack.pop_to("dashboard")
 
     def _consume_report(self, report: ActionReport) -> None:
-        """把应用报告写入日志、刷新面板，并处理游戏结束。"""
+        """把报告写入日志、刷新面板，并统一切换到结局页面。"""
 
         for message in report.messages:
             self._append_log(message)
         self._refresh_dashboard()
         if report.game_over:
+            self._battle_page = None
             state = self._application.state
             if state is not None:
-                if state.victory:
-                    RichChoiceDialog(
-                        self._root,
-                        self._config.section("dialogs")["info_title"],
-                        state.ending_message,
-                        (("close", "回望余烬", "结局已写入当前游戏状态。", True),),
-                        self._config,
-                    ).show()
-                else:
-                    messagebox.showerror(
-                        self._config.section("dialogs")["info_title"],
-                        state.ending_message,
-                        parent=self._root,
+                title_key = (
+                    "victory_page_title" if state.victory else "failure_page_title"
+                )
+                page = EndingPage(
+                    parent=self._root,
+                    button_factory=self._button_factory,
+                    theme=self._theme,
+                    fonts=self._fonts,
+                    ending_title=self._config.text(title_key),
+                    body=state.ending_message,
+                    on_submit=self._close_ending,
+                    submit_label=self._interface["pages"]["close_label"],
+                    page_config=self._interface["pages"],
+                )
+                if self._page_stack.current_page_id == "ending":
+                    self._page_stack.replace(
+                        "ending",
+                        page,
+                        back_handler=self._close_ending,
                     )
+                else:
+                    self._page_stack.push(
+                        "ending",
+                        page,
+                        back_handler=self._close_ending,
+                    )
+
+    def _close_ending(self) -> None:
+        """从结局页返回已禁用生存行动的指挥台。"""
+
+        self._battle_page = None
+        self._page_stack.pop_to("dashboard")
 
     def _append_log(self, message: str) -> None:
         """向只读日志追加一条带回合标记的中文消息。"""
@@ -1297,16 +1282,26 @@ class GameWindow:
             )
 
     def _confirm_return_to_menu(self) -> None:
-        """二次确认后返回三个选项的主菜单。"""
+        """在主窗口确认页二次确认是否放弃未保存进度。"""
 
         dialogs = self._config.section("dialogs")
-        confirmed = messagebox.askyesno(
-            dialogs["confirm_return_title"],
-            dialogs["confirm_return_message"],
+        page = ConfirmPage(
             parent=self._root,
+            button_factory=self._button_factory,
+            theme=self._theme,
+            fonts=self._fonts,
+            title=dialogs["confirm_return_title"],
+            body=dialogs["confirm_return_message"],
+            on_submit=self.show_main_menu,
+            on_back=self._page_stack.pop,
+            danger=True,
+            page_config=self._interface["pages"],
         )
-        if confirmed:
-            self.show_main_menu()
+        self._page_stack.push(
+            "return_menu_confirm",
+            page,
+            back_handler=page.back_handler,
+        )
 
     def _make_button(
         self,
@@ -1318,6 +1313,7 @@ class GameWindow:
         icon: str = "",
         subtitle: str = "",
         show_prompt: bool = True,
+        shape: str = "rectangle",
     ) -> GameButton:
         """通过统一工厂创建跨平台配色一致的自绘游戏按钮。"""
 
@@ -1330,19 +1326,43 @@ class GameWindow:
             icon=icon,
             subtitle=subtitle,
             show_prompt=show_prompt,
+            shape=shape,
+        )
+
+    def _show_message(self, title: str, body: str) -> None:
+        """把普通信息、教程或档案作为主窗口内子页面展示。"""
+
+        page = MessagePage(
+            parent=self._root,
+            button_factory=self._button_factory,
+            theme=self._theme,
+            fonts=self._fonts,
+            title=title,
+            body=body,
+            on_back=self._page_stack.pop,
+            page_config=self._interface["pages"],
+        )
+        self._page_stack.push(
+            "message",
+            page,
+            back_handler=page.back_handler,
         )
 
     def _show_error(self, message: str) -> None:
-        """使用配置标题展示可恢复错误。"""
+        """把可恢复错误作为主窗口内消息页叠加到来源页面。"""
 
-        messagebox.showerror(
-            self._config.section("dialogs")["error_title"],
-            message,
+        page = MessagePage(
             parent=self._root,
+            button_factory=self._button_factory,
+            theme=self._theme,
+            fonts=self._fonts,
+            title=self._config.section("dialogs")["error_title"],
+            body=message,
+            on_back=self._page_stack.pop,
+            page_config=self._interface["pages"],
         )
-
-    def _clear_root(self) -> None:
-        """销毁根窗口内现有页面组件，准备界面切换。"""
-
-        for child in self._root.winfo_children():
-            child.destroy()
+        self._page_stack.push(
+            "error",
+            page,
+            back_handler=page.back_handler,
+        )

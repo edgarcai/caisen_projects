@@ -24,9 +24,11 @@ class GameButton(tk.Canvas):
         subtitle: str = "",
         state: str = "normal",
         show_prompt: bool = True,
+        shape: str = "rectangle",
     ) -> None:
         """创建指定尺寸、样式和状态的自绘按钮。"""
 
+        self._validate_shape(shape, metrics, width)
         self._text = text
         self._subtitle = subtitle
         self._icon = icon
@@ -42,6 +44,8 @@ class GameButton(tk.Canvas):
         self._pressed = False
         self._focused = False
         self._show_prompt = show_prompt
+        self._shape = shape
+        self._parallelogram_slant = int(metrics.get("parallelogram_slant", 0))
         parent_background = str(parent.cget("bg"))
         super().__init__(
             parent,
@@ -53,22 +57,15 @@ class GameButton(tk.Canvas):
             takefocus=1,
             cursor="hand2" if state == "normal" else "arrow",
         )
-        self._background_item = self.create_rectangle(
-            1,
-            1,
-            width - 1,
-            height - 1,
-            width=metrics["border_width"],
-        )
-        self._accent_item = self.create_rectangle(
-            1,
-            1,
-            metrics["accent_width"],
-            height - 1,
-            width=0,
-        )
+        self._background_item = self._create_background_item()
+        self._accent_item = self._create_accent_item()
         icon_x = metrics["icon_center_x"]
-        text_x = metrics["text_with_icon_x"] if icon else metrics["text_without_icon_x"]
+        if icon:
+            text_x = metrics["text_with_icon_x"]
+        elif shape == "parallelogram":
+            text_x = metrics["parallelogram_text_x"]
+        else:
+            text_x = metrics["text_without_icon_x"]
         self._icon_item = self.create_text(
             icon_x,
             height // 2,
@@ -127,6 +124,10 @@ class GameButton(tk.Canvas):
             return self._text
         if key == "state":
             return self._state
+        if key == "shape":
+            return self._shape
+        if key == "subtitle":
+            return self._subtitle
         if key in {"background", "bg"}:
             return self._current_palette()["background"]
         if key in {"foreground", "fg"}:
@@ -151,6 +152,76 @@ class GameButton(tk.Canvas):
         self.bind("<FocusIn>", self._on_focus_in)
         self.bind("<FocusOut>", self._on_focus_out)
 
+    @staticmethod
+    def _validate_shape(
+        shape: str,
+        metrics: Mapping[str, Any],
+        width: int,
+    ) -> None:
+        """校验按钮形状及平行四边形斜切值是否能够安全绘制。"""
+
+        if shape not in {"rectangle", "parallelogram"}:
+            raise ValueError("未知按钮形状：{}".format(shape))
+        if shape == "rectangle":
+            return
+        slant = metrics.get("parallelogram_slant")
+        if (
+            isinstance(slant, bool)
+            or not isinstance(slant, int)
+            or slant <= 0
+            or slant * 2 >= width
+        ):
+            raise ValueError("平行四边形按钮斜切值必须为小于按钮半宽的正整数")
+
+    def _create_background_item(self) -> int:
+        """依据配置形状创建矩形或平行四边形背景图元。"""
+
+        if self._shape == "parallelogram":
+            slant = self._parallelogram_slant
+            return self.create_polygon(
+                slant + 1,
+                1,
+                self._button_width - 1,
+                1,
+                self._button_width - slant - 1,
+                self._button_height - 1,
+                1,
+                self._button_height - 1,
+                width=self._metrics["border_width"],
+            )
+        return self.create_rectangle(
+            1,
+            1,
+            self._button_width - 1,
+            self._button_height - 1,
+            width=self._metrics["border_width"],
+        )
+
+    def _create_accent_item(self) -> int:
+        """创建贴合当前按钮左边缘的强调色图元。"""
+
+        accent_width = self._metrics["accent_width"]
+        if self._shape == "parallelogram":
+            slant = self._parallelogram_slant
+            return self.create_polygon(
+                slant + 1,
+                1,
+                slant + accent_width + 1,
+                1,
+                accent_width + 1,
+                self._button_height - 1,
+                1,
+                self._button_height - 1,
+                width=0,
+            )
+        return self.create_rectangle(
+            1,
+            1,
+            accent_width,
+            self._button_height - 1,
+            width=0,
+        )
+
     def _on_enter(self, _event: tk.Event) -> None:
         """鼠标进入时切换悬停色。"""
 
@@ -168,7 +239,7 @@ class GameButton(tk.Canvas):
     def _on_press(self, _event: tk.Event) -> None:
         """鼠标按下时显示按压反馈并取得键盘焦点。"""
 
-        if self._state == "normal":
+        if self._state == "normal" and self._contains_point(_event.x, _event.y):
             self.focus_set()
             self._pressed = True
             self._redraw()
@@ -179,8 +250,7 @@ class GameButton(tk.Canvas):
         should_invoke = (
             self._state == "normal"
             and self._pressed
-            and 0 <= event.x <= self._button_width
-            and 0 <= event.y <= self._button_height
+            and self._contains_point(event.x, event.y)
         )
         self._pressed = False
         self._redraw()
@@ -204,6 +274,18 @@ class GameButton(tk.Canvas):
 
         self._focused = False
         self._redraw()
+
+    def _contains_point(self, x_position: int, y_position: int) -> bool:
+        """判断坐标是否位于当前矩形或平行四边形的有效点击区域。"""
+
+        if not 0 <= y_position <= self._button_height:
+            return False
+        if self._shape == "rectangle":
+            return 0 <= x_position <= self._button_width
+        vertical_ratio = y_position / max(self._button_height, 1)
+        left_edge = self._parallelogram_slant * (1 - vertical_ratio)
+        right_edge = self._button_width - self._parallelogram_slant * vertical_ratio
+        return left_edge <= x_position <= right_edge
 
     def _current_palette(self) -> Mapping[str, str]:
         """按照禁用、按压和悬停优先级返回当前调色板。"""
@@ -261,10 +343,14 @@ class GameButtonFactory:
         subtitle: str = "",
         state: str = "normal",
         show_prompt: bool = True,
+        shape: str = "rectangle",
     ) -> GameButton:
         """按照稳定样式名和尺寸名创建一个自绘按钮。"""
 
         size_config = self._metrics["sizes"][size]
+        button_fonts = dict(self._fonts)
+        if "font_size" in size_config:
+            button_fonts["button_size"] = size_config["font_size"]
         return GameButton(
             parent=parent,
             text=text,
@@ -272,13 +358,14 @@ class GameButtonFactory:
             palette=self._styles[style],
             disabled_palette=self._styles["disabled"],
             metrics=self._metrics,
-            fonts=self._fonts,
+            fonts=button_fonts,
             width=size_config["width"],
             height=size_config["height"],
             icon=icon,
             subtitle=subtitle,
             state=state,
             show_prompt=show_prompt,
+            shape=shape,
         )
 
 
