@@ -39,7 +39,7 @@ function companionView(canManage: boolean): UiCompanionView {
     portraitKey: "companion_linlan",
     portraitAssetPath: "",
     statusLabel: canManage ? "在队" : "未加入",
-    trustLabel: "信任 0",
+    trustLabel: "信任：0",
     introduction: "来自白塔的医生。",
     biography: "来自白塔的医生。\n\n信任不足，隐藏档案尚未解锁。",
     secret: webConfig.texts.companion_secret_locked,
@@ -149,6 +149,8 @@ describe("伙伴档案与管理 UI 契约", () => {
     expect(buildCompanionDetailBody(webConfig, locked)).toContain(
       webConfig.texts.companion_secret_locked,
     );
+    expect(management.options[0]?.label).toContain("信任：0");
+    expect(management.options[0]?.label).not.toContain("信任：信任：");
   });
 
   it("配装页只展示所选栏位的实时仓库装备", () => {

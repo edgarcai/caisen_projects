@@ -16,3 +16,5 @@ export * from "./ResearchCraftingService";
 export * from "./StateOperations";
 export * from "./StoryService";
 export * from "./ShelterService";
+export * from "./TradeAmbushService";
+export * from "./TransportLoadoutService";

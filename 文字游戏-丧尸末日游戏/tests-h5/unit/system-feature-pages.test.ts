@@ -13,6 +13,7 @@ import {
   buildCraftingPrompt,
   buildHistoryDocument,
   buildResearchPrompt,
+  buildTransportManagementPrompt,
   buildWarehousePrompt,
 } from "../../src/ui/pages/SystemFeaturePages";
 import type {
@@ -194,6 +195,38 @@ describe("仓库、研发、制作与历史的真实展示模型", () => {
     expect(research.options[0]).toMatchObject({ disabled: false, tone: "primary" });
     expect(research.options[0]?.description).toContain("远征步数加成：2");
     expect(crafting.options[0]).toMatchObject({ disabled: true });
+  });
+
+  it("载具设置区分已装备、可装备和未制作状态", () => {
+    const prompt = buildTransportManagementPrompt(webConfig, [
+      {
+        id: "motorboat",
+        name: "浅水机动艇",
+        modeLabel: "海上",
+        description: "抵达岛屿码头",
+        ownedQuantity: 1,
+        equipped: true,
+        disabled: false,
+      },
+      {
+        id: "helicopter",
+        name: "轻型直升机",
+        modeLabel: "飞行",
+        description: "建立低空航线",
+        ownedQuantity: 0,
+        equipped: false,
+        disabled: true,
+        disabledReason: webConfig.texts.transport_unavailable,
+      },
+    ]);
+
+    expect(prompt.options[0]).toMatchObject({ disabled: false, tone: "primary" });
+    expect(prompt.options[0]?.label).toContain(webConfig.texts.transport_equipped);
+    expect(prompt.options[0]?.description).toContain("海上载具｜持有 1");
+    expect(prompt.options[1]).toMatchObject({
+      disabled: true,
+      disabledReason: webConfig.texts.transport_unavailable,
+    });
   });
 
   it("历史页在空档案和有周档案时都使用配置化文案", () => {

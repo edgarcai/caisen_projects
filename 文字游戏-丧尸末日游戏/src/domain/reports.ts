@@ -77,12 +77,29 @@ export type ManagementCategory =
   | "trade_sell"
   | "recruit";
 
+/** 经营项目详情页中的一行稳定信息。 */
+export interface ManagementField {
+  id: string;
+  label: string;
+  value: string;
+}
+
+/** 经营项目的一项实时前置或资源要求。 */
+export interface ManagementRequirement {
+  id: string;
+  label: string;
+  description: string;
+  met: boolean;
+}
+
 export interface ManagementOption {
   optionId: string;
   label: string;
   category: ManagementCategory;
   available: boolean;
   description: string;
+  fields: readonly ManagementField[];
+  requirements: readonly ManagementRequirement[];
 }
 
 export interface ManagementResolution {

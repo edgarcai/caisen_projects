@@ -223,7 +223,7 @@ export class InventoryService {
     };
   }
 
-  /** 查询制作物总量并扣除所长与全部伙伴占用的同 ID 装备。 */
+  /** 查询制作物总量并扣除所长、伙伴和载具设置占用的同 ID 物品。 */
   private availableCraftedQuantity(
     state: GameState,
     item: CraftedWarehouseItemConfig,
@@ -236,7 +236,12 @@ export class InventoryService {
     const companionEquipped = state.companions.reduce((count, companion) =>
       count + [companion.equipped_weapon_id, companion.equipped_armor_id]
         .filter((itemId) => itemId === item.item_id).length, 0);
-    return Math.max(0, total - playerEquipped - companionEquipped);
+    const transportEquipped = state.inventory.equipped_transport_ids
+      .filter((itemId) => itemId === item.item_id).length;
+    return Math.max(
+      0,
+      total - playerEquipped - companionEquipped - transportEquipped,
+    );
   }
 
   /** 按稳定 ID 返回制作物配置。 */

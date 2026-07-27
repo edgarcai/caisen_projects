@@ -1000,7 +1000,7 @@ test("避难所活动先显示需求且确认一次只结算一次", async ({ pa
   );
   await waitForScreen(page, "management_option_detail");
   expect(
-    await readLayaNodeBounds(page, "page-management-option-detail-requirement-availability"),
+    await readLayaNodeBounds(page, "page-management-option-detail-requirement-shared_supper-unlock"),
   ).not.toBeNull();
   await clickLayaNode(page, "page-management-option-detail-confirm");
   await waitForScreen(page, "message");

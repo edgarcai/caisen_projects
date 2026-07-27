@@ -135,10 +135,12 @@ function createState(options: StateOptions = {}): GameState {
       crafted_items: {},
       equipped_weapon_id: null,
       equipped_armor_id: null,
+      equipped_transport_ids: [],
     },
     research: {
       completed_project_ids: [],
     },
+    management_cycle_usage: {},
     expedition: {
       city_id: "city_a",
       district_id: configuredDefaultDistrictId("city_a"),

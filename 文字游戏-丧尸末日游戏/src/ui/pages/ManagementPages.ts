@@ -2,7 +2,7 @@ import type { GameUiConfig } from "../../styles/GameTheme";
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
 import type { UiFactory } from "../components/UiFactory";
 import type { LayaRuntimeLike } from "../laya/LayaRuntime";
-import type { UiOptionView } from "../ports/GameUiPort";
+import type { UiManagementOptionView } from "../ports/GameUiPort";
 import { createConfigDrivenDetailPage } from "./ConfigDrivenDetailPage";
 import type { PageView } from "./PageView";
 
@@ -18,7 +18,7 @@ export function createManagementOptionDetailPage(
   factory: UiFactory,
   config: GameUiConfig,
   layout: ResponsiveLayout,
-  option: UiOptionView,
+  option: UiManagementOptionView,
   actions: ManagementOptionDetailActions,
 ): PageView {
   const locked = option.disabled || option.lockedAppearance === true;
@@ -27,15 +27,15 @@ export function createManagementOptionDetailPage(
     view: {
       title: option.label,
       description: option.description,
-      fields: [],
-      requirements: [
-        {
-          id: "availability",
-          label: config.texts.management_detail_requirements_title,
-          description: option.disabledReason ?? option.description,
-          status: locked ? "unmet" : "met",
-        },
-      ],
+      fields: option.fields,
+      requirements: option.requirements.length > 0
+        ? option.requirements
+        : [{
+            id: "availability",
+            label: config.texts.management_detail_requirements_title,
+            description: option.disabledReason ?? option.description,
+            status: locked ? "unmet" : "met",
+          }],
     },
     requirementText: {
       fieldsTitle: config.texts.management_detail_title,

@@ -10,6 +10,7 @@ import type {
   InventoryState,
   PlayerState,
   ResearchState,
+  ManagementCycleUsageState,
   ShelterState,
   StoryState,
   WeeklyArchiveState,
@@ -55,7 +56,12 @@ export interface GameRuleConfig {
   };
   world_map: {
     minimum_districts_per_city: number;
-    required_neighbor_degree: number;
+    home_city_ids: readonly string[];
+    neighbor_limits_by_terrain: Readonly<Record<
+      CityTerrain,
+      { minimum: number; maximum: number }
+    >>;
+    isolated_terrains: readonly CityTerrain[];
   };
   player_counts: Record<string, { minimum: number; maximum: number }>;
   mode_survival_cost_percent: Record<GameMode, number>;
@@ -150,6 +156,9 @@ export interface CampaignProfilesConfig {
 /** 城市所处地貌，决定可用于远行的交通工具。 */
 export type CityTerrain = "land" | "river" | "coastal" | "island";
 
+/** 城市要求多辆载具时采用任一满足或全部满足。 */
+export type CityTransportMatch = "any" | "all";
+
 /** 一座城市内可被独立选择、介绍和抽取事件的区划。 */
 export interface CityDistrictConfig {
   id: string;
@@ -172,7 +181,9 @@ export interface CityConfig {
   neighbor_ids: readonly string[];
   intelligence_newspapers_required: number;
   path_item_ids: readonly string[];
+  allow_path_items: boolean;
   transport_item_ids: readonly string[];
+  transport_match: CityTransportMatch;
   default_district_id: string;
   districts: readonly CityDistrictConfig[];
   /** 城市事件全集，用于验证各区划事件引用的完整性。 */
@@ -196,6 +207,7 @@ export interface GameConfigDocument {
     checkpoint: CheckpointState | null;
     inventory: InventoryState;
     research: ResearchState;
+    management_cycle_usage: Record<string, ManagementCycleUsageState>;
     expedition: ExpeditionState | null;
     last_expedition_failure: ExpeditionFailureState | null;
   };
@@ -357,8 +369,16 @@ export interface FacilityConfig {
   name: string;
   description: string;
   max_level: number;
+  /** 是否占用避难所的总建设等级容量。 */
+  counts_toward_total_level_limit: boolean;
   unlock_requirements?: readonly RequirementConfig[];
   levels: readonly FacilityLevelConfig[];
+}
+
+/** 避难所设施总等级容量与扩建效果的配置。 */
+export interface FacilityManagementConfig {
+  initial_total_level_limit: number;
+  capacity_modifier_target: string;
 }
 
 export interface JobConfig {
@@ -399,6 +419,51 @@ export interface TradeConfig {
   quantity: number;
   buy_price: number;
   sell_price: number;
+}
+
+/** 一名交易商在旧版商品目录中的展示与解锁配置。 */
+export interface TradeVendorConfig {
+  vendor_id: string;
+  name: string;
+  unlock_requirements?: readonly RequirementConfig[];
+  attitude: string;
+  stock_item_ids: readonly string[];
+}
+
+/** 旧版商品目录中的一项可买卖资源。 */
+export interface TradeItemConfig {
+  item_id: string;
+  name: string;
+  resource_target: string;
+  quantity: number;
+  buy_price: number;
+  sell_price: number;
+}
+
+/** 跨全部交易项目共享的周期限额。 */
+export interface TradeCycleConfig {
+  usage_key: string;
+  days: number;
+  maximum_transactions: number;
+}
+
+/** 交易途中可能触发的配置化事件。 */
+export interface TradeAmbushConfig {
+  chance_percent: number;
+  event_id: string;
+  choice_id: string;
+}
+
+/** 交易目录、周期和途中风险的共享规则。 */
+export interface TradeManagementConfig {
+  refresh_hours: number;
+  buy_price_percent: number;
+  sell_price_percent: number;
+  price_variance_percent: readonly [number, number];
+  vendors: readonly TradeVendorConfig[];
+  items: readonly TradeItemConfig[];
+  cycle: TradeCycleConfig;
+  ambush: TradeAmbushConfig;
 }
 
 export interface RecruitConfig {
@@ -448,9 +513,11 @@ export interface StoryConfigDocument {
   bosses: readonly BossConfig[];
   combat: CombatConfig;
   discoveries: readonly DiscoveryConfig[];
+  facility_management: FacilityManagementConfig;
   facilities: readonly FacilityConfig[];
   jobs: readonly JobConfig[];
   activities: readonly ShelterActivityConfig[];
+  trade: TradeManagementConfig;
   trades: readonly TradeConfig[];
   recruits: readonly RecruitConfig[];
   endings: readonly EndingConfig[];
@@ -483,6 +550,7 @@ export interface EventConfig {
   pre_result?: string;
   pre_effects?: readonly NumericEffectConfig[];
   effects?: readonly NumericEffectConfig[];
+  outcomes?: readonly EventOutcomeConfig[];
   choices?: readonly EventChoiceConfig[];
 }
 
@@ -553,6 +621,24 @@ export interface V5ToV6SaveMigrationConfig {
     companion_interaction_cooldown_turns: number;
     companion_interaction_count: number;
     last_expedition_failure: null;
+  };
+}
+
+/** v6 存档补齐载具配装与周期经营用量时使用的迁移配置。 */
+export interface V6ToV7SaveMigrationConfig {
+  schema_version: number;
+  from_version: number;
+  to_version: number;
+  compatibility: {
+    home_city_replacements: Readonly<Record<string, string>>;
+    capacity_facility_id: string;
+  };
+  state_defaults: {
+    equipped_transport_ids: readonly string[];
+    facility_levels: Readonly<Record<string, number>>;
+    management_cycle_usage: Readonly<
+      Record<string, { cycle_index: number; count: number }>
+    >;
   };
 }
 

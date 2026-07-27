@@ -36,17 +36,17 @@ function mutableDistricts(city: CityConfig): CityDistrictConfig[] {
 }
 
 describe("世界地图配置验证", () => {
-  it("真实 A-H 城市形成严格环形且每市配置六个完整区划", () => {
+  it("真实 A-G 城市形成大陆链且 H 岛独立并配置完整区划", () => {
     const game = cloneGameConfig();
     const expectedTopology: Readonly<Record<string, readonly string[]>> = {
-      city_a: ["city_h", "city_b"],
+      city_a: ["city_b"],
       city_b: ["city_a", "city_c"],
       city_c: ["city_b", "city_d"],
       city_d: ["city_c", "city_e"],
       city_e: ["city_d", "city_f"],
       city_f: ["city_e", "city_g"],
-      city_g: ["city_f", "city_h"],
-      city_h: ["city_g", "city_a"],
+      city_g: ["city_f"],
+      city_h: [],
     };
 
     expect(() => {
@@ -55,6 +55,10 @@ describe("世界地图配置验证", () => {
     expect(game.cities.map((city) => city.name)).toEqual([
       "A市", "B市", "C市", "D市", "E市", "F市", "G市", "H市",
     ]);
+    expect(game.rules.world_map.home_city_ids).toEqual([
+      "city_a", "city_b", "city_c", "city_d", "city_e", "city_f", "city_g",
+    ]);
+    expect(game.rules.world_map.home_city_ids).not.toContain("city_h");
     for (const city of game.cities) {
       expect(city.neighbor_ids, city.id).toEqual(expectedTopology[city.id]);
       expect(city.districts, city.id).toHaveLength(
@@ -74,9 +78,26 @@ describe("世界地图配置验证", () => {
     }
   });
 
+  it("拒绝空白名单、重复城市、未知城市与隔离岛屿出生点", () => {
+    const invalidLists = [
+      [],
+      ["city_a", "city_a"],
+      ["unknown_city"],
+      ["city_h"],
+    ] as const;
+
+    for (const homeCityIds of invalidLists) {
+      const game = cloneGameConfig();
+      Reflect.set(game.rules.world_map, "home_city_ids", [...homeCityIds]);
+      expect(() => {
+        validateWorldMapConfig(game, configuredEvents);
+      }, homeCityIds.join(",")).toThrow();
+    }
+  });
+
   it("拒绝单向邻接，避免运行时以双向查找掩盖配置错误", () => {
     const game = cloneGameConfig();
-    setNeighbors(requireCity(game, "city_h"), ["city_g", "city_b"]);
+    setNeighbors(requireCity(game, "city_b"), ["city_c"]);
 
     expect(() => {
       validateWorldMapConfig(game, configuredEvents);
@@ -85,28 +106,28 @@ describe("世界地图配置验证", () => {
     );
   });
 
-  it("拒绝邻接度数与配置化环形约束不符的城市", () => {
+  it("拒绝邻接度数超出配置化地貌范围的城市", () => {
     const game = cloneGameConfig();
-    setNeighbors(requireCity(game, "city_d"), ["city_c"]);
+    setNeighbors(requireCity(game, "city_d"), []);
 
     expect(() => {
       validateWorldMapConfig(game, configuredEvents);
     }).toThrow(
-      /必须配置 2 个邻接城市/,
+      /邻接数必须位于 1 到 2/,
     );
   });
 
-  it("拒绝由多个孤立环组成的非连通拓扑", () => {
+  it("拒绝除配置化岛屿外的非连通大陆拓扑", () => {
     const game = cloneGameConfig();
     const disconnectedTopology: Readonly<Record<string, readonly string[]>> = {
-      city_a: ["city_b", "city_d"],
+      city_a: ["city_b"],
       city_b: ["city_a", "city_c"],
-      city_c: ["city_b", "city_d"],
-      city_d: ["city_c", "city_a"],
-      city_e: ["city_f", "city_h"],
+      city_c: ["city_b"],
+      city_d: ["city_e"],
+      city_e: ["city_d", "city_f"],
       city_f: ["city_e", "city_g"],
-      city_g: ["city_f", "city_h"],
-      city_h: ["city_g", "city_e"],
+      city_g: ["city_f"],
+      city_h: [],
     };
     for (const city of game.cities) {
       setNeighbors(city, disconnectedTopology[city.id] ?? []);
@@ -115,7 +136,7 @@ describe("世界地图配置验证", () => {
     expect(() => {
       validateWorldMapConfig(game, configuredEvents);
     }).toThrow(
-      /必须是一个连通的环/,
+      /非岛屿城市拓扑必须保持连通/,
     );
   });
 

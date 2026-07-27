@@ -9,6 +9,7 @@ import type {
 const SUPPORTED_SCHEMA_VERSION = 1;
 const EQUIPMENT_CATEGORIES = new Set(["weapon", "armor"]);
 const EQUIPMENT_ATTRIBUTES = new Set(["attack", "defense", "agility"]);
+const TRANSPORT_MODES = new Set(["land", "sea", "air"]);
 const WAREHOUSE_CATEGORIES = new Set([
   "consumable",
   "material",
@@ -34,6 +35,7 @@ export function validateSurvivalSystemsConfig(
   const typed = value as SurvivalSystemsConfigDocument;
   validateWarehouse(typed);
   validateResearchAndCrafting(typed);
+  validateTransportLoadout(typed);
   validateExpedition(typed);
   return typed;
 }
@@ -43,6 +45,7 @@ function validateTopLevelSections(document: Readonly<Record<string, unknown>>): 
   const warehouse = requireRecord(document.warehouse, "warehouse");
   const research = requireRecord(document.research, "research");
   const crafting = requireRecord(document.crafting, "crafting");
+  requireRecord(document.transport_loadout, "transport_loadout");
   requireRecord(document.expedition, "expedition");
   requireRecord(document.display, "display");
   requireArray(warehouse.resource_items, "warehouse.resource_items");
@@ -68,6 +71,7 @@ function validateWarehouse(config: SurvivalSystemsConfigDocument): void {
       throw new Error(`装备 ${item.item_id} 不能同时声明为远征携带物。`);
     }
     validateEquipmentBonuses(item);
+    validateTransportMode(item);
   }
   for (const item of resources) {
     requireNonEmptyString(item.state_target, `warehouse.${item.item_id}.state_target`);
@@ -80,6 +84,47 @@ function validateWarehouse(config: SurvivalSystemsConfigDocument): void {
       config.warehouse.category_labels[category as keyof typeof config.warehouse.category_labels],
       `warehouse.category_labels.${category}`,
     );
+  }
+}
+
+/** 校验只有载具声明通行模式，且每辆载具都具备可识别模式。 */
+function validateTransportMode(
+  item: ResourceWarehouseItemConfig | CraftedWarehouseItemConfig,
+): void {
+  const mode = (item as CraftedWarehouseItemConfig).transport_mode;
+  if (item.category !== "transport") {
+    if (mode !== undefined) {
+      throw new Error(`非载具 ${item.item_id} 不能声明 transport_mode。`);
+    }
+    return;
+  }
+  if (typeof mode !== "string" || !TRANSPORT_MODES.has(mode)) {
+    throw new Error(`载具 ${item.item_id} 缺少有效 transport_mode。`);
+  }
+}
+
+/** 校验载具配装容量、地貌标签和反馈文案。 */
+function validateTransportLoadout(config: SurvivalSystemsConfigDocument): void {
+  const loadout = config.transport_loadout;
+  requireInteger(
+    loadout.maximum_active_transports,
+    "transport_loadout.maximum_active_transports",
+    1,
+  );
+  for (const mode of TRANSPORT_MODES) {
+    requireNonEmptyString(
+      loadout.mode_labels[mode as keyof typeof loadout.mode_labels],
+      `transport_loadout.mode_labels.${mode}`,
+    );
+  }
+  for (const [key, text] of Object.entries({
+    equipped_text: loadout.equipped_text,
+    unequipped_text: loadout.unequipped_text,
+    unavailable_text: loadout.unavailable_text,
+    capacity_reached_text: loadout.capacity_reached_text,
+    invalid_transport_text: loadout.invalid_transport_text,
+  })) {
+    requireNonEmptyString(text, `transport_loadout.${key}`);
   }
 }
 

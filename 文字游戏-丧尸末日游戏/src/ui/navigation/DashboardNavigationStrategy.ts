@@ -17,6 +17,9 @@ export const DASHBOARD_ACTION_IDS = [
   "explore",
   "shelter_management",
   "companions",
+  "companion_management",
+  "transport_management",
+  "facility_management",
   "use_food",
   "use_medicine",
   "feed_shelter",
@@ -48,9 +51,11 @@ export type DashboardEntryId = InGameNavigationId | DashboardActionId;
 export type DashboardPushScreen =
   | "management_categories"
   | "companions"
+  | "companion_management"
   | "supplies"
   | "settings"
   | "warehouse"
+  | "transport_management"
   | "research"
   | "crafting"
   | "history"
@@ -65,6 +70,7 @@ export type DashboardNavigationIntent =
   | { readonly type: "reset_dashboard" }
   | { readonly type: "open_story" }
   | { readonly type: "open_expedition" }
+  | { readonly type: "open_management_category"; readonly categoryId: string }
   | { readonly type: "push_screen"; readonly screen: DashboardPushScreen }
   | { readonly type: "save_game" }
   | { readonly type: "perform_supply_action"; readonly actionId: SupplyActionId };
@@ -74,6 +80,12 @@ export type DashboardNavigationIntent =
  */
 export interface DashboardNavigationPolicy {
   readonly entries: Readonly<Record<string, DashboardNavigationIntent>>;
+}
+
+/** 可由 Web 配置注入的经营分类快捷路由。 */
+export interface DashboardManagementCategoryShortcut {
+  readonly entry_id: string;
+  readonly category_id: string;
 }
 
 const STORY_INTENT = Object.freeze({ type: "open_story" } as const);
@@ -88,6 +100,9 @@ const DEFAULT_POLICY_ENTRIES = Object.freeze({
   settings: { type: "push_screen", screen: "settings" },
   shelter_management: { type: "push_screen", screen: "management_categories" },
   companions: { type: "push_screen", screen: "companions" },
+  companion_management: { type: "push_screen", screen: "companion_management" },
+  transport_management: { type: "push_screen", screen: "transport_management" },
+  facility_management: { type: "push_screen", screen: "management_categories" },
   use_food: { type: "perform_supply_action", actionId: "use_food" },
   use_medicine: { type: "perform_supply_action", actionId: "use_medicine" },
   feed_shelter: { type: "perform_supply_action", actionId: "feed_shelter" },
@@ -106,6 +121,24 @@ const DEFAULT_POLICY_ENTRIES = Object.freeze({
 /** 保留当前行为的默认局内导航策略。 */
 export const DEFAULT_DASHBOARD_NAVIGATION_POLICY: DashboardNavigationPolicy =
   Object.freeze({ entries: DEFAULT_POLICY_ENTRIES });
+
+/**
+ * 在稳定默认路由上叠加配置化经营快捷入口，不修改共享默认策略。
+ */
+export function createDashboardNavigationPolicy(
+  shortcuts: readonly DashboardManagementCategoryShortcut[],
+): DashboardNavigationPolicy {
+  const entries: Record<string, DashboardNavigationIntent> = {
+    ...DEFAULT_POLICY_ENTRIES,
+  };
+  for (const shortcut of shortcuts) {
+    entries[shortcut.entry_id] = {
+      type: "open_management_category",
+      categoryId: shortcut.category_id,
+    };
+  }
+  return Object.freeze({ entries: Object.freeze(entries) });
+}
 
 /**
  * 将指挥台或底部导航入口解析为稳定意图；未配置入口安全返回 null。

@@ -53,7 +53,8 @@ class FixtureSaveRepository implements SaveRepository {
 function createValidator(): SaveStateValidator {
   return new SaveStateValidator(
     game.rules,
-    Object.keys(story.defaults.facility_levels),
+    story.facilities,
+    story.facility_management,
     story.defaults.companions.map((companion) => companion.companion_id),
     validateSurvivalSystemsConfig(survivalSystemsDocument),
     game.campaign_profiles,
@@ -130,6 +131,8 @@ function downgradeToV4(rawState: Record<string, unknown>): Record<string, unknow
 
 /** 删除 v6 希望、寿命、伙伴管理和失败摘要字段。 */
 function deleteV6Fields(state: Record<string, unknown>): void {
+  delete state.management_cycle_usage;
+  delete asObject(state.inventory).equipped_transport_ids;
   delete state.last_expedition_failure;
   for (const player of state.players as Record<string, unknown>[]) {
     delete player.age;

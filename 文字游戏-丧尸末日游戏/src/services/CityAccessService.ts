@@ -16,7 +16,7 @@ export interface CityAccessDecision {
   readonly accessSummary: string;
 }
 
-/** 依据城市拓扑、报纸情报、路径道具和交通工具判定通行。 */
+/** 依据城市拓扑、报纸情报、路径道具和已装备载具判定通行。 */
 export class CityAccessService {
   private readonly content: GameContent;
   private readonly survivalSystems: SurvivalSystemsConfigDocument;
@@ -44,14 +44,18 @@ export class CityAccessService {
     }
     const hasIntelligence =
       state.shelter.newspapers >= city.intelligence_newspapers_required;
-    const hasPath = city.path_item_ids.some((itemId) => this.hasItem(state, itemId));
-    const hasTransport = city.transport_item_ids.some((itemId) =>
-      this.hasItem(state, itemId),
-    );
+    const hasPath = city.allow_path_items
+      && city.path_item_ids.some((itemId) => this.ownsItem(state, itemId));
+    const hasTransport = this.transportRequirementSatisfied(state, city);
     const accessible = hasIntelligence && (hasPath || hasTransport);
     const reason = accessible
       ? this.content.text("city_access_remote_ready", { steps: travelStepCost })
-      : this.remoteLockedReason(city, hasIntelligence, hasPath || hasTransport);
+      : this.remoteLockedReason(
+        city,
+        hasIntelligence,
+        hasPath,
+        hasTransport,
+      );
     return {
       city,
       relation,
@@ -118,14 +122,23 @@ export class CityAccessService {
   private remoteLockedReason(
     city: CityConfig,
     hasIntelligence: boolean,
-    hasRoute: boolean,
+    hasPath: boolean,
+    hasTransport: boolean,
   ): string {
     if (!hasIntelligence) {
       return this.content.text("city_access_need_intelligence", {
         required: city.intelligence_newspapers_required,
       });
     }
-    if (!hasRoute) {
+    if (!hasPath && !hasTransport && city.transport_match === "all") {
+      const itemNames = city.transport_item_ids.map(
+        (itemId) => this.configuredItemName(itemId),
+      );
+      return this.content.text("city_access_need_all_transports", {
+        items: itemNames.join(this.content.text("city_access_item_separator")),
+      });
+    }
+    if (!hasPath && !hasTransport) {
       const itemNames = [
         ...city.path_item_ids,
         ...city.transport_item_ids,
@@ -137,10 +150,23 @@ export class CityAccessService {
     return this.content.text("city_access_unavailable");
   }
 
-  /** 判断制作物或剧情关键物品中是否持有指定通行道具。 */
-  private hasItem(state: GameState, itemId: string): boolean {
+  /** 判断制作物或剧情关键物品中是否持有指定路线道具。 */
+  private ownsItem(state: GameState, itemId: string): boolean {
     return (state.inventory.crafted_items[itemId] ?? 0) > 0
       || state.story.key_items.includes(itemId);
+  }
+
+  /** 按城市匹配策略判断需要的载具是否已经真实装备。 */
+  private transportRequirementSatisfied(
+    state: GameState,
+    city: CityConfig,
+  ): boolean {
+    const equippedIds = new Set(state.inventory.equipped_transport_ids);
+    if (city.transport_match === "all") {
+      return city.transport_item_ids.length > 0
+        && city.transport_item_ids.every((itemId) => equippedIds.has(itemId));
+    }
+    return city.transport_item_ids.some((itemId) => equippedIds.has(itemId));
   }
 
   /** 从仓库配置解析通行物品中文名。 */

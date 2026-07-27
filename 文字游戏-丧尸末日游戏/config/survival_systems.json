@@ -18,9 +18,9 @@
       {"item_id": "trauma_kit", "name": "创伤急救包", "category": "consumable", "carryable": true, "description": "把常用止血与抑制感染用品组合成套。"},
       {"item_id": "signal_beacon", "name": "折叠信标", "category": "tool", "carryable": true, "description": "标记安全路线，为远征提供额外步数。"},
       {"item_id": "route_map", "name": "区域安全路线图", "category": "tool", "carryable": false, "description": "由旧报纸和无线电记录拼合的远城通行路径。"},
-      {"item_id": "armored_car", "name": "加固越野车", "category": "transport", "carryable": false, "description": "适合陆地、河岸道路和沿海公路的远行载具。"},
-      {"item_id": "motorboat", "name": "浅水机动艇", "category": "transport", "carryable": false, "description": "可穿过河道、海湾并抵达岛屿码头。"},
-      {"item_id": "helicopter", "name": "轻型直升机", "category": "transport", "carryable": false, "description": "不受地貌限制，但研发与修复成本极高。"},
+      {"item_id": "armored_car", "name": "加固越野车", "category": "transport", "transport_mode": "land", "carryable": false, "description": "适合陆地、河岸道路和沿海公路的远行载具。"},
+      {"item_id": "motorboat", "name": "浅水机动艇", "category": "transport", "transport_mode": "sea", "carryable": false, "description": "可穿过河道、海湾并抵达岛屿码头。"},
+      {"item_id": "helicopter", "name": "轻型直升机", "category": "transport", "transport_mode": "air", "carryable": false, "description": "不受地貌限制，但研发与修复成本极高。"},
       {"item_id": "reinforced_coat", "name": "加固防护服", "category": "armor", "carryable": false, "description": "可装备的轻型防具；装备后防御 +10，且不计入仓库可用数量。", "equipment_bonuses": {"defense": 10}},
       {"item_id": "pipe_rifle", "name": "管式步枪", "category": "weapon", "carryable": false, "description": "可装备的远程武器；装备后攻击 +12，且不计入仓库可用数量。", "equipment_bonuses": {"attack": 12}}
     ],
@@ -244,6 +244,15 @@
     "locked_text": "对应研发尚未完成。",
     "insufficient_text": "制作材料不足。",
     "unknown_text": "未知制作配方：{recipe_id}。"
+  },
+  "transport_loadout": {
+    "maximum_active_transports": 2,
+    "mode_labels": {"land": "陆行", "sea": "海上", "air": "飞行"},
+    "equipped_text": "已将【{item_name}】加入出发载具，现在可以驾驶。",
+    "unequipped_text": "已将【{item_name}】移出出发载具。",
+    "unavailable_text": "仓库中没有可配置的【{item_name}】。",
+    "capacity_reached_text": "出发载具最多同时配置{maximum}辆，请先卸下一辆。",
+    "invalid_transport_text": "【{item_name}】不是可驾驶载具。"
   },
   "expedition": {
     "base_steps": 10,

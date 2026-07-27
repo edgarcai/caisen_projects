@@ -967,16 +967,40 @@ function createSelection<TId extends SelectionId>(
   return { current, select, advance, options: readOptions };
 }
 
-/** 从 H5 配置构建真正可选的游戏模式，包括无尽模式。 */
+/** 按入口白名单排序模式，并为独立剧情或多人入口补入当前模式。 */
+export function resolveEntryModeOptions(
+  config: GameUiConfig,
+  initialMode: GameMode,
+): readonly SetupOption<GameMode>[] {
+  const orderedModeIds: GameMode[] = [...config.new_game_setup.entry_mode_ids];
+  if (!orderedModeIds.includes(initialMode)) {
+    orderedModeIds.push(initialMode);
+  }
+  const optionById = new Map<GameMode, SetupOption<GameMode>>(
+    config.new_game_setup.mode_options.map((option) => [
+      option.id,
+      {
+        id: option.id,
+        label: option.label,
+        description: option.description,
+      },
+    ]),
+  );
+  return orderedModeIds.map((modeId) => {
+    const option = optionById.get(modeId);
+    if (option === undefined) {
+      throw new Error(`开局模式入口缺少配置：${modeId}`);
+    }
+    return option;
+  });
+}
+
+/** 从 H5 配置构建当前入口真正可选的游戏模式。 */
 function createModeSelection(
   config: GameUiConfig,
   initialMode: GameMode,
 ): SetupSelection<GameMode> {
-  const options = config.new_game_setup.mode_options.map((option) => ({
-    id: option.id as GameMode,
-    label: option.label,
-    description: option.description,
-  }));
+  const options = resolveEntryModeOptions(config, initialMode);
   return createSelection(options, initialMode, config.texts.profile_mode_label);
 }
 

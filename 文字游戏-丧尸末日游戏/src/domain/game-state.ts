@@ -110,10 +110,17 @@ export interface InventoryState {
   crafted_items: Record<string, number>;
   equipped_weapon_id: string | null;
   equipped_armor_id: string | null;
+  equipped_transport_ids: string[];
 }
 
 export interface ResearchState {
   completed_project_ids: string[];
+}
+
+/** 一个配置化经营周期内已使用的次数。 */
+export interface ManagementCycleUsageState {
+  cycle_index: number;
+  count: number;
 }
 
 export interface ExpeditionState {
@@ -193,6 +200,7 @@ export interface RestorableGameState {
   weekly_archives: WeeklyArchiveState[];
   inventory: InventoryState;
   research: ResearchState;
+  management_cycle_usage: Record<string, ManagementCycleUsageState>;
   expedition: ExpeditionState | null;
   last_expedition_failure: ExpeditionFailureState | null;
 }

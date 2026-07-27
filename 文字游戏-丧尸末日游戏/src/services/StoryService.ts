@@ -270,6 +270,14 @@ export class StoryService {
     return true;
   }
 
+  /** 返回一组未满足配置条件的本地化说明，供非剧情详情页复用。 */
+  public unmetRequirementsDescription(
+    requirements: readonly RequirementConfig[],
+    state: GameState,
+  ): string {
+    return this.lockedReason(requirements, state);
+  }
+
   /** 生成伙伴身份、状态、信任与秘密提示文本。 */
   public companionSummary(state: GameState): string {
     const statusLabels: Record<string, string> = {

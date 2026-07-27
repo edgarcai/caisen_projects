@@ -255,8 +255,8 @@ describe("避难所经营与基础物品", () => {
     expect(state.shelter.health).toBe(333);
   });
 
-  it("工作结算随机产出与风险，交易不推进世界时间", () => {
-    const application = buildApplication(new QueueRandomSource([90, 7, 100]));
+  it("工作结算随机产出与风险，安全交易不推进世界时间", () => {
+    const application = buildApplication(new QueueRandomSource([90, 7, 100, 100]));
     application.startNewGame(["白菜"], "single");
     const state = requireState(application);
 

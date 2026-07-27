@@ -119,32 +119,6 @@
 
   <path d="M633 470c-96 42-174 116-226 250h468c-45-120-112-204-191-250z" fill="url(#doorGlow)" opacity="0.2" filter="url(#blur28)"/>
 
-  <g fill="#080d0f">
-    <path d="M442 516c1-18 7-31 17-40l3-40 14-20 15 3 6 22-4 35c12 11 19 26 19 43l-11 36 7 72-15 70h-18l4-71-8-57-11 56-2 72h-18l-3-79 8-78z"/>
-    <circle cx="478" cy="397" r="18"/>
-    <path d="M464 421l-36 44 11 9 33-30zm29 14l45 28-8 13-47-25z"/>
-    <path d="M510 461l55-2v7l-57 8z"/>
-  </g>
-  <path d="M548 456l72 2v5l-72 4z" fill="#202d2d"/>
-
-  <g fill="#121a1c" opacity="0.78">
-    <g transform="translate(249 441) scale(.58)">
-      <circle cx="0" cy="0" r="17"/>
-      <path d="M-13 14l-10 72 14 60h15l-2-59 17-70z"/>
-      <path d="M-13 28l-42 32 6 10 44-23z"/>
-    </g>
-    <g transform="translate(321 462) scale(.43)">
-      <circle cx="0" cy="0" r="17"/>
-      <path d="M-13 14l-10 72 14 60h15l-2-59 17-70z"/>
-      <path d="M-13 28l-42 32 6 10 44-23z"/>
-    </g>
-    <g transform="translate(194 472) scale(.38)">
-      <circle cx="0" cy="0" r="17"/>
-      <path d="M-13 14l-10 72 14 60h15l-2-59 17-70z"/>
-      <path d="M-13 28l-42 32 6 10 44-23z"/>
-    </g>
-  </g>
-
   <g opacity="0.38" stroke="#415350" stroke-width="4">
     <path d="M0 606h390M0 641h352"/>
     <path d="M44 568v152m113-152v152m118-152v152"/>

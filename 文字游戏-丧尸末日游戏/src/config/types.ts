@@ -250,7 +250,7 @@ export type NewGameSetupCategoryId =
 
 /** 配置化的游戏模式选项。 */
 export interface NewGameModeOptionConfig {
-  readonly id: string;
+  readonly id: NavigationGameMode;
   readonly label: string;
   readonly description: string;
 }
@@ -303,6 +303,7 @@ export interface NewGameSetupConfig {
   readonly name_input: NativeNameInputConfig;
   readonly preset_names: readonly string[];
   readonly mode_options: readonly NewGameModeOptionConfig[];
+  readonly entry_mode_ids: readonly NavigationGameMode[];
   readonly categories: readonly NewGameSetupCategoryConfig[];
   readonly desktop: NewGameSetupDesktopLayoutConfig;
   readonly mobile: NewGameSetupMobileLayoutConfig;
@@ -350,14 +351,11 @@ export interface PreGameNoticeConfig {
 /** 制作方开场 LOGO 的文案、资源与几何配置。 */
 export interface PublisherSplashConfig {
   readonly title: string;
-  readonly subtitle: string;
   readonly background_asset: string;
   readonly background_opacity: number;
   readonly content_width: number;
   readonly title_height: number;
-  readonly subtitle_height: number;
-  readonly decoration_width: number;
-  readonly decoration_gap: number;
+  readonly title_font_size: number;
 }
 
 /** 单个响应式封面菜单结构。 */
@@ -515,6 +513,17 @@ export interface WebActionConfig {
   readonly icon: string;
 }
 
+/** 指挥台行动到经营分类的配置化快捷路由。 */
+export interface ManagementCategoryShortcutConfig {
+  readonly entry_id: string;
+  readonly category_id: string;
+}
+
+/** 指挥台导航的可扩展配置。 */
+export interface DashboardNavigationConfig {
+  readonly management_category_shortcuts: readonly ManagementCategoryShortcutConfig[];
+}
+
 /** H5 界面文案。 */
 export interface TextConfig {
   readonly loading: string;
@@ -563,6 +572,8 @@ export interface TextConfig {
   readonly settings_tutorial_description: string;
   readonly settings_return_menu: string;
   readonly settings_return_menu_description: string;
+  readonly return_menu_confirm_title: string;
+  readonly return_menu_confirm_body: string;
   readonly reduced_motion_description: string;
   readonly reduced_motion_on: string;
   readonly reduced_motion_off: string;
@@ -578,6 +589,13 @@ export interface TextConfig {
   readonly warehouse_detail_format: string;
   readonly warehouse_equip: string;
   readonly warehouse_not_equippable: string;
+  readonly transport_title: string;
+  readonly transport_body: string;
+  readonly transport_item_format: string;
+  readonly transport_detail_format: string;
+  readonly transport_equipped: string;
+  readonly transport_available: string;
+  readonly transport_unavailable: string;
   readonly research_title: string;
   readonly research_body: string;
   readonly research_item_format: string;
@@ -729,5 +747,6 @@ export interface WebGameConfig {
   readonly navigation: readonly NavigationConfig[];
   readonly actions: readonly WebActionConfig[];
   readonly action_groups: readonly ActionGroupConfig[];
+  readonly dashboard_navigation: DashboardNavigationConfig;
   readonly texts: TextConfig;
 }

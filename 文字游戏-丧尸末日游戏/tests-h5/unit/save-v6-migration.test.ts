@@ -2,6 +2,7 @@ import gameDocument from "../../config/game_config.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import v5ToV6MigrationDocument from "../../config/save_migrations/v5_to_v6.json";
+import v6ToV7MigrationDocument from "../../config/save_migrations/v6_to_v7.json";
 import { describe, expect, it } from "vitest";
 import { createGameApplication } from "../../src/application";
 import { validateSurvivalSystemsConfig } from "../../src/config/survivalSystemsValidator";
@@ -9,14 +10,30 @@ import type {
   GameConfigDocument,
   StoryConfigDocument,
   V5ToV6SaveMigrationConfig,
+  V6ToV7SaveMigrationConfig,
 } from "../../src/domain/content";
 import type { GameState } from "../../src/domain/game-state";
 import type { SaveRepository, SaveSlotSummary } from "../../src/domain/ports";
-import { SaveStateValidator, V5ToV6SaveMigrator } from "../../src/infrastructure";
+import {
+  SaveStateValidator,
+  V5ToV6SaveMigrator,
+  V6ToV7SaveMigrator,
+} from "../../src/infrastructure";
+import type { V6ToV7SaveMigrationContext } from "../../src/infrastructure";
 
 const game = gameDocument as unknown as GameConfigDocument;
 const story = storyDocument as unknown as StoryConfigDocument;
 const migration: V5ToV6SaveMigrationConfig = v5ToV6MigrationDocument;
+const currentMigration: V6ToV7SaveMigrationConfig = v6ToV7MigrationDocument;
+
+/** 使用权威内容构造 v6→v7 迁移上下文。 */
+function createV7MigrationContext(): V6ToV7SaveMigrationContext {
+  return {
+    facilities: story.facilities,
+    facilityManagement: story.facility_management,
+    allowedHomeCityIds: game.rules.world_map.home_city_ids,
+  };
+}
 
 /** 为迁移测试创建无外部存储副作用的端口。 */
 class FixtureRepository implements SaveRepository {
@@ -38,7 +55,8 @@ class FixtureRepository implements SaveRepository {
 function createValidator(): SaveStateValidator {
   return new SaveStateValidator(
     game.rules,
-    Object.keys(story.defaults.facility_levels),
+    story.facilities,
+    story.facility_management,
     story.defaults.companions.map((companion) => companion.companion_id),
     validateSurvivalSystemsConfig(survivalSystemsDocument),
     game.campaign_profiles,
@@ -56,6 +74,8 @@ function createV6State(): GameState {
 
 /** 递归移除只属于 v6 的字段，构造真实 v5 结构。 */
 function downgradeRestorableState(rawState: Record<string, unknown>): void {
+  delete rawState.management_cycle_usage;
+  delete (rawState.inventory as Record<string, unknown>).equipped_transport_ids;
   delete rawState.last_expedition_failure;
   const players = rawState.players as Record<string, unknown>[];
   for (const player of players) {
@@ -118,7 +138,11 @@ describe("v5 到 v6 存档迁移", () => {
       interaction_count: 0,
     });
     expect(snapshot).toHaveProperty("last_expedition_failure", null);
-    expect(() => validator.parse(state)).not.toThrow();
+    const current = new V6ToV7SaveMigrator(
+      currentMigration,
+      createV7MigrationContext(),
+    ).migrate(document);
+    expect(() => validator.parse(current.game_state)).not.toThrow();
   });
 
   it("拒绝错误版本链与伪造的伙伴装备占用", () => {

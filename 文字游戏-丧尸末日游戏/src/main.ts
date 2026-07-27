@@ -1,6 +1,7 @@
 import { createGameApplication } from "./application";
 import {
   validateCoverThemeAchievementReferences,
+  validateDashboardNavigationReferences,
   validateNamePresetCoverage,
 } from "./config/configLoader";
 import type { WebGameConfig } from "./config/types";
@@ -9,6 +10,7 @@ import { createBrowserUiSettingsRepository } from "./infrastructure";
 import { GameUiAdapter } from "./presentation";
 import { GameShell } from "./ui";
 import { createBrowserNativeTextInputPolicy } from "./ui/interactions/NativeTextInputPolicy";
+import { createDashboardNavigationPolicy } from "./ui/navigation/DashboardNavigationStrategy";
 
 /** 浏览器测试与问题诊断可读取的最小只读接口。 */
 export interface ShelterGameDebugHandle {
@@ -25,6 +27,15 @@ export interface GameDebugNodeBounds {
   readonly height: number;
   readonly stageWidth: number;
   readonly stageHeight: number;
+}
+
+/** 组合根仅需读取的经营分类目录最小结构。 */
+interface ManagementCategoryCatalogSource {
+  readonly interface: {
+    readonly pages: {
+      readonly management_categories: readonly { readonly id: string }[];
+    };
+  };
 }
 
 /** 已挂载游戏的生命周期句柄。 */
@@ -59,6 +70,14 @@ export async function mountGame(
     config,
     application.content.game.rules.player_counts,
   );
+  const managementCategoryCatalog = application.content.game as unknown as
+    ManagementCategoryCatalogSource;
+  validateDashboardNavigationReferences(
+    config,
+    managementCategoryCatalog.interface.pages.management_categories.map(
+      (category) => category.id,
+    ),
+  );
   const adapter = new GameUiAdapter(application, config);
   const settingsRepository = createBrowserUiSettingsRepository(
     config.storage.settings_key,
@@ -73,6 +92,9 @@ export async function mountGame(
     createBrowserNativeTextInputPolicy(
       config.new_game_setup.name_input,
       document,
+    ),
+    createDashboardNavigationPolicy(
+      config.dashboard_navigation.management_category_shortcuts,
     ),
   );
   await shell.mount();

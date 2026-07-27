@@ -2,7 +2,10 @@ import type {
   CampaignProfilesConfig,
   CityConfig,
   CityDistrictConfig,
+  FacilityConfig,
+  FacilityManagementConfig,
   GameRuleConfig,
+  RequirementConfig,
 } from "../domain/content";
 import { SaveDataError } from "../domain/errors";
 import type {
@@ -61,6 +64,11 @@ const RESTORABLE_V6_STATE_FIELDS = [
   "last_expedition_failure",
 ] as const;
 const V6_STATE_FIELDS = [...RESTORABLE_V6_STATE_FIELDS, "checkpoint"] as const;
+const RESTORABLE_V7_STATE_FIELDS = [
+  ...RESTORABLE_V6_STATE_FIELDS,
+  "management_cycle_usage",
+] as const;
+const V7_STATE_FIELDS = [...RESTORABLE_V7_STATE_FIELDS, "checkpoint"] as const;
 const PLAYER_FIELDS = [
   "name",
   "health",
@@ -140,6 +148,8 @@ const INVENTORY_FIELDS = [
   "equipped_weapon_id",
   "equipped_armor_id",
 ] as const;
+const V7_INVENTORY_FIELDS = [...INVENTORY_FIELDS, "equipped_transport_ids"] as const;
+const MANAGEMENT_CYCLE_USAGE_FIELDS = ["cycle_index", "count"] as const;
 const RESEARCH_FIELDS = ["completed_project_ids"] as const;
 const CAMPAIGN_FIELDS = [
   "difficulty_id",
@@ -189,24 +199,32 @@ const COMPANION_STATUSES = new Set(["active", "locked", "exiled", "lost", "dead"
 export class SaveStateValidator {
   private readonly rules: GameRuleConfig;
   private readonly facilityIds: readonly string[];
+  private readonly facilityById: ReadonlyMap<string, FacilityConfig>;
+  private readonly facilityManagement: FacilityManagementConfig;
   private readonly companionIds: readonly string[];
   private readonly survivalSystems: SurvivalSystemsConfigDocument;
   private readonly cityById: ReadonlyMap<string, CityConfig>;
   private readonly campaignDifficultyIds: ReadonlySet<string>;
   private readonly campaignOriginIds: ReadonlySet<string>;
   private readonly campaignTraitIds: ReadonlySet<string>;
+  private readonly homeCityIds: ReadonlySet<string>;
 
   /** 注入生存规则、内容 ID、城市地图、开局档案与生存系统配置。 */
   public constructor(
     rules: GameRuleConfig,
-    facilityIds: readonly string[],
+    facilities: readonly FacilityConfig[],
+    facilityManagement: FacilityManagementConfig,
     companionIds: readonly string[],
     survivalSystems: SurvivalSystemsConfigDocument,
     campaignProfiles: CampaignProfilesConfig,
     cities: readonly CityConfig[],
   ) {
     this.rules = rules;
-    this.facilityIds = [...facilityIds];
+    this.facilityIds = facilities.map((facility) => facility.facility_id);
+    this.facilityById = new Map(
+      facilities.map((facility) => [facility.facility_id, facility]),
+    );
+    this.facilityManagement = facilityManagement;
     this.companionIds = [...companionIds];
     this.survivalSystems = survivalSystems;
     this.cityById = new Map(cities.map((city) => [city.id, city]));
@@ -219,6 +237,7 @@ export class SaveStateValidator {
     this.campaignTraitIds = new Set(
       campaignProfiles.traits.map((trait) => trait.id),
     );
+    this.homeCityIds = new Set(rules.world_map.home_city_ids);
   }
 
   /** 在迁移前验证旧 v1 生存状态的精确结构。 */
@@ -308,9 +327,25 @@ export class SaveStateValidator {
     return state;
   }
 
-  /** 从已通过 v6 结构检查的数据创建副本并验证完整状态。 */
+  /** 在构造领域对象前验证 v7 载具与经营周期容器。 */
+  public validateRawV7(rawState: unknown): JsonObject {
+    const state = exactObject(rawState, V7_STATE_FIELDS, "v7 game_state");
+    this.validateRawV7Base(state, "v7 game_state");
+    if (state.checkpoint !== null) {
+      const checkpoint = exactObject(state.checkpoint, CHECKPOINT_FIELDS, "v7 checkpoint");
+      const snapshot = exactObject(
+        checkpoint.snapshot,
+        RESTORABLE_V7_STATE_FIELDS,
+        "v7 checkpoint.snapshot",
+      );
+      this.validateRawV7Base(snapshot, "v7 checkpoint.snapshot");
+    }
+    return state;
+  }
+
+  /** 从已通过 v7 结构检查的数据创建副本并验证完整状态。 */
   public parse(rawState: unknown): GameState {
-    const state = structuredClone(this.validateRawV6(rawState)) as unknown as GameState;
+    const state = structuredClone(this.validateRawV7(rawState)) as unknown as GameState;
     this.validate(state);
     return state;
   }
@@ -369,6 +404,7 @@ export class SaveStateValidator {
     this.validateChronicle(state);
     this.validateInventory(state);
     this.validateResearch(state);
+    this.validateManagementCycleUsage(state);
     this.validateExpedition(state);
     this.validateExpeditionFailure(state);
     this.validateCheckpoint(state);
@@ -422,6 +458,7 @@ export class SaveStateValidator {
     playerFields: readonly string[] = PLAYER_FIELDS,
     shelterFields: readonly string[] = SHELTER_FIELDS,
     companionFields: readonly string[] = COMPANION_FIELDS,
+    inventoryFields: readonly string[] = INVENTORY_FIELDS,
   ): void {
     this.validateGameplayContainers(
       state,
@@ -463,7 +500,7 @@ export class SaveStateValidator {
         );
       }
     }
-    const inventory = exactObject(state.inventory, INVENTORY_FIELDS, `${path}.inventory`);
+    const inventory = exactObject(state.inventory, inventoryFields, `${path}.inventory`);
     requireObject(inventory.crafted_items, `${path}.inventory.crafted_items`);
     exactObject(state.research, RESEARCH_FIELDS, `${path}.research`);
     this.validateOptionalObject(state.expedition, expeditionFields, `${path}.expedition`);
@@ -498,6 +535,44 @@ export class SaveStateValidator {
       V6_COMPANION_FIELDS,
     );
     exactObject(state.campaign, CAMPAIGN_FIELDS, `${path}.campaign`);
+    this.validateRawExpeditionFailure(state, path);
+  }
+
+  /** 校验 v7 可恢复状态的载具列表与周期经营用量。 */
+  private validateRawV7Base(state: JsonObject, path: string): void {
+    this.validateRawSurvivalBase(
+      state,
+      path,
+      V5_EXPEDITION_FIELDS,
+      V5_PENDING_FIELDS,
+      V6_PLAYER_FIELDS,
+      V6_SHELTER_FIELDS,
+      V6_COMPANION_FIELDS,
+      V7_INVENTORY_FIELDS,
+    );
+    exactObject(state.campaign, CAMPAIGN_FIELDS, `${path}.campaign`);
+    const inventory = state.inventory as JsonObject;
+    requireArray(
+      inventory.equipped_transport_ids,
+      `${path}.inventory.equipped_transport_ids`,
+    );
+    const usage = requireObject(
+      state.management_cycle_usage,
+      `${path}.management_cycle_usage`,
+    );
+    for (const [usageId, entry] of Object.entries(usage)) {
+      requireNonEmptyString(usageId, `${path}.management_cycle_usage 的键`);
+      exactObject(
+        entry,
+        MANAGEMENT_CYCLE_USAGE_FIELDS,
+        `${path}.management_cycle_usage.${usageId}`,
+      );
+    }
+    this.validateRawExpeditionFailure(state, path);
+  }
+
+  /** 校验 v6/v7 共用的可选强制返程结构。 */
+  private validateRawExpeditionFailure(state: JsonObject, path: string): void {
     if (state.last_expedition_failure !== null) {
       const failure = exactObject(
         state.last_expedition_failure,
@@ -544,6 +619,9 @@ export class SaveStateValidator {
       throw new SaveDataError(`开局档案引用未知特性：${campaign.trait_id}。`);
     }
     this.requireKnownCity(campaign.home_city_id, "campaign.home_city_id");
+    if (!this.homeCityIds.has(campaign.home_city_id)) {
+      throw new SaveDataError(`开局档案引用不可选的出生城市：${campaign.home_city_id}。`);
+    }
   }
 
   /** 校验玩家姓名、资源整数、唯一性和生命上限。 */
@@ -640,13 +718,143 @@ export class SaveStateValidator {
     requireExactStringSet(ids, this.companionIds, "伙伴 ID");
   }
 
-  /** 校验设施等级映射与配置中的设施集合完全一致。 */
+  /** 校验设施集合、单项上限、解锁前置与扩建后的总等级容量。 */
   private validateFacilities(state: GameState): void {
     const ids = Object.keys(state.facility_levels);
     requireExactStringSet(ids, this.facilityIds, "设施 ID");
+    let occupiedLevel = 0;
     for (const [facilityId, level] of Object.entries(state.facility_levels)) {
       requireInteger(level, `facility_levels.${facilityId}`, 0);
+      const facility = this.facilityById.get(facilityId);
+      if (facility === undefined) {
+        throw new SaveDataError(`facility_levels.${facilityId} 引用未知设施。`);
+      }
+      if (level > facility.max_level) {
+        throw new SaveDataError(
+          `facility_levels.${facilityId} 超过配置上限 ${String(facility.max_level)}。`,
+        );
+      }
+      if (
+        level > 0
+        && !this.facilityRequirementsMet(facility.unlock_requirements ?? [], state)
+      ) {
+        throw new SaveDataError(`facility_levels.${facilityId} 不满足设施解锁前置。`);
+      }
+      if (facility.counts_toward_total_level_limit) occupiedLevel += level;
     }
+    const capacity = this.facilityManagement.initial_total_level_limit
+      + this.facilityCapacityModifier(state);
+    if (occupiedLevel > capacity) {
+      throw new SaveDataError(
+        `常规设施总等级 ${String(occupiedLevel)} 超过当前容量 ${String(capacity)}。`,
+      );
+    }
+  }
+
+  /** 递归评估设施解锁条件，拒绝伪造标记、线索、首领结果或设施等级。 */
+  private facilityRequirementsMet(
+    requirements: readonly RequirementConfig[],
+    state: GameState,
+  ): boolean {
+    return requirements.every((requirement) => {
+      if (requirement.type === "any_of") {
+        return (requirement.requirements ?? []).some((nested) =>
+          this.facilityRequirementsMet([nested], state),
+        );
+      }
+      if (requirement.type === "all_of") {
+        return this.facilityRequirementsMet(requirement.requirements ?? [], state);
+      }
+      return this.facilityRequirementMet(requirement, state);
+    });
+  }
+
+  /** 评估一个可用于设施解锁的叶子条件。 */
+  private facilityRequirementMet(
+    requirement: RequirementConfig,
+    state: GameState,
+  ): boolean {
+    switch (requirement.type) {
+      case "scene_completed":
+        return requirement.scene_id !== undefined
+          && state.story.completed_scene_ids.includes(requirement.scene_id);
+      case "flag":
+        return requirement.flag_id !== undefined
+          && state.story.flags.includes(requirement.flag_id);
+      case "flag_absent":
+        return requirement.flag_id !== undefined
+          && !state.story.flags.includes(requirement.flag_id);
+      case "key_item":
+        return requirement.key_item_id !== undefined
+          && state.story.key_items.includes(requirement.key_item_id);
+      case "any_key_item":
+        return (requirement.key_item_ids ?? []).some((itemId) =>
+          state.story.key_items.includes(itemId),
+        );
+      case "boss_resolved":
+        return requirement.boss_id !== undefined
+          && state.story.boss_outcomes[requirement.boss_id] !== undefined;
+      case "boss_outcome_any": {
+        const outcome = requirement.boss_id === undefined
+          ? undefined
+          : state.story.boss_outcomes[requirement.boss_id];
+        return outcome !== undefined && (requirement.outcomes ?? []).includes(outcome);
+      }
+      case "facility_level": {
+        if (requirement.facility_id === undefined || requirement.value === undefined) {
+          return false;
+        }
+        const current = state.facility_levels[requirement.facility_id];
+        return current !== undefined && this.compareFacilityRequirement(
+          current,
+          requirement.operator ?? "gte",
+          requirement.value,
+        );
+      }
+      default:
+        throw new SaveDataError(
+          `设施解锁前置使用了无法校验的类型：${requirement.type}。`,
+        );
+    }
+  }
+
+  /** 使用与剧情规则一致的整数比较符检查设施等级。 */
+  private compareFacilityRequirement(
+    current: number,
+    operator: NonNullable<RequirementConfig["operator"]>,
+    expected: number,
+  ): boolean {
+    switch (operator) {
+      case "gte": return current >= expected;
+      case "lte": return current <= expected;
+      case "gt": return current > expected;
+      case "lt": return current < expected;
+      case "eq": return current === expected;
+      case "neq": return current !== expected;
+    }
+  }
+
+  /** 按已建成等级累加指定目标的容量被动修正。 */
+  private facilityCapacityModifier(state: GameState): number {
+    let modifier = 0;
+    for (const facility of this.facilityById.values()) {
+      const currentLevel = state.facility_levels[facility.facility_id] ?? 0;
+      for (const level of facility.levels) {
+        if (level.level > currentLevel) continue;
+        for (const effect of level.effects ?? []) {
+          if (
+            effect.target !== this.facilityManagement.capacity_modifier_target
+            || typeof effect.amount !== "number"
+          ) {
+            continue;
+          }
+          if (effect.operation === "add") modifier += effect.amount;
+          else if (effect.operation === "subtract") modifier -= effect.amount;
+          else modifier = effect.amount;
+        }
+      }
+    }
+    return modifier;
   }
 
   /** 校验公历日期和配置化每日行动时段。 */
@@ -791,6 +999,27 @@ export class SaveStateValidator {
       craftedItems,
       quantities,
     );
+    requireUniqueStringList(
+      state.inventory.equipped_transport_ids,
+      "inventory.equipped_transport_ids",
+    );
+    if (
+      state.inventory.equipped_transport_ids.length
+      > this.survivalSystems.transport_loadout.maximum_active_transports
+    ) {
+      throw new SaveDataError("已装备载具数量超过配置上限。");
+    }
+    for (const [index, itemId] of state.inventory.equipped_transport_ids.entries()) {
+      const item = craftedItems.get(itemId);
+      if (item === undefined || item.category !== "transport") {
+        throw new SaveDataError(
+          `inventory.equipped_transport_ids[${String(index)}] 引用了未知物品或错误分类。`,
+        );
+      }
+      if ((quantities[itemId] ?? 0) < 1) {
+        throw new SaveDataError(`已装备载具 ${itemId} 不在制作物库存中。`);
+      }
+    }
     for (const [index, companion] of state.companions.entries()) {
       this.validateEquippedItem(
         companion.equipped_weapon_id,
@@ -815,6 +1044,7 @@ export class SaveStateValidator {
           companion.equipped_weapon_id,
           companion.equipped_armor_id,
         ]),
+        ...state.inventory.equipped_transport_ids,
       ].filter((equippedId) => equippedId === itemId).length;
       if (equippedCount > (quantities[itemId] ?? 0)) {
         throw new SaveDataError(`装备 ${itemId} 的占用数超过制作物库存。`);
@@ -847,6 +1077,32 @@ export class SaveStateValidator {
       if (project.required_project_ids.some((requiredId) => !completedIds.has(requiredId))) {
         throw new SaveDataError(`研究项目 ${projectId} 缺少已完成的前置项目。`);
       }
+    }
+  }
+
+  /** 校验每项经营周期用量都使用稳定 ID 与非负整数计数。 */
+  private validateManagementCycleUsage(state: GameState): void {
+    const usage = requireObject(
+      state.management_cycle_usage,
+      "management_cycle_usage",
+    );
+    for (const [usageId, rawEntry] of Object.entries(usage)) {
+      requireNonEmptyString(usageId, "management_cycle_usage 的键");
+      const entry = exactObject(
+        rawEntry,
+        MANAGEMENT_CYCLE_USAGE_FIELDS,
+        `management_cycle_usage.${usageId}`,
+      );
+      requireInteger(
+        entry.cycle_index,
+        `management_cycle_usage.${usageId}.cycle_index`,
+        0,
+      );
+      requireInteger(
+        entry.count,
+        `management_cycle_usage.${usageId}.count`,
+        0,
+      );
     }
   }
 

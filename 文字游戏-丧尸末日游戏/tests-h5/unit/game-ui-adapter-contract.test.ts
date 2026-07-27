@@ -57,6 +57,12 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     expect(snapshot.actionGroups).toEqual([]);
     expect(snapshot.storyPrompt).toBeNull();
     expect(snapshot.tutorial?.body).toContain("B-17避难所");
+    expect(snapshot.campaignProfileOptions.cities.map((city) => city.id)).toEqual([
+      "city_a", "city_b", "city_c", "city_d", "city_e", "city_f", "city_g",
+    ]);
+    expect(snapshot.campaignProfileOptions.cities.some(
+      (city) => city.id === "city_h",
+    )).toBe(false);
     expect(snapshot.ending).toBeNull();
     expect(adapter.canLoadGame()).toBe(false);
   });
@@ -115,12 +121,9 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     expect(snapshot.actionGroups.some((group) => group.id === "system")).toBe(false);
     expect(snapshot.cities).toHaveLength(8);
     expect(snapshot.managementCategories.map((category) => category.id)).toEqual([
-      "support",
-      "facility",
-      "job",
+      "operation",
       "activity",
-      "trade",
-      "recruit",
+      "upgrade",
     ]);
     expect(snapshot.companions).toHaveLength(4);
     expect(adapter.canLoadGame()).toBe(false);
@@ -305,25 +308,25 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     expect(storage.primaryWrites).toBe(2);
   });
 
-  it("生存保障仅展示供餐和修复，并通过 management_action 路由两项行动", () => {
+  it("经营页先展示供餐和修复，并通过 management_action 路由两项行动", () => {
     const { adapter, application } = buildH5Harness();
     adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
     const state = requireState(application);
-    const support = adapter.getSnapshot().managementCategories.find(
-      (category) => category.id === "support",
+    const operation = adapter.getSnapshot().managementCategories.find(
+      (category) => category.id === "operation",
     );
 
-    expect(support?.options.map((option) => option.id)).toEqual([
-      "support::feed_shelter",
-      "support::repair_shelter",
+    expect(operation?.options.slice(0, 2).map((option) => option.id)).toEqual([
+      "operation::feed_shelter",
+      "operation::repair_shelter",
     ]);
 
     requirePlayer(state).food = 100;
     state.shelter.group_hunger = 25;
     const fed = adapter.execute({
       type: "management_action",
-      categoryId: "support",
-      optionId: "support::feed_shelter",
+      categoryId: "operation",
+      optionId: "operation::feed_shelter",
     });
     expect(fed.accepted).toBe(true);
     expect(state.shelter.group_hunger).toBeLessThan(25);
@@ -332,8 +335,8 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     state.shelter.health = 100;
     const repaired = adapter.execute({
       type: "management_action",
-      categoryId: "support",
-      optionId: "support::repair_shelter",
+      categoryId: "operation",
+      optionId: "operation::repair_shelter",
     });
     expect(repaired.accepted).toBe(true);
     expect(state.shelter.health).toBeGreaterThan(100);

@@ -107,7 +107,7 @@ describe("H5 剧情、战斗与探索命令流", () => {
     expect(state.battle).toMatchObject({ finished: true, retreated: true });
     expect(snapshot.battle).toBeNull();
     expect(requireAction(snapshot, "shelter_management").disabled).toBe(false);
-    expect(snapshot.managementCategories).toHaveLength(6);
+    expect(snapshot.managementCategories).toHaveLength(3);
   });
 
   it("探索事件只抽取一次，并在显式存档恢复后继续同一事件", () => {
@@ -170,7 +170,7 @@ describe("H5 经营、物品与失败命令流", () => {
     harness.adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
     const state = requireState(harness.application);
     const facilityCategory = harness.adapter.getSnapshot().managementCategories.find(
-      (category) => category.id === "facility",
+      (category) => category.id === "upgrade",
     );
     const wall = facilityCategory?.options.find(
       (option) => option.id === "facility::outer_wall",
@@ -180,7 +180,7 @@ describe("H5 经营、物品与失败命令流", () => {
 
     const locked = harness.adapter.execute({
       type: "management_action",
-      categoryId: "facility",
+      categoryId: "upgrade",
       optionId: "facility::outer_wall",
     });
     expect(locked.accepted).toBe(false);
@@ -190,7 +190,7 @@ describe("H5 经营、物品与失败命令流", () => {
     requirePlayer(state).coins = 100;
     const upgraded = harness.adapter.execute({
       type: "management_action",
-      categoryId: "facility",
+      categoryId: "upgrade",
       optionId: "facility::outer_wall",
     });
 

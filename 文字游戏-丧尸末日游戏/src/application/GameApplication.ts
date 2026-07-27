@@ -28,6 +28,7 @@ import type {
   ExpeditionCompanionView,
   ExpeditionStatusView,
   ResearchProjectView,
+  TransportLoadoutOptionView,
   WarehouseItemCatalogEntry,
   WarehouseItemView,
 } from "../domain/survival-systems";
@@ -59,6 +60,7 @@ import type {
   ResolvedCampaignProfile,
   ShelterService,
   StoryService,
+  TransportLoadoutService,
 } from "../services";
 
 interface CommitActionOptions {
@@ -83,6 +85,7 @@ export class GameApplication {
   private readonly inventory: InventoryService;
   private readonly equipment: PlayerAttributeProvider;
   private readonly researchCrafting: ResearchCraftingService;
+  private readonly transportLoadout: TransportLoadoutService;
   private readonly expedition: ExpeditionService;
   private readonly campaignProfiles: CampaignProfileService;
   private readonly modeCapabilities: GameModeCapabilityPolicy;
@@ -103,6 +106,7 @@ export class GameApplication {
     inventory: InventoryService,
     equipment: PlayerAttributeProvider,
     researchCrafting: ResearchCraftingService,
+    transportLoadout: TransportLoadoutService,
     expedition: ExpeditionService,
     campaignProfiles: CampaignProfileService,
     modeCapabilities: GameModeCapabilityPolicy,
@@ -121,6 +125,7 @@ export class GameApplication {
     this.inventory = inventory;
     this.equipment = equipment;
     this.researchCrafting = researchCrafting;
+    this.transportLoadout = transportLoadout;
     this.expedition = expedition;
     this.campaignProfiles = campaignProfiles;
     this.modeCapabilities = modeCapabilities;
@@ -192,6 +197,7 @@ export class GameApplication {
       checkpoint: structuredClone(defaults.checkpoint),
       inventory: structuredClone(defaults.inventory),
       research: structuredClone(defaults.research),
+      management_cycle_usage: structuredClone(defaults.management_cycle_usage),
       expedition: structuredClone(defaults.expedition),
       last_expedition_failure: structuredClone(defaults.last_expedition_failure),
     };
@@ -411,6 +417,11 @@ export class GameApplication {
     return this.researchCrafting.craftingRecipes(this.requireState());
   }
 
+  /** 返回全部载具的持有数量与当前驾驶配置。 */
+  public transportLoadoutOptions(): readonly TransportLoadoutOptionView[] {
+    return this.transportLoadout.options(this.requireState());
+  }
+
   /** 返回当前可加入远征的伙伴及其词条步数。 */
   public expeditionCompanions(): readonly ExpeditionCompanionView[] {
     return this.expedition.companionOptions(this.requireState());
@@ -483,6 +494,19 @@ export class GameApplication {
   public equipItem(itemId: string): ActionReport {
     const working = cloneGameState(this.requireFreePlayableState());
     const resolution = this.inventory.equip(working, itemId);
+    return this.commitAction(working, [...resolution.messages], {
+      consumesTurn: false,
+      actionType: "equipment",
+    });
+  }
+
+  /** 装备或卸下一辆载具，不额外推进世界时间。 */
+  public toggleTransport(itemId: string): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    const resolution = this.transportLoadout.toggle(working, itemId);
+    if (!resolution.applied) {
+      return actionReport(resolution.messages, false);
+    }
     return this.commitAction(working, [...resolution.messages], {
       consumesTurn: false,
       actionType: "equipment",
@@ -898,6 +922,13 @@ export class GameApplication {
     options: CommitActionOptions,
   ): ActionReport {
     this.rules.normalize(working);
+    const immediateEnding = this.rules.settleFailure(working);
+    if (
+      immediateEnding !== null
+      && messages[messages.length - 1] !== immediateEnding.message
+    ) {
+      messages.push(immediateEnding.message);
+    }
     this.chronicle.record(working, messages);
     if (options.consumesTurn && !isEnded(working)) {
       messages.push(...this.rules.advanceTurn(
@@ -949,6 +980,7 @@ export class GameApplication {
     this.state.checkpoint = source.checkpoint;
     this.state.inventory = source.inventory;
     this.state.research = source.research;
+    this.state.management_cycle_usage = source.management_cycle_usage;
     this.state.expedition = source.expedition;
     this.state.last_expedition_failure = source.last_expedition_failure;
   }

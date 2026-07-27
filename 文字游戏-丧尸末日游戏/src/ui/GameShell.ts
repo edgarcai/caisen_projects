@@ -15,8 +15,10 @@ import { resolveVisibleDisplayNodeBounds } from "./laya/DisplayNodeLocator";
 import { PageStack } from "./navigation/PageStack";
 import type { GameRoute } from "./navigation/PageStack";
 import {
+  DEFAULT_DASHBOARD_NAVIGATION_POLICY,
   resolveDashboardNavigationIntent,
   type DashboardNavigationIntent,
+  type DashboardNavigationPolicy,
 } from "./navigation/DashboardNavigationStrategy";
 import { DeferredResizeCoordinator } from "./interactions/DeferredResizeCoordinator";
 import type { NativeTextInputPolicyPort } from "./interactions/NativeTextInputPolicy";
@@ -39,7 +41,6 @@ import {
   createCompanionManagementPage,
   createCompanionsPage,
 } from "./pages/CompanionsPage";
-import { createConfirmPage } from "./pages/ConfirmPage";
 import { ConnectionPage } from "./pages/ConnectionPage";
 import { CoverPage } from "./pages/CoverPage";
 import {
@@ -70,6 +71,7 @@ import {
   createCraftingPage,
   createHistoryPage,
   createResearchPage,
+  createTransportManagementPage,
   createWarehousePage,
 } from "./pages/SystemFeaturePages";
 import {
@@ -77,6 +79,7 @@ import {
   createCoverThemeSelectorPage,
   createExitConfirmPage,
   createFunctionMenuPage,
+  createReturnMenuConfirmPage,
   createRollbackConfirmPage,
   createSettingsPage,
 } from "./pages/SystemMenuPages";
@@ -88,7 +91,6 @@ import type {
   GameUiSnapshot,
   SaveSlotsPageMode,
   UiCampaignProfileSelection,
-  UiActionGroupView,
   UiCompanionEquipmentSlot,
   UiDocumentView,
   UiNavigationDirective,
@@ -127,6 +129,7 @@ export class GameShell {
   private readonly navigation: PageStack;
   private readonly settingsPort: UiSettingsPort;
   private readonly nativeTextInputPolicy: NativeTextInputPolicyPort;
+  private readonly dashboardNavigationPolicy: DashboardNavigationPolicy;
   private snapshot: GameUiSnapshot | null;
   private renderedPages: RenderedPage[];
   private preferences: UiPreferences;
@@ -152,6 +155,8 @@ export class GameShell {
     port: GameUiPort,
     settingsPort: UiSettingsPort,
     nativeTextInputPolicy: NativeTextInputPolicyPort,
+    dashboardNavigationPolicy: DashboardNavigationPolicy =
+      DEFAULT_DASHBOARD_NAVIGATION_POLICY,
   ) {
     this.runtime = expectLayaRuntime(runtime);
     this.stage = expectLayaStage(stage);
@@ -159,6 +164,7 @@ export class GameShell {
     this.port = port;
     this.settingsPort = settingsPort;
     this.nativeTextInputPolicy = nativeTextInputPolicy;
+    this.dashboardNavigationPolicy = dashboardNavigationPolicy;
     this.factory = new UiFactory(
       this.runtime,
       config.theme,
@@ -459,6 +465,8 @@ export class GameShell {
         return this.createSupplies(layout, snapshot);
       case "warehouse":
         return this.createWarehouse(layout, snapshot);
+      case "transport_management":
+        return this.createTransportManagement(layout, snapshot);
       case "research":
         return this.createResearch(layout, snapshot);
       case "crafting":
@@ -1063,6 +1071,22 @@ export class GameShell {
     );
   }
 
+  /** 创建载具设置页并将装备或卸下意图接入真实命令。 */
+  private createTransportManagement(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createTransportManagementPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.transportLoadoutOptions,
+      this.goBack,
+      (itemId): void => { void this.toggleTransport(itemId); },
+    );
+  }
+
   /** 创建研发页并提交选中的研发项目。 */
   private createResearch(
     layout: ResponsiveLayout,
@@ -1377,19 +1401,11 @@ export class GameShell {
    * 创建返回主菜单的独立确认页。
    */
   private createReturnConfirm(layout: ResponsiveLayout): PageView {
-    const action = this.findAction("return_menu");
-    const documentView: UiDocumentView = {
-      title: action?.label ?? "",
-      body: action?.description ?? "",
-      tone: "danger",
-    };
-    return createConfirmPage(
+    return createReturnMenuConfirmPage(
       this.runtime,
       this.factory,
       this.config,
       layout,
-      "page-return-menu-confirm",
-      documentView,
       (): void => {
         void this.returnToMenu();
       },
@@ -1680,7 +1696,10 @@ export class GameShell {
    * 把指挥台行动和导航统一解析为无副作用意图。
    */
   private readonly handleDashboardEntry = (entryId: string): void => {
-    const intent = resolveDashboardNavigationIntent(entryId);
+    const intent = resolveDashboardNavigationIntent(
+      entryId,
+      this.dashboardNavigationPolicy,
+    );
     if (intent !== null) {
       this.executeDashboardNavigationIntent(intent);
     }
@@ -1699,6 +1718,9 @@ export class GameShell {
         return;
       case "open_expedition":
         this.openExpedition();
+        return;
+      case "open_management_category":
+        this.openManagementOptions(intent.categoryId);
         return;
       case "push_screen":
         if (intent.screen === "settings") {
@@ -2016,6 +2038,15 @@ export class GameShell {
   private async equipWarehouseItem(itemId: string): Promise<void> {
     await this.execute(
       { type: "equip_item", itemId },
+      (): void => undefined,
+      true,
+    );
+  }
+
+  /** 提交一辆载具的装备或卸下意图并保留设置页。 */
+  private async toggleTransport(itemId: string): Promise<void> {
+    await this.execute(
+      { type: "transport_toggle", itemId },
       (): void => undefined,
       true,
     );
@@ -2399,21 +2430,6 @@ export class GameShell {
    */
   private findNavigation(id: string): NavigationToken | undefined {
     return this.config.navigation.find((item) => item.id === id);
-  }
-
-  /**
-   * 在所有行动组中查找指定行动。
-   */
-  private findAction(id: string): UiOptionView | undefined {
-    const groups: readonly UiActionGroupView[] =
-      this.snapshot?.actionGroups ?? [];
-    for (const group of groups) {
-      const action = group.actions.find((candidate) => candidate.id === id);
-      if (action !== undefined) {
-        return action;
-      }
-    }
-    return undefined;
   }
 
   /** 从远征领域读模型建立稳定名称映射，避免读档后泄露内部 ID。 */

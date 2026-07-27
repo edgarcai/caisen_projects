@@ -4,6 +4,7 @@ import v2ToV3MigrationDocument from "../../config/save_migrations/v2_to_v3.json"
 import v3ToV4MigrationDocument from "../../config/save_migrations/v3_to_v4.json";
 import v4ToV5MigrationDocument from "../../config/save_migrations/v4_to_v5.json";
 import v5ToV6MigrationDocument from "../../config/save_migrations/v5_to_v6.json";
+import v6ToV7MigrationDocument from "../../config/save_migrations/v6_to_v7.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import { createGameApplication } from "../../src/application";
@@ -16,6 +17,7 @@ import type {
   V3ToV4SaveMigrationConfig,
   V4ToV5SaveMigrationConfig,
   V5ToV6SaveMigrationConfig,
+  V6ToV7SaveMigrationConfig,
 } from "../../src/domain/content";
 import type {
   GameState,
@@ -30,7 +32,9 @@ import {
   V1ToV2SaveMigrator,
   V2ToV3SaveMigrator,
   V5ToV6SaveMigrator,
+  V6ToV7SaveMigrator,
 } from "../../src/infrastructure";
+import type { V6ToV7SaveMigrationContext } from "../../src/infrastructure";
 import type { SaveDocument } from "../../src/infrastructure/SaveMigration";
 import { V3ToV4SaveMigrator } from "../../src/infrastructure/V3ToV4SaveMigrator";
 import { V4ToV5SaveMigrator } from "../../src/infrastructure/V4ToV5SaveMigrator";
@@ -43,6 +47,24 @@ const v2ToV3Config = v2ToV3MigrationDocument as unknown as V2ToV3SaveMigrationCo
 const v3ToV4Config: V3ToV4SaveMigrationConfig = v3ToV4MigrationDocument;
 const v4ToV5Config: V4ToV5SaveMigrationConfig = v4ToV5MigrationDocument;
 const v5ToV6Config: V5ToV6SaveMigrationConfig = v5ToV6MigrationDocument;
+const v6ToV7Config: V6ToV7SaveMigrationConfig = v6ToV7MigrationDocument;
+
+/** 使用权威内容构造 v6→v7 迁移上下文。 */
+function createV7MigrationContext(): V6ToV7SaveMigrationContext {
+  return {
+    facilities: story.facilities,
+    facilityManagement: story.facility_management,
+    allowedHomeCityIds: game.rules.world_map.home_city_ids,
+  };
+}
+
+/** 把 v6 文档提升到当前 v7，供语义校验复用。 */
+function migrateToCurrent(document: Readonly<SaveDocument>): SaveDocument {
+  return new V6ToV7SaveMigrator(
+    v6ToV7Config,
+    createV7MigrationContext(),
+  ).migrate(document);
+}
 
 /** 为状态夹具提供不产生外部副作用的存档端口。 */
 class FixtureSaveRepository implements SaveRepository {
@@ -83,7 +105,8 @@ class FixtureSaveRepository implements SaveRepository {
 function createValidator(): SaveStateValidator {
   return new SaveStateValidator(
     game.rules,
-    Object.keys(story.defaults.facility_levels),
+    story.facilities,
+    story.facility_management,
     story.defaults.companions.map((companion) => companion.companion_id),
     validateSurvivalSystemsConfig(survivalSystemsDocument),
     game.campaign_profiles,
@@ -105,6 +128,8 @@ function downgradeRestorableState(
   rawState: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> {
   const state: Record<string, unknown> = structuredClone(rawState);
+  delete state.management_cycle_usage;
+  delete asObject(state.inventory).equipped_transport_ids;
   delete state.last_expedition_failure;
   for (const player of state.players as Record<string, unknown>[]) {
     delete player.age;
@@ -217,12 +242,13 @@ describe("v3 到 v4 存档迁移", () => {
       migrated,
     );
     const v6Document = new V5ToV6SaveMigrator(v5ToV6Config).migrate(v5Document);
-    expect(validator.parse(v6Document.game_state).checkpoint?.snapshot.campaign).toEqual(
+    const v7Document = migrateToCurrent(v6Document);
+    expect(validator.parse(v7Document.game_state).checkpoint?.snapshot.campaign).toEqual(
       v3ToV4Config.state_defaults.campaign,
     );
   });
 
-  it("按 1→2→3→4→5→6 连续迁移老存档并通过当前语义校验", () => {
+  it("按 1→2→3→4→5→6→7 连续迁移老存档并通过当前语义校验", () => {
     const validator = createValidator();
     let document: SaveDocument = {
       schema_version: 1,
@@ -238,10 +264,11 @@ describe("v3 到 v4 存档迁移", () => {
     validator.validateRawV4(document.game_state);
     document = new V4ToV5SaveMigrator(v4ToV5Config, game.cities).migrate(document);
     document = new V5ToV6SaveMigrator(v5ToV6Config).migrate(document);
+    document = migrateToCurrent(document);
 
     const restored = validator.parse(document.game_state);
 
-    expect(document.schema_version).toBe(6);
+    expect(document.schema_version).toBe(7);
     expect(restored.turn_number).toBe(9);
     expect(restored.story.flags).toContain("legacy_save");
     expect(restored.campaign).toEqual(v3ToV4Config.state_defaults.campaign);
@@ -308,7 +335,8 @@ describe("v4 存档严格校验", () => {
       game_state: state,
     });
     const v6 = new V5ToV6SaveMigrator(v5ToV6Config).migrate(v5);
-    expect(() => validator.parse(v6.game_state)).toThrow();
+    const v7 = migrateToCurrent(v6);
+    expect(() => validator.parse(v7.game_state)).toThrow();
   });
 
   it("拒绝未在城市旅行配置中声明的远征路费", () => {
@@ -325,7 +353,8 @@ describe("v4 存档严格校验", () => {
       game_state: state,
     });
     const v6 = new V5ToV6SaveMigrator(v5ToV6Config).migrate(v5);
-    expect(() => validator.parse(v6.game_state)).toThrow(
+    const v7 = migrateToCurrent(v6);
+    expect(() => validator.parse(v7.game_state)).toThrow(
       "远征城市路费不在配置允许的范围内",
     );
   });
@@ -338,7 +367,8 @@ describe("v4 存档严格校验", () => {
     });
     const v5 = new V4ToV5SaveMigrator(v4ToV5Config, game.cities).migrate(migrated);
     const v6 = new V5ToV6SaveMigrator(v5ToV6Config).migrate(v5);
-    const rawState = JSON.parse(JSON.stringify(v6.game_state)) as unknown;
+    const v7 = migrateToCurrent(v6);
+    const rawState = JSON.parse(JSON.stringify(v7.game_state)) as unknown;
 
     const parsed = validator.parse(rawState);
 

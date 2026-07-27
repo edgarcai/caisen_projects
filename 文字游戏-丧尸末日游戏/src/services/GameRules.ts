@@ -156,6 +156,14 @@ export class GameRules {
     return null;
   }
 
+  /** 在一次状态事务边界统一落地失败结局，并保证已有结局不被覆盖。 */
+  public settleFailure(state: GameState): EndingState | null {
+    if (state.ending !== null) return state.ending;
+    const ending = this.checkFailure(state);
+    if (ending !== null) state.ending = ending;
+    return ending;
+  }
+
   /** 为首领战中倒下的所长创建配置化失败结局。 */
   public combatFailure(playerName: string, mode: GameState["mode"]): EndingState {
     return this.failureEnding("combat", mode, { player_name: playerName });
@@ -247,9 +255,8 @@ export class GameRules {
         }));
       }
     }
-    const ending = this.checkFailure(state);
+    const ending = this.settleFailure(state);
     if (ending !== null) {
-      state.ending = ending;
       messages.push(ending.message);
     }
     if (advance.dayChanged) {

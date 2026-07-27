@@ -1,6 +1,7 @@
 import { formatTemplate } from "../../domain/content";
 import type { GameUiConfig } from "../../styles/GameTheme";
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
+import { ScrollRegion } from "../components/ScrollRegion";
 import type { UiFactory } from "../components/UiFactory";
 import type {
   LayaNodeLike,
@@ -43,10 +44,16 @@ interface TutorialDialogBindings {
   readonly step: LayaTextLike;
   readonly speaker: LayaTextLike;
   readonly title: LayaTextLike;
-  readonly instruction: LayaTextLike;
-  readonly targetState: LayaTextLike;
+  readonly instructionRegion: TutorialInstructionRegion;
   readonly nextLabel: LayaTextLike;
   readonly previousLabel: LayaTextLike;
+}
+
+/** 正文滚动区需要原位更新的显示节点。 */
+interface TutorialInstructionRegion {
+  readonly scroll: ScrollRegion;
+  readonly instruction: LayaTextLike;
+  readonly targetState: LayaTextLike;
 }
 
 /** 对话框在当前断点的几何结果。 */
@@ -59,7 +66,7 @@ interface TutorialDialogGeometry {
 
 /** 创建带聚焦暗化、角色通讯框和双向步骤导航的新手教程。 */
 export function createGuidedTutorialPage(
-  _runtime: LayaRuntimeLike,
+  runtime: LayaRuntimeLike,
   factory: UiFactory,
   config: GameUiConfig,
   layout: ResponsiveLayout,
@@ -105,6 +112,7 @@ export function createGuidedTutorialPage(
   /** 在对话按钮创建前提供可替换的“上一步”动作。 */
   let previousAction = (): void => undefined;
   const bindings = renderTutorialDialog(
+    runtime,
     factory,
     config,
     dialog,
@@ -126,7 +134,6 @@ export function createGuidedTutorialPage(
     });
     bindings.speaker.text = step.speaker;
     bindings.title.text = step.title;
-    bindings.instruction.text = step.instruction;
     bindings.nextLabel.text = stepIndex === total - 1
       ? config.guided_tutorial.complete_label
       : config.guided_tutorial.next_label;
@@ -134,7 +141,12 @@ export function createGuidedTutorialPage(
       ? config.theme.muted_text
       : config.theme.text;
     const target = resolveTarget(step.target_test_id);
-    bindings.targetState.visible = target === null;
+    refreshTutorialInstructionRegion(
+      bindings.instructionRegion,
+      config,
+      step.instruction,
+      target === null,
+    );
     drawTutorialSpotlight(
       spotlight,
       focusBorder,
@@ -180,6 +192,7 @@ export function createGuidedTutorialPage(
     refreshTarget: refresh,
     /** 释放教程覆盖层的所有指针事件与显示节点。 */
     destroy: (): void => {
+      bindings.instructionRegion.scroll.destroy();
       root.offAll();
       root.destroy(true);
     },
@@ -188,6 +201,7 @@ export function createGuidedTutorialPage(
 
 /** 在对话框中渲染角色通讯文案与三个底部动作。 */
 function renderTutorialDialog(
+  runtime: LayaRuntimeLike,
   factory: UiFactory,
   config: GameUiConfig,
   parent: LayaNodeLike,
@@ -236,32 +250,22 @@ function renderTutorialDialog(
   });
   const actionHeight = config.controls.compact_button_height;
   const actionTop = geometry.height - padding - actionHeight;
-  const targetStateHeight = config.typography.body_line_height;
-  const targetState = factory.text(parent, {
-    testId: "guided-tutorial-target-state",
-    text: config.guided_tutorial.missing_target_label,
-    x: padding,
-    y: actionTop - targetStateHeight,
-    width: innerWidth,
-    height: targetStateHeight,
-    fontSize: config.typography.caption_size,
-    color: config.theme.warning,
-  });
   const instructionTop = titleTop + title.height + config.layout.page.option_gap;
-  const instruction = factory.text(parent, {
-    testId: "guided-tutorial-instruction",
-    text: " ",
-    x: padding,
-    y: instructionTop,
-    width: innerWidth,
-    height: Math.max(
-      config.typography.body_line_height,
-      actionTop - targetStateHeight - instructionTop - config.layout.page.option_gap,
-    ),
-    fontSize: config.typography.body_size,
-    color: config.theme.text,
-  });
   const gap = config.layout.page.option_gap;
+  const instructionViewportHeight = actionTop - instructionTop - gap;
+  if (instructionViewportHeight <= 0) {
+    throw new Error("教程通讯框高度不足以容纳正文区与底部按钮。");
+  }
+  const instructionRegion = createTutorialInstructionRegion(
+    runtime,
+    factory,
+    config,
+    parent,
+    padding,
+    instructionTop,
+    innerWidth,
+    instructionViewportHeight,
+  );
   const buttonWidth = (innerWidth - gap * 2) / 3;
   factory.button(parent, {
     testId: "guided-tutorial-skip",
@@ -297,11 +301,75 @@ function renderTutorialDialog(
     step,
     speaker,
     title,
-    instruction,
-    targetState,
+    instructionRegion,
     nextLabel: requireButtonLabel(nextButton, "guided-tutorial-next"),
     previousLabel: requireButtonLabel(previousButton, "guided-tutorial-previous"),
   };
+}
+
+/** 创建与底部按钮解耦的教程正文滚动区。 */
+function createTutorialInstructionRegion(
+  runtime: LayaRuntimeLike,
+  factory: UiFactory,
+  config: GameUiConfig,
+  parent: LayaNodeLike,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): TutorialInstructionRegion {
+  const scroll = new ScrollRegion(
+    runtime,
+    parent,
+    "guided-tutorial-instruction-scroll",
+    x,
+    y,
+    width,
+    height,
+    config.controls.scroll_step,
+    config.controls.drag_threshold,
+  );
+  const instruction = factory.autoText(scroll.content, {
+    testId: "guided-tutorial-instruction",
+    text: " ",
+    x: 0,
+    y: 0,
+    width,
+    fontSize: config.typography.body_size,
+    color: config.theme.text,
+  });
+  const targetState = factory.autoText(scroll.content, {
+    testId: "guided-tutorial-target-state",
+    text: config.guided_tutorial.missing_target_label,
+    x: 0,
+    y: 0,
+    width,
+    fontSize: config.typography.caption_size,
+    color: config.theme.warning,
+  });
+  return { scroll, instruction, targetState };
+}
+
+/** 按当前步骤的真实换行高度更新正文和滚动上限。 */
+function refreshTutorialInstructionRegion(
+  region: TutorialInstructionRegion,
+  config: GameUiConfig,
+  instructionText: string,
+  showTargetState: boolean,
+): void {
+  const gap = config.layout.page.option_gap;
+  region.instruction.text = instructionText;
+  region.instruction.height = Math.max(
+    config.typography.body_line_height,
+    region.instruction.textHeight,
+  );
+  region.targetState.visible = showTargetState;
+  region.targetState.y = region.instruction.height + gap;
+  const contentBottom = showTargetState
+    ? region.targetState.y + region.targetState.height
+    : region.instruction.height;
+  region.scroll.setContentHeight(contentBottom + gap);
+  region.scroll.revealNode(region.instruction.name, 0, "start");
 }
 
 /** 按当前断点计算右下或底部全宽通讯框。 */

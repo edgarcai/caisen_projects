@@ -10,6 +10,7 @@ import type {
   UiOptionView,
   UiPromptView,
   UiResearchProjectView,
+  UiTransportLoadoutOptionView,
   UiWarehouseItemView,
   UiWeeklyArchiveView,
 } from "../ports/GameUiPort";
@@ -64,6 +65,54 @@ export function buildWarehousePrompt(
         tone: canEquip ? "primary" : "default",
       };
     }),
+  };
+}
+
+/** 创建载具设置页并把装备或卸载动作提交给应用层。 */
+export function createTransportManagementPage(
+  runtime: LayaRuntimeLike,
+  factory: UiFactory,
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  items: readonly UiTransportLoadoutOptionView[],
+  onBack: () => void,
+  onToggle: (itemId: string) => void,
+): PageView {
+  return createChoicePage(runtime, factory, config, layout, {
+    testId: "page-transport-management",
+    title: config.texts.transport_title,
+    prompt: buildTransportManagementPrompt(config, items),
+    onBack,
+    onSelect: (option): void => { onToggle(option.id); },
+  });
+}
+
+/** 把实时载具配装转换为包含驾驶状态与持有数量的选择页模型。 */
+export function buildTransportManagementPrompt(
+  config: GameUiConfig,
+  items: readonly UiTransportLoadoutOptionView[],
+): UiPromptView {
+  return {
+    id: "transport-management",
+    title: config.texts.transport_title,
+    body: config.texts.transport_body,
+    options: items.map((item): UiOptionView => ({
+      id: item.id,
+      label: formatUiTemplate(config.texts.transport_item_format, {
+        name: item.name,
+        status: item.equipped
+          ? config.texts.transport_equipped
+          : config.texts.transport_available,
+      }),
+      description: formatUiTemplate(config.texts.transport_detail_format, {
+        mode: item.modeLabel,
+        quantity: item.ownedQuantity,
+        description: item.description,
+      }),
+      disabled: item.disabled,
+      disabledReason: item.disabledReason,
+      tone: item.equipped ? "primary" : "default",
+    })),
   };
 }
 

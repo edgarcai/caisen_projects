@@ -9,6 +9,7 @@ import { UiFactory } from "../../src/ui/components/UiFactory";
 import type { LayaRuntimeLike } from "../../src/ui/laya/LayaRuntime";
 import {
   createNewGameSetupPage,
+  resolveEntryModeOptions,
   type NewGameSetupPageView,
 } from "../../src/ui/pages/NewGameSetupPage";
 import { createGuidedTutorialPage } from "../../src/ui/pages/GuidedTutorialPage";
@@ -445,6 +446,23 @@ function createTestView(
 }
 
 describe("新游戏配置页", () => {
+  it("普通入口保持配置顺序，独立入口只追加自身模式", () => {
+    expect(resolveEntryModeOptions(webConfig, "single").map((option) => option.id)).toEqual([
+      "single",
+      "endless",
+    ]);
+    expect(resolveEntryModeOptions(webConfig, "story").map((option) => option.id)).toEqual([
+      "single",
+      "endless",
+      "story",
+    ]);
+    expect(resolveEntryModeOptions(webConfig, "multiplayer").map((option) => option.id)).toEqual([
+      "single",
+      "endless",
+      "multiplayer",
+    ]);
+  });
+
   it("从配置默认值起步，循环选项并提交去空格后的完整档案", () => {
     const onBack = vi.fn();
     const onSubmit = vi.fn();
@@ -476,6 +494,10 @@ describe("新游戏配置页", () => {
     expect(requireNode(root, "profile-setup-options")).toBeTruthy();
     expect(requireNode(root, "profile-setup-preview")).toBeTruthy();
     expect(requireNode(root, "profile-setup-summary")).toBeTruthy();
+    expect(requireNode(root, "profile-mode-option-single")).toBeTruthy();
+    expect(requireNode(root, "profile-mode-option-endless")).toBeTruthy();
+    expect(() => requireNode(root, "profile-mode-option-multiplayer")).toThrow();
+    expect(() => requireNode(root, "profile-mode-option-story")).toThrow();
 
     nameInput.text = "  林岚  ";
     nameInput.emit("blur");
@@ -535,6 +557,8 @@ describe("新游戏配置页", () => {
     expect(requireText(mobileRoot, "profile-mode-label").text).toBe(
       webConfig.new_game_setup.mode_options.find((option) => option.id === "story")?.label,
     );
+    expect(requireNode(mobileRoot, "profile-mode-option-story")).toBeTruthy();
+    expect(() => requireNode(mobileRoot, "profile-mode-option-multiplayer")).toThrow();
 
     const desktopView = createTestView(
       createLayout(false),
@@ -554,6 +578,8 @@ describe("新游戏配置页", () => {
     expect(secondName.parent?.y).toBeGreaterThan(firstName.parent?.y ?? 0);
     expect(desktopDifficulty.x).toBeGreaterThan(desktopMode.x);
     expect(desktopDifficulty.y).toBe(desktopMode.y);
+    expect(requireNode(desktopRoot, "profile-mode-option-multiplayer")).toBeTruthy();
+    expect(() => requireNode(desktopRoot, "profile-mode-option-story")).toThrow();
 
     mobileView.page.destroy();
     desktopView.page.destroy();
@@ -778,6 +804,71 @@ describe("开局引导与制作方页", () => {
     view.destroy();
   });
 
+  it("三个质量视口的长教程正文可滚至末尾且按钮固定在底部", () => {
+    for (const viewportId of ["desktop", "mobile", "mobile_landscape"]) {
+      const runtime = createFakeRuntime();
+      const layout = createQualityViewportLayout(viewportId);
+      const view = createGuidedTutorialPage(
+        runtime,
+        createFactory(runtime),
+        webConfig,
+        layout,
+        (): { x: number; y: number; width: number; height: number } => ({
+          x: layout.outerPadding,
+          y: layout.outerPadding,
+          width: webConfig.guided_tutorial.fallback_target_width,
+          height: webConfig.guided_tutorial.fallback_target_height,
+        }),
+        { onComplete: vi.fn(), onSkip: vi.fn() },
+      );
+      const root = view.root as unknown as FakeNode;
+      const viewport = requireNode(root, "guided-tutorial-instruction-scroll");
+      const content = requireNode(
+        root,
+        "guided-tutorial-instruction-scroll-content",
+      );
+      const nextButton = requireNode(root, "guided-tutorial-next");
+
+      expect(resolveGlobalY(viewport) + viewport.height).toBeLessThanOrEqual(
+        resolveGlobalY(nextButton),
+      );
+      webConfig.guided_tutorial.steps.forEach((step, stepIndex) => {
+        const instruction = requireText(root, "guided-tutorial-instruction");
+        expect(instruction.text).toBe(step.instruction);
+        expect(instruction.height).toBeGreaterThanOrEqual(instruction.textHeight);
+        expect(Math.abs(content.y)).toBe(0);
+
+        if (instruction.height > viewport.height) {
+          if (layout.usesCompactUi) {
+            const stage = runtime.stage as unknown as FakeStage;
+            stage.mouseY = viewport.height;
+            viewport.emit("mousedown");
+            stage.mouseY = -instruction.height;
+            stage.emit("mousemove");
+            stage.emit("mouseup");
+          } else {
+            const attempts = Math.ceil(
+              instruction.height / webConfig.controls.scroll_step,
+            ) + 1;
+            for (let attempt = 0; attempt < attempts; attempt += 1) {
+              viewport.emit("mousewheel", { delta: -1 });
+            }
+          }
+          expect(content.y).toBeLessThan(0);
+          expect(instruction.y + instruction.height + content.y)
+            .toBeLessThanOrEqual(viewport.height);
+          expect(instruction.y + instruction.height + content.y)
+            .toBeGreaterThan(0);
+        }
+
+        if (stepIndex < webConfig.guided_tutorial.steps.length - 1) {
+          view.next();
+        }
+      });
+      view.destroy();
+    }
+  });
+
   it("开局提示的返回、查看教程和继续行为彼此独立", () => {
     const runtime = createFakeRuntime();
     const back = vi.fn();
@@ -824,7 +915,12 @@ describe("开局引导与制作方页", () => {
     const hold = webConfig.motion.publisher_logo_hold_ms;
     const fadeOut = webConfig.motion.publisher_logo_fade_out_ms;
 
-    expect(requireText(root, "publisher-splash-title").text).toBe("白菜出品");
+    const publisherTitle = requireText(root, "publisher-splash-title");
+    expect(publisherTitle.text).toBe("白菜出品");
+    expect(publisherTitle.fontSize).toBe(
+      splashConfig.publisher_splash.title_font_size,
+    );
+    expect(() => requireNode(root, "publisher-splash-subtitle")).toThrow();
     expect(requireNode(root, "publisher-splash-background").alpha).toBe(
       splashConfig.publisher_splash.background_opacity,
     );

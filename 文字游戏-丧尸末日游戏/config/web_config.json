@@ -137,8 +137,8 @@
   },
   "typography": {
     "font_family": "PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif",
-    "cover_title_size": 72,
-    "cover_subtitle_size": 42,
+    "cover_title_size": 80,
+    "cover_subtitle_size": 48,
     "page_title_size": 36,
     "section_title_size": 28,
     "body_size": 30,
@@ -208,6 +208,7 @@
         "description": "以生存天数为目标的长线挑战：生存损耗提高至 115%，不含剧情终局。"
       }
     ],
+    "entry_mode_ids": ["single", "endless"],
     "categories": [
       {"id": "name", "label": "所长", "description": "建立指挥者身份与多人名单。"},
       {"id": "mode", "label": "模式", "description": "决定本局的核心循环和结束条件。"},
@@ -284,14 +285,14 @@
         "id": "exploration",
         "speaker": "侦察员·阳关",
         "title": "规划第一次远征",
-        "instruction": "点击探索，先查看城市通行需求，再选区划、同行伙伴与携带物。城市路程与区划事件都会消耗步数。",
+        "instruction": "点击探索，先查看城市通行需求，再选区划、同行伙伴与携带物。H 市是没有邻城的孤岛，必须在载具设置中同时装备海上与飞行载具才能进入。城市路程与区划事件都会消耗步数。",
         "target_test_id": "dashboard-action-explore"
       },
       {
         "id": "shelter-management",
         "speaker": "基地指挥官·豪菜",
         "title": "稳住避难所",
-        "instruction": "供餐、修复、工作、招募与活动统一收在避难所管理中。先保住耐久和群体希望，再谈扩张。",
+        "instruction": "避难所管理分为经营、活动与升级。初始区域的设施总等级上限是 10；先完成区域扩张，才能继续升级并建造新设施。贸易每个生存周只能完成一次，运输途中还可能遭遇抢劫。",
         "target_test_id": "dashboard-action-shelter_management"
       },
       {
@@ -312,7 +313,7 @@
         "id": "save-and-settings",
         "speaker": "基地指挥官·豪菜",
         "title": "暂停与存档",
-        "instruction": "按 ESC 打开功能菜单，可以存档、设置、回档或返回主菜单。完整教程也可随时从设置里重新打开。",
+        "instruction": "按 ESC 打开功能菜单，可以存档、设置、回档或返回主菜单。v7 存档会保留已装备载具、区域扩张与当周贸易次数；完整教程也可随时从设置里重新打开。",
         "target_test_id": "dashboard-settings"
       }
     ]
@@ -325,14 +326,11 @@
   },
   "publisher_splash": {
     "title": "白菜出品",
-    "subtitle": "避难所通讯系统",
     "background_asset": "",
     "background_opacity": 0.22,
     "content_width": 680,
     "title_height": 128,
-    "subtitle_height": 56,
-    "decoration_width": 520,
-    "decoration_gap": 26
+    "title_font_size": 72
   },
   "layout": {
     "cover": {
@@ -464,7 +462,7 @@
     "settings_schema_version": 2,
     "achievement_key": "shelter-embers-achievements-v1",
     "achievement_schema_version": 1,
-    "schema_version": 6,
+    "schema_version": 7,
     "auto_save": true,
     "backup_slots": 2,
     "save_slot_count": 6
@@ -504,16 +502,24 @@
     {"id": "settings", "label": "设置", "icon": "⚙", "placements": ["mobile_header", "desktop_header"], "modes": ["single", "multiplayer", "story", "endless"]}
   ],
   "actions": [
+    {"id": "companion_management", "label": "伙伴装备管理", "style": "secondary", "icon": "♟"},
+    {"id": "transport_management", "label": "载具设置", "style": "secondary", "icon": "◫"},
+    {"id": "facility_management", "label": "设施管理", "style": "secondary", "icon": "⚒"},
     {"id": "warehouse", "label": "避难所仓库", "style": "secondary", "icon": "▣"},
     {"id": "research", "label": "研究台", "style": "secondary", "icon": "⌬"},
     {"id": "crafting", "label": "制作工坊", "style": "secondary", "icon": "⚙"},
     {"id": "history", "label": "历史记录", "style": "secondary", "icon": "≡"}
   ],
+  "dashboard_navigation": {
+    "management_category_shortcuts": [
+      {"entry_id": "facility_management", "category_id": "upgrade"}
+    ]
+  },
   "action_groups": [
     {
       "id": "core",
-      "label": "核心行动",
-      "action_ids": ["explore", "shelter_management", "companions"]
+      "label": "生存指令",
+      "action_ids": ["explore", "shelter_management", "companions", "companion_management", "transport_management", "facility_management"]
     },
     {
       "id": "supplies",
@@ -544,7 +550,7 @@
     "exit_description": "结束本次指挥；浏览器限制关闭时会给出安全提示。",
     "update_log": "▤ 更新日志",
     "update_log_title": "更新日志",
-    "update_log_body": "版本 5.0 · 火种协议\n\n• 新增普通求生、双人协作、剧情模式与无尽求生四种模式，以及五种开局起源。\n• 建档界面升级为桌面三栏策略式布局，手机端改为纵向分步流程。\n• 伙伴档案可查看立绘与完整经历，并新增武器、防具配装和互动系统。\n• 避难所加入活动分类、希望值，以及所长年龄与 70～120 岁随机寿命。\n• 远征基础步数提高至 10；步数耗尽时展示独立失败结算、生命变化和逐项损失。\n• 新增七步战术引导、开局教程提示、手机通讯栏与屏外目标自动聚焦。\n• 启动时播放‘白菜出品’制作方标识，再依次进入更新日志与封面。\n• 存档升级为 v6，旧 v1～v5 存档会逐级迁移并保留伙伴、希望与远征状态。",
+    "update_log_body": "版本 7.0 · 群岛拓界\n\n• H 市改为没有邻城的孤岛；只有在载具设置中同时装备海上与飞行载具才能进入。\n• 新增载具设置，仓库中的载具必须先装备才能用于远征。\n• 避难所管理重组为经营、活动与升级；初始设施总等级上限为 10，完成区域扩张后才能继续升级并建造新设施。\n• 贸易改为每个生存周最多完成一次，运输途中可能遭遇抢劫并触发不同结果。\n• 扩充银行、医院、商业街、摩天楼与寂静街区的探索事件，并保留小偷追踪的多分支结局。\n• 存档升级为 v7，保留已装备载具与每周经营次数；旧 v1～v6 存档会逐级安全迁移。",
     "profile_setup_title": "建立所长档案",
     "profile_setup_body": "姓名只代表所长本人；模式、难度、起源、特性与出生市区会分别影响本局规则。",
     "profile_name_label": "所长姓名",
@@ -595,12 +601,12 @@
     "companion_secret_locked": "信任不足，隐藏档案尚未解锁。",
     "companion_portrait_unavailable": "立绘信号暂未接入",
     "companion_portrait_signal_format": "档案信号：{status}\n资源键：{key}",
-    "companion_status_format": "{name} · {role}\n状态：{status}｜信任：{trust}",
+    "companion_status_format": "{name} · {role}\n状态：{status}｜{trust}",
     "companion_equipment_format": "{slot}：{item}",
     "companion_interaction_cooldown_format": "还需 {turns} 回合才能再次互动",
-    "management_detail_title": "避难所活动详情",
-    "management_detail_requirements_title": "活动需求",
-    "management_detail_confirm": "开始活动",
+    "management_detail_title": "项目详情",
+    "management_detail_requirements_title": "执行需求",
+    "management_detail_confirm": "确认执行",
     "communication_log_title": "行动通讯",
     "communication_log_open": "查看完整通讯",
     "communication_log_empty": "本周尚无行动通讯。",
@@ -637,6 +643,8 @@
     "settings_tutorial_description": "查看当前模式对应的生存、远征、避难所与存档规则。",
     "settings_return_menu": "返回主菜单",
     "settings_return_menu_description": "结束当前指挥视图并返回封面；未手动保存的进度不会额外写入。",
+    "return_menu_confirm_title": "返回主菜单",
+    "return_menu_confirm_body": "返回主菜单不会额外保存。请确认已经手动存档，或已抵达最近一次十日检查点。",
     "reduced_motion_description": "降低页面切换和悬停动画，适合易晕动或低性能设备。",
     "reduced_motion_on": "减少动效：已开启",
     "reduced_motion_off": "减少动效：已关闭",
@@ -652,6 +660,13 @@
     "warehouse_detail_format": "{category}｜{description}",
     "warehouse_equip": "点击装备",
     "warehouse_not_equippable": "该物品不能装备",
+    "transport_title": "载具设置",
+    "transport_body": "只有放入出发配置的载具才可以驾驶。岛屿城市要求海上与飞行载具同时处于已装备状态。",
+    "transport_item_format": "{name}｜{status}",
+    "transport_detail_format": "{mode}载具｜持有 {quantity}\n{description}",
+    "transport_equipped": "已装备，可驾驶",
+    "transport_available": "未装备",
+    "transport_unavailable": "尚未制作该载具",
     "research_title": "研究台",
     "research_body": "研发会消耗配置化资源与时间，并可能提高远征行动上限。",
     "research_item_format": "{name}｜{status}",

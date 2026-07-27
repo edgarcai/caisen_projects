@@ -13,6 +13,9 @@ export type WarehouseItemCategory =
 /** 装备可修正的玩家战斗属性。 */
 export type PlayerCombatAttribute = "attack" | "defense" | "agility";
 
+/** 载具能够覆盖的稳定通行地貌。 */
+export type TransportMode = "land" | "sea" | "air";
+
 /** 由既有状态目标提供数量的仓库物品。 */
 export interface ResourceWarehouseItemConfig {
   readonly item_id: string;
@@ -31,6 +34,7 @@ export interface CraftedWarehouseItemConfig {
   readonly carryable: boolean;
   readonly description: string;
   readonly equipment_bonuses?: Partial<Readonly<Record<PlayerCombatAttribute, number>>>;
+  readonly transport_mode?: TransportMode;
 }
 
 /** 由剧情配置注入仓库的只读关键物品档案。 */
@@ -127,6 +131,15 @@ export interface SurvivalSystemsConfigDocument {
     readonly insufficient_text: string;
     readonly unknown_text: string;
   };
+  readonly transport_loadout: {
+    readonly maximum_active_transports: number;
+    readonly mode_labels: Readonly<Record<TransportMode, string>>;
+    readonly equipped_text: string;
+    readonly unequipped_text: string;
+    readonly unavailable_text: string;
+    readonly capacity_reached_text: string;
+    readonly invalid_transport_text: string;
+  };
   readonly expedition: {
     readonly base_steps: number;
     readonly maximum_companions: number;
@@ -171,6 +184,18 @@ export interface WarehouseItemCatalogEntry {
   readonly categoryLabel: string;
   readonly carryable: boolean;
   readonly description: string;
+}
+
+/** 载具设置页展示的一辆已制作或待制作载具。 */
+export interface TransportLoadoutOptionView {
+  readonly itemId: string;
+  readonly name: string;
+  readonly mode: TransportMode;
+  readonly modeLabel: string;
+  readonly description: string;
+  readonly ownedQuantity: number;
+  readonly equipped: boolean;
+  readonly available: boolean;
 }
 
 /** 研发页面展示的一项实时状态。 */

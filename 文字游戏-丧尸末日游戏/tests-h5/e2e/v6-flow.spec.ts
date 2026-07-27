@@ -17,6 +17,7 @@ interface ConfiguredMode {
 interface V6WebConfig {
   readonly new_game_setup: {
     readonly mode_options: readonly ConfiguredMode[];
+    readonly entry_mode_ids: readonly ConfiguredMode["id"][];
   };
   readonly storage: {
     readonly key: string;
@@ -451,7 +452,7 @@ async function reloadAndLoadFirstSlot(page: Page): Promise<void> {
   await waitForScreen(page, "dashboard");
 }
 
-/** 在一份合法 v6 存档中注入配置化装备，供真实配装 UI 消费。 */
+/** 在一份当前版本存档中注入配置化装备，供真实配装 UI 消费。 */
 async function seedCraftedEquipment(
   page: Page,
   itemId: string,
@@ -468,7 +469,7 @@ async function seedCraftedEquipment(
       };
     };
     if (document.schema_version !== schemaVersion) {
-      throw new Error("测试只允许修改当前 v6 存档。");
+      throw new Error("测试只允许修改当前配置版本存档。");
     }
     document.game_state.inventory.crafted_items[equipmentId] = 1;
     localStorage.setItem(storageKey, JSON.stringify(document));
@@ -682,7 +683,7 @@ async function seedExhaustedExpedition(
       };
     };
     if (document.schema_version !== schemaVersion) {
-      throw new Error("测试只允许修改当前 v6 存档。");
+      throw new Error("测试只允许修改当前配置版本存档。");
     }
     const state = document.game_state;
     const expedition = state.expedition;
@@ -711,7 +712,7 @@ async function seedExhaustedExpedition(
   });
 }
 
-test("五个起源与四个模式均由建档 UI 暴露并可真实进入无尽求生", async ({
+test("五个起源与普通入口模式均由建档 UI 暴露并可真实进入无尽求生", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== DESKTOP_PROJECT, "仅在桌面基准项目验证全量建档列表");
@@ -731,10 +732,18 @@ test("五个起源与四个模式均由建档 UI 暴露并可真实进入无尽�
   expect(gameConfig.campaign_profiles.origins).toHaveLength(REQUIRED_ORIGIN_COUNT);
 
   await clickLayaNode(page, "profile-category-mode");
-  for (const mode of webConfig.new_game_setup.mode_options) {
+  for (const modeId of webConfig.new_game_setup.entry_mode_ids) {
     expect(
-      await readLayaNodeBounds(page, `profile-mode-option-${mode.id}`),
+      await readLayaNodeBounds(page, `profile-mode-option-${modeId}`),
     ).not.toBeNull();
+  }
+  const independentModeIds = webConfig.new_game_setup.mode_options
+    .map((mode) => mode.id)
+    .filter((modeId) => !webConfig.new_game_setup.entry_mode_ids.includes(modeId));
+  for (const modeId of independentModeIds) {
+    expect(
+      await readLayaNodeBounds(page, `profile-mode-option-${modeId}`),
+    ).toBeNull();
   }
   const endlessMode = webConfig.new_game_setup.mode_options.find(
     (mode) => mode.id === "endless",

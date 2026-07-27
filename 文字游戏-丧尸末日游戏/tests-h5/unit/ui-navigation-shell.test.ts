@@ -26,6 +26,7 @@ import {
 import { resolvePageScaffoldGeometry } from "../../src/ui/pages/PageView";
 import {
   buildFunctionMenuPrompt,
+  buildReturnMenuConfirmDocument,
   buildCoverThemePrompt,
   buildSettingsPrompt,
   createCreditsDocument,
@@ -491,6 +492,16 @@ describe("通用底部操作区与本地设置", () => {
       "return-menu",
     ]);
     expect(inGame.options.at(-1)?.tone).toBe("danger");
+  });
+
+  it("返回主菜单确认文档只读取严格 Web 专用文案", () => {
+    expect(buildReturnMenuConfirmDocument(webConfig)).toEqual({
+      title: webConfig.texts.return_menu_confirm_title,
+      body: webConfig.texts.return_menu_confirm_body,
+      tone: "danger",
+    });
+    expect(webConfig.texts.return_menu_confirm_title).not.toBe("");
+    expect(webConfig.texts.return_menu_confirm_body).not.toBe("");
   });
 
   it("双动作在固定页脚中等宽排列且不超过配置最大宽度", () => {

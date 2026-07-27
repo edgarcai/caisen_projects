@@ -656,8 +656,10 @@ describe("v3 时间线与迁移", () => {
       crafted_items: {},
       equipped_weapon_id: null,
       equipped_armor_id: null,
+      equipped_transport_ids: [],
     });
     expect(migrated.research).toEqual({ completed_project_ids: [] });
+    expect(migrated.management_cycle_usage).toEqual({});
     expect(migrated.expedition).toBeNull();
     expect(migrated.turn_number).toBe(23);
   });

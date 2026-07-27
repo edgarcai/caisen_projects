@@ -103,9 +103,12 @@ export type NewGameSetupCategoryTokenId =
   | "city"
   | "slot";
 
+/** UI 层允许的稳定游戏模式标识。 */
+export type GameModeTokenId = "single" | "multiplayer" | "story" | "endless";
+
 /** UI 层的配置化模式选项。 */
 export interface NewGameModeOptionTokens {
-  readonly id: string;
+  readonly id: GameModeTokenId;
   readonly label: string;
   readonly description: string;
 }
@@ -158,6 +161,7 @@ export interface GameNewGameSetupTokens {
   readonly name_input: NativeNameInputTokens;
   readonly preset_names: readonly string[];
   readonly mode_options: readonly NewGameModeOptionTokens[];
+  readonly entry_mode_ids: readonly GameModeTokenId[];
   readonly categories: readonly NewGameSetupCategoryTokens[];
   readonly desktop: NewGameSetupDesktopTokens;
   readonly mobile: NewGameSetupMobileTokens;
@@ -205,14 +209,11 @@ export interface PreGameNoticeTokens {
 /** UI 层的制作方开场 LOGO 配置。 */
 export interface PublisherSplashTokens {
   readonly title: string;
-  readonly subtitle: string;
   readonly background_asset: string;
   readonly background_opacity: number;
   readonly content_width: number;
   readonly title_height: number;
-  readonly subtitle_height: number;
-  readonly decoration_width: number;
-  readonly decoration_gap: number;
+  readonly title_font_size: number;
 }
 
 /** 单个响应式封面菜单布局配置。 */
@@ -495,6 +496,8 @@ export interface GameTextTokens {
   readonly settings_tutorial_description: string;
   readonly settings_return_menu: string;
   readonly settings_return_menu_description: string;
+  readonly return_menu_confirm_title: string;
+  readonly return_menu_confirm_body: string;
   readonly reduced_motion_description: string;
   readonly reduced_motion_on: string;
   readonly reduced_motion_off: string;
@@ -510,6 +513,13 @@ export interface GameTextTokens {
   readonly warehouse_detail_format: string;
   readonly warehouse_equip: string;
   readonly warehouse_not_equippable: string;
+  readonly transport_title: string;
+  readonly transport_body: string;
+  readonly transport_item_format: string;
+  readonly transport_detail_format: string;
+  readonly transport_equipped: string;
+  readonly transport_available: string;
+  readonly transport_unavailable: string;
   readonly research_title: string;
   readonly research_body: string;
   readonly research_item_format: string;

@@ -117,7 +117,7 @@ function renderOptionalSplashBackground(
   parent.addChild(background);
 }
 
-/** 渲染保持为实时文字的制作方名称、副标和装饰线。 */
+/** 渲染保持为实时文字且不依赖封面字号的制作方名称。 */
 function renderPublisherBrand(
   factory: UiFactory,
   config: GameUiConfig,
@@ -129,64 +129,25 @@ function renderPublisherBrand(
     requestedWidth,
     layout.stageWidth - layout.safeArea.left - layout.safeArea.right - layout.outerPadding * 2,
   );
-  const totalHeight = config.publisher_splash.title_height
-    + config.publisher_splash.subtitle_height
-    + config.publisher_splash.decoration_gap * 2;
+  const totalHeight = config.publisher_splash.title_height;
   const root = factory.container("publisher-splash-brand");
   root.pos((layout.stageWidth - width) / 2, (layout.stageHeight - totalHeight) / 2);
   root.size(width, totalHeight);
   root.mouseEnabled = false;
-  const decorationWidth = Math.min(width, config.publisher_splash.decoration_width);
-  const decorationLeft = (width - decorationWidth) / 2;
-  root.graphics.drawLine(
-    decorationLeft,
-    0,
-    decorationLeft + decorationWidth,
-    0,
-    config.theme.border_active,
-    config.controls.focus_border_width,
-  );
   factory.text(root, {
     testId: "publisher-splash-title",
     text: config.publisher_splash.title,
     x: 0,
-    y: config.publisher_splash.decoration_gap,
+    y: 0,
     width,
     height: config.publisher_splash.title_height,
-    fontSize: config.typography.cover_title_size,
+    fontSize: config.publisher_splash.title_font_size,
     color: config.theme.text,
     bold: true,
     align: "center",
     valign: "middle",
     wordWrap: false,
   });
-  const subtitleTop = config.publisher_splash.decoration_gap
-    + config.publisher_splash.title_height;
-  factory.text(root, {
-    testId: "publisher-splash-subtitle",
-    text: config.publisher_splash.subtitle,
-    x: 0,
-    y: subtitleTop,
-    width,
-    height: config.publisher_splash.subtitle_height,
-    fontSize: config.typography.caption_size,
-    color: config.theme.accent,
-    bold: true,
-    align: "center",
-    valign: "middle",
-    wordWrap: false,
-  });
-  const lowerLineY = subtitleTop
-    + config.publisher_splash.subtitle_height
-    + config.publisher_splash.decoration_gap;
-  root.graphics.drawLine(
-    decorationLeft,
-    lowerLineY,
-    decorationLeft + decorationWidth,
-    lowerLineY,
-    config.theme.border_active,
-    config.controls.focus_border_width,
-  );
   parent.addChild(root);
   return root;
 }

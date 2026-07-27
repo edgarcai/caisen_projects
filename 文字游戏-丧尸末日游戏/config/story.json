@@ -38,7 +38,10 @@
       "infirmary": 0,
       "radio_room": 0,
       "hydroponic_greenhouse": 0,
-      "outer_wall": 0
+      "outer_wall": 0,
+      "shelter_expansion": 0,
+      "water_purification": 0,
+      "energy_center": 0
     },
     "limits": {
       "humanity_min": -10,
@@ -85,15 +88,22 @@
       "neq": "不能等于"
     },
     "target_names": {
+      "player.health": "生命",
       "player.food": "食物",
       "player.intelligence": "智力",
+      "player.coins": "金币",
       "player.parts": "零件",
       "player.medical_supplies": "医疗用品",
+      "player.attack": "攻击",
       "player.agility": "敏捷",
       "player.antidotes": "解毒剂",
       "shelter.population": "避难所人数",
       "shelter.health": "避难所耐久",
       "shelter.activity": "避难所活跃度",
+      "shelter.hope": "希望值",
+      "shelter.books": "书本",
+      "shelter.magazines": "杂志",
+      "shelter.toys": "玩具",
       "story.evidence": "证据",
       "story.humanity": "人性",
       "story.infection_pressure": "感染压力",
@@ -1686,12 +1696,17 @@
       "evidence_value": 2
     }
   ],
+  "facility_management": {
+    "initial_total_level_limit": 10,
+    "capacity_modifier_target": "rules.facility_total_level_capacity"
+  },
   "facilities": [
     {
       "facility_id": "field_kitchen",
       "name": "战地厨房",
       "description": "提高食物利用率，并允许豪菜研究‘至少看起来像饭’的配方。",
       "max_level": 3,
+      "counts_toward_total_level_limit": true,
       "unlock_requirements": [],
       "levels": [
         {
@@ -1728,6 +1743,7 @@
       "name": "机修工坊",
       "description": "制造零件、强化防御，并解锁复杂工程选择。",
       "max_level": 3,
+      "counts_toward_total_level_limit": true,
       "unlock_requirements": [],
       "levels": [
         {
@@ -1764,6 +1780,7 @@
       "name": "避难所医务室",
       "description": "治疗伤势、压制负面状态并研究回声菌株。",
       "max_level": 3,
+      "counts_toward_total_level_limit": true,
       "unlock_requirements": [
         {"type": "flag", "flag_id": "linlan_joined"}
       ],
@@ -1802,6 +1819,7 @@
       "name": "无线电室",
       "description": "监听求救、发现隐藏地点并改善远程交易。",
       "max_level": 3,
+      "counts_toward_total_level_limit": true,
       "unlock_requirements": [],
       "levels": [
         {
@@ -1838,6 +1856,7 @@
       "name": "水培温室",
       "description": "稳定生产食物，降低群体饥饿增长。",
       "max_level": 3,
+      "counts_toward_total_level_limit": true,
       "unlock_requirements": [
         {"type": "facility_level", "facility_id": "machine_workshop", "operator": "gte", "value": 1}
       ],
@@ -1876,6 +1895,7 @@
       "name": "复合防御墙",
       "description": "提高避难所耐久上限和防御设施伤害。",
       "max_level": 3,
+      "counts_toward_total_level_limit": true,
       "unlock_requirements": [],
       "levels": [
         {
@@ -1905,6 +1925,121 @@
           "build_hours": 16,
           "effects": [
             {"target": "rules.shelter_turn_damage_percent", "operation": "subtract", "amount": 35}
+          ]
+        }
+      ]
+    },
+    {
+      "facility_id": "shelter_expansion",
+      "name": "避难所扩建",
+      "description": "打通封闭舱段并加固承重结构，提高可同时维持的设施总等级。扩建本身不占用建设容量。",
+      "max_level": 3,
+      "counts_toward_total_level_limit": false,
+      "unlock_requirements": [],
+      "levels": [
+        {
+          "level": 1,
+          "parts_cost": 30,
+          "coins_cost": 20,
+          "build_hours": 8,
+          "effects": [
+            {"target": "rules.facility_total_level_capacity", "operation": "add", "amount": 5}
+          ]
+        },
+        {
+          "level": 2,
+          "parts_cost": 55,
+          "coins_cost": 45,
+          "build_hours": 12,
+          "effects": [
+            {"target": "rules.facility_total_level_capacity", "operation": "add", "amount": 5}
+          ]
+        },
+        {
+          "level": 3,
+          "parts_cost": 85,
+          "coins_cost": 75,
+          "build_hours": 16,
+          "effects": [
+            {"target": "rules.facility_total_level_capacity", "operation": "add", "amount": 5}
+          ]
+        }
+      ]
+    },
+    {
+      "facility_id": "water_purification",
+      "name": "净水系统",
+      "description": "净化地下蓄水并回收冷凝水，缓解群体饥饿压力，提高公共供餐效率。",
+      "max_level": 3,
+      "counts_toward_total_level_limit": true,
+      "unlock_requirements": [
+        {"type": "facility_level", "facility_id": "shelter_expansion", "operator": "gte", "value": 1}
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "parts_cost": 24,
+          "coins_cost": 18,
+          "build_hours": 6,
+          "effects": [
+            {"target": "rules.group_hunger_gain_percent", "operation": "subtract", "amount": 6}
+          ]
+        },
+        {
+          "level": 2,
+          "parts_cost": 42,
+          "coins_cost": 38,
+          "build_hours": 10,
+          "effects": [
+            {"target": "rules.group_hunger_gain_percent", "operation": "subtract", "amount": 8}
+          ]
+        },
+        {
+          "level": 3,
+          "parts_cost": 68,
+          "coins_cost": 65,
+          "build_hours": 14,
+          "effects": [
+            {"target": "rules.shelter_food_hunger_reduction", "operation": "add", "amount": 8}
+          ]
+        }
+      ]
+    },
+    {
+      "facility_id": "energy_center",
+      "name": "能源中心",
+      "description": "重启旧时代储能阵列，为防御、维修和夜间生产提供稳定电力。",
+      "max_level": 3,
+      "counts_toward_total_level_limit": true,
+      "unlock_requirements": [
+        {"type": "facility_level", "facility_id": "shelter_expansion", "operator": "gte", "value": 2}
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "parts_cost": 28,
+          "coins_cost": 25,
+          "build_hours": 7,
+          "effects": [
+            {"target": "rules.shelter_turn_damage_percent", "operation": "subtract", "amount": 7}
+          ]
+        },
+        {
+          "level": 2,
+          "parts_cost": 50,
+          "coins_cost": 50,
+          "build_hours": 11,
+          "effects": [
+            {"target": "rules.shelter_turn_damage_percent", "operation": "subtract", "amount": 10}
+          ]
+        },
+        {
+          "level": 3,
+          "parts_cost": 78,
+          "coins_cost": 82,
+          "build_hours": 15,
+          "effects": [
+            {"target": "rules.repair_health_restore", "operation": "add", "amount": 18}
           ]
         }
       ]
@@ -2073,6 +2208,16 @@
     "buy_price_percent": 100,
     "sell_price_percent": 55,
     "price_variance_percent": [90, 115],
+    "cycle": {
+      "usage_key": "weekly_trade",
+      "days": 7,
+      "maximum_transactions": 1
+    },
+    "ambush": {
+      "chance_percent": 30,
+      "event_id": "trade_route_ambush",
+      "choice_id": "resolve"
+    },
     "vendors": [
       {
         "vendor_id": "wandering_caravan",

@@ -241,6 +241,38 @@ export function buildCoverThemePrompt(
   };
 }
 
+/** 创建只读取 Web 专用文案的返回主菜单确认页。 */
+export function createReturnMenuConfirmPage(
+  runtime: LayaRuntimeLike,
+  factory: UiFactory,
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  onConfirm: () => void,
+  onCancel: () => void,
+): PageView {
+  return createConfirmPage(
+    runtime,
+    factory,
+    config,
+    layout,
+    "page-return-menu-confirm",
+    buildReturnMenuConfirmDocument(config),
+    onConfirm,
+    onCancel,
+  );
+}
+
+/** 构造不依赖当前可见行动分组的返回主菜单确认文档。 */
+export function buildReturnMenuConfirmDocument(
+  config: GameUiConfig,
+): UiDocumentView {
+  return {
+    title: config.texts.return_menu_confirm_title,
+    body: config.texts.return_menu_confirm_body,
+    tone: "danger",
+  };
+}
+
 /** 创建回到最近检查点的二次确认页。 */
 export function createRollbackConfirmPage(
   runtime: LayaRuntimeLike,

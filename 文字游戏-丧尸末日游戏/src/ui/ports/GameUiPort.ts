@@ -32,6 +32,7 @@ export type GameScreenId =
   | "settings"
   | "cover_theme_selector"
   | "warehouse"
+  | "transport_management"
   | "research"
   | "crafting"
   | "expedition_city_list"
@@ -270,8 +271,14 @@ export interface UiBattleView {
 /**
  * 一项经营类别及其可执行项目。
  */
+export interface UiManagementOptionView extends UiOptionView {
+  readonly fields: readonly UiDetailFieldView[];
+  readonly requirements: readonly UiRequirementView[];
+}
+
+/** 一项经营类别及其全部结构化项目。 */
 export interface UiManagementCategoryView extends UiOptionView {
-  readonly options: readonly UiOptionView[];
+  readonly options: readonly UiManagementOptionView[];
 }
 
 /**
@@ -345,6 +352,18 @@ export interface UiWarehouseItemView {
   readonly equippable: boolean;
   readonly equipped: boolean;
   readonly description: string;
+}
+
+/** 载具设置页中的一辆可驾驶载具。 */
+export interface UiTransportLoadoutOptionView {
+  readonly id: string;
+  readonly name: string;
+  readonly modeLabel: string;
+  readonly description: string;
+  readonly ownedQuantity: number;
+  readonly equipped: boolean;
+  readonly disabled: boolean;
+  readonly disabledReason?: string;
 }
 
 /**
@@ -507,6 +526,7 @@ export interface GameUiSnapshot {
   readonly managementCategories: readonly UiManagementCategoryView[];
   readonly companions: readonly UiCompanionView[];
   readonly warehouseItems: readonly UiWarehouseItemView[];
+  readonly transportLoadoutOptions: readonly UiTransportLoadoutOptionView[];
   readonly researchProjects: readonly UiResearchProjectView[];
   readonly craftingRecipes: readonly UiCraftingRecipeView[];
   readonly expeditionCompanions: readonly UiExpeditionCompanionView[];
@@ -536,6 +556,7 @@ export type GameUiCommand =
   | { readonly type: "research_complete"; readonly projectId: string }
   | { readonly type: "craft_item"; readonly recipeId: string }
   | { readonly type: "equip_item"; readonly itemId: string }
+  | { readonly type: "transport_toggle"; readonly itemId: string }
   | {
       readonly type: "expedition_begin";
       readonly cityId: string;

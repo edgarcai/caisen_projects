@@ -3,6 +3,7 @@ import {
   DASHBOARD_ACTION_IDS,
   DEFAULT_DASHBOARD_NAVIGATION_POLICY,
   IN_GAME_NAVIGATION_IDS,
+  createDashboardNavigationPolicy,
   resolveDashboardNavigationIntent,
   type DashboardNavigationPolicy,
 } from "../../src/ui/navigation/DashboardNavigationStrategy";
@@ -47,6 +48,9 @@ describe("局内仪表盘导航策略", () => {
       "explore",
       "shelter_management",
       "companions",
+      "companion_management",
+      "transport_management",
+      "facility_management",
       "use_food",
       "use_medicine",
       "feed_shelter",
@@ -73,6 +77,18 @@ describe("局内仪表盘导航策略", () => {
       type: "push_screen",
       screen: "companions",
     });
+    expect(resolveDashboardNavigationIntent("companion_management")).toEqual({
+      type: "push_screen",
+      screen: "companion_management",
+    });
+    expect(resolveDashboardNavigationIntent("transport_management")).toEqual({
+      type: "push_screen",
+      screen: "transport_management",
+    });
+    expect(resolveDashboardNavigationIntent("facility_management")).toEqual({
+      type: "push_screen",
+      screen: "management_categories",
+    });
     expect(resolveDashboardNavigationIntent("return_menu")).toEqual({
       type: "push_screen",
       screen: "return_menu_confirm",
@@ -86,6 +102,23 @@ describe("局内仪表盘导航策略", () => {
       type: "perform_supply_action",
       actionId: "repair_shelter",
     });
+  });
+
+  it("按注入配置打开设施管理分类，不在默认策略硬编码", () => {
+    const policy = createDashboardNavigationPolicy([
+      { entry_id: "facility_management", category_id: "upgrade" },
+    ]);
+
+    expect(resolveDashboardNavigationIntent("facility_management", policy)).toEqual({
+      type: "open_management_category",
+      categoryId: "upgrade",
+    });
+    expect(
+      resolveDashboardNavigationIntent(
+        "facility_management",
+        DEFAULT_DASHBOARD_NAVIGATION_POLICY,
+      ),
+    ).toEqual({ type: "push_screen", screen: "management_categories" });
   });
 
   it("对未配置 ID 安全停留，不误当作物资命令", () => {

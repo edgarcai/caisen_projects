@@ -9,7 +9,11 @@ import type {
   GameState,
   ShelterState,
 } from "../domain/game-state";
-import type { ActionReport, ManagementOption } from "../domain/reports";
+import type {
+  ActionReport,
+  ManagementCategory,
+  ManagementOption,
+} from "../domain/reports";
 import type { WebGameConfig } from "../config/types";
 import type {
   GameUiCommand,
@@ -30,15 +34,16 @@ import type {
   UiExpeditionStatusView,
   UiHistoryEntryView,
   UiManagementCategoryView,
+  UiManagementOptionView,
   UiMeterView,
   UiNoticeView,
-  UiOptionView,
   UiPromptView,
   UiResearchProjectView,
   UiSaveSlotView,
   UiStoryAccess,
   UiStatView,
   UiTone,
+  UiTransportLoadoutOptionView,
   UiPlayerView,
   UiWarehouseItemView,
   UiWeeklyArchiveView,
@@ -64,6 +69,7 @@ interface ManagementCategoryPresentation {
   readonly id: string;
   readonly label: string;
   readonly action_ids?: readonly string[];
+  readonly domain_categories?: readonly ManagementCategory[];
 }
 
 interface H5Presentation {
@@ -172,6 +178,7 @@ export class GameUiAdapter implements GameUiPort {
       managementCategories: state === null ? [] : this.managementCategoryViews(state),
       companions: state === null ? [] : this.companionViews(state),
       warehouseItems: state === null ? [] : this.warehouseItemViews(state),
+      transportLoadoutOptions: state === null ? [] : this.transportLoadoutOptionViews(),
       researchProjects: state === null ? [] : this.researchProjectViews(),
       craftingRecipes: state === null ? [] : this.craftingRecipeViews(),
       expeditionCompanions: state === null ? [] : this.expeditionCompanionViews(),
@@ -310,6 +317,10 @@ export class GameUiAdapter implements GameUiPort {
       }
       case "equip_item": {
         const report = this.application.equipItem(command.itemId);
+        return { accepted: report.stateChanged, report };
+      }
+      case "transport_toggle": {
+        const report = this.application.toggleTransport(command.itemId);
         return { accepted: report.stateChanged, report };
       }
       case "companion_equip": {
@@ -484,6 +495,7 @@ export class GameUiAdapter implements GameUiPort {
   /** 把领域配置中的难度、起源、特性与城市转换为开局选择模型。 */
   private campaignProfileOptions(): UiCampaignProfileOptionsView {
     const game = this.application.content.game;
+    const allowedHomeCityIds = new Set(game.rules.world_map.home_city_ids);
     return {
       difficulties: game.campaign_profiles.difficulties.map((item) => ({
         id: item.id,
@@ -500,11 +512,13 @@ export class GameUiAdapter implements GameUiPort {
         label: item.label,
         description: item.description,
       })),
-      cities: game.cities.map((city) => ({
-        id: city.id,
-        label: `${city.name} · ${city.district}`,
-        description: city.description,
-      })),
+      cities: game.cities
+        .filter((city) => allowedHomeCityIds.has(city.id))
+        .map((city) => ({
+          id: city.id,
+          label: `${city.name} · ${city.district}`,
+          description: city.description,
+        })),
       defaultSelection: {
         difficultyId: game.campaign_profiles.migration_default.difficulty_id,
         originId: game.campaign_profiles.migration_default.origin_id,
@@ -940,7 +954,7 @@ export class GameUiAdapter implements GameUiPort {
     };
   }
 
-  /** 按配置汇总设施、工作、交易、招募及避难所保障页面。 */
+  /** 按配置汇总经营、活动与升级页面，不在适配器硬编码领域类别映射。 */
   private managementCategoryViews(state: GameState): UiManagementCategoryView[] {
     if (
       isEnded(state)
@@ -952,13 +966,15 @@ export class GameUiAdapter implements GameUiPort {
     const options = this.application.managementOptions();
     return this.presentation.interface.pages.management_categories.map((category) => {
       const configuredActionIds = category.action_ids ?? [];
-      const categoryOptions = configuredActionIds.length > 0
-        ? configuredActionIds.map((actionId) =>
-            this.managementSupplyOptionView(category.id, actionId, state),
-          )
-        : options
-            .filter((option) => this.outerCategory(option) === category.id)
-            .map((option) => this.managementOptionView(option));
+      const domainCategories = category.domain_categories ?? [];
+      const categoryOptions = [
+        ...configuredActionIds.map((actionId) =>
+          this.managementSupplyOptionView(category.id, actionId, state),
+        ),
+        ...options
+          .filter((option) => domainCategories.includes(option.category))
+          .map((option) => this.managementOptionView(option)),
+      ];
       return {
         id: category.id,
         label: category.label,
@@ -1079,6 +1095,22 @@ export class GameUiAdapter implements GameUiPort {
       equipped: state.inventory.equipped_weapon_id === item.itemId
         || state.inventory.equipped_armor_id === item.itemId,
       description: item.description,
+    }));
+  }
+
+  /** 把载具服务投影为可装备、可卸载且能解释缺失状态的页面模型。 */
+  private transportLoadoutOptionViews(): UiTransportLoadoutOptionView[] {
+    return this.application.transportLoadoutOptions().map((option) => ({
+      id: option.itemId,
+      name: option.name,
+      modeLabel: option.modeLabel,
+      description: option.description,
+      ownedQuantity: option.ownedQuantity,
+      equipped: option.equipped,
+      disabled: !option.available && !option.equipped,
+      disabledReason: option.available || option.equipped
+        ? undefined
+        : this.webConfig.texts.transport_unavailable,
     }));
   }
 
@@ -1285,7 +1317,8 @@ export class GameUiAdapter implements GameUiPort {
   }
 
   /** 将配置化经营选项转换为稳定且无冲突的 UI ID。 */
-  private managementOptionView(option: ManagementOption): UiOptionView {
+  private managementOptionView(option: ManagementOption): UiManagementOptionView {
+    const firstUnmet = option.requirements.find((requirement) => !requirement.met);
     return {
       id: this.managementOptionId(option),
       label: option.label,
@@ -1294,8 +1327,16 @@ export class GameUiAdapter implements GameUiPort {
       lockedAppearance: !option.available,
       disabledReason: option.available
         ? undefined
-        : this.application.content.text("management_failed"),
+        : firstUnmet?.description
+          ?? this.application.content.text("management_failed"),
       tone: option.available ? "primary" : "default",
+      fields: option.fields,
+      requirements: option.requirements.map((requirement) => ({
+        id: requirement.id,
+        label: requirement.label,
+        description: requirement.description,
+        status: requirement.met ? "met" : "unmet",
+      })),
     };
   }
 
@@ -1304,7 +1345,7 @@ export class GameUiAdapter implements GameUiPort {
     categoryId: string,
     actionId: string,
     state: GameState,
-  ): UiOptionView {
+  ): UiManagementOptionView {
     const action = this.actionPresentations().find((candidate) => candidate.id === actionId);
     if (action === undefined) {
       throw new Error(this.application.content.text("unknown_action", {
@@ -1320,6 +1361,14 @@ export class GameUiAdapter implements GameUiPort {
       lockedAppearance: blockedReason !== null,
       disabledReason: blockedReason ?? undefined,
       tone: this.actionTone(action.style),
+      fields: [],
+      requirements: [{
+        id: `${actionId}-availability`,
+        label: this.application.content.text("management_requirement_action_label"),
+        description: blockedReason
+          ?? this.application.content.text("management_action_available"),
+        status: blockedReason === null ? "met" : "unmet",
+      }],
     };
   }
 
@@ -1339,10 +1388,16 @@ export class GameUiAdapter implements GameUiPort {
 
   /** 校验 UI 经营项目仍与当前领域选项一致。 */
   private resolveManagementOption(categoryId: string, uiOptionId: string): ManagementOption {
+    const category = this.presentation.interface.pages.management_categories.find(
+      (candidate) => candidate.id === categoryId,
+    );
     const option = this.application.managementOptions().find(
       (candidate) => this.managementOptionId(candidate) === uiOptionId,
     );
-    if (option === undefined || this.outerCategory(option) !== categoryId) {
+    if (
+      option === undefined
+      || category?.domain_categories?.includes(option.category) !== true
+    ) {
       throw new GameApplicationError(this.application.content.text("management_failed"));
     }
     return option;
@@ -1351,13 +1406,6 @@ export class GameUiAdapter implements GameUiPort {
   /** 为买入和卖出同 ID 商品生成不冲突的选择 ID。 */
   private managementOptionId(option: ManagementOption): string {
     return `${option.category}${MANAGEMENT_OPTION_SEPARATOR}${option.optionId}`;
-  }
-
-  /** 将五类领域经营命令折叠为四个页面分类。 */
-  private outerCategory(option: ManagementOption): string {
-    return option.category === "trade_buy" || option.category === "trade_sell"
-      ? "trade"
-      : option.category;
   }
 
   /** 把主配置按钮风格映射为 UI 语义色。 */

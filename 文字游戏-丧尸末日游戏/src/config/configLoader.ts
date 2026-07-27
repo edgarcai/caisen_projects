@@ -5,9 +5,11 @@ import type {
   CoverThemesConfig,
   CoverMenuLayoutConfig,
   ControlConfig,
+  DashboardNavigationConfig,
   EngineConfig,
   GuidedTutorialConfig,
   LayoutConfig,
+  ManagementCategoryShortcutConfig,
   MotionConfig,
   NavigationConfig,
   NewGameSetupConfig,
@@ -62,6 +64,7 @@ const NAVIGATION_GAME_MODES = [
   "story",
   "endless",
 ] as const;
+const STANDARD_NEW_GAME_ENTRY_MODES = ["single", "endless"] as const;
 const WEB_EXIT_STRATEGIES = [
   "close_only",
   "history_back",
@@ -257,6 +260,8 @@ const TEXT_KEYS = [
   "settings_tutorial_description",
   "settings_return_menu",
   "settings_return_menu_description",
+  "return_menu_confirm_title",
+  "return_menu_confirm_body",
   "reduced_motion_description",
   "reduced_motion_on",
   "reduced_motion_off",
@@ -272,6 +277,13 @@ const TEXT_KEYS = [
   "warehouse_detail_format",
   "warehouse_equip",
   "warehouse_not_equippable",
+  "transport_title",
+  "transport_body",
+  "transport_item_format",
+  "transport_detail_format",
+  "transport_equipped",
+  "transport_available",
+  "transport_unavailable",
   "research_title",
   "research_body",
   "research_item_format",
@@ -956,6 +968,25 @@ function parseNewGameSetup(
       "new_game_setup.mode_options 必须覆盖 single / multiplayer / story / endless",
     );
   }
+  const entryModeIds = parseNavigationEnumArray(
+    source.entry_mode_ids,
+    NAVIGATION_GAME_MODES,
+    "new_game_setup.entry_mode_ids",
+  );
+  const unknownEntryMode = entryModeIds.find((modeId) => !configuredModeIds.has(modeId));
+  if (unknownEntryMode !== undefined) {
+    throw new WebConfigError(
+      `new_game_setup.entry_mode_ids 引用了未配置的模式：${unknownEntryMode}`,
+    );
+  }
+  const missingStandardMode = STANDARD_NEW_GAME_ENTRY_MODES.find(
+    (modeId) => !entryModeIds.includes(modeId),
+  );
+  if (missingStandardMode !== undefined) {
+    throw new WebConfigError(
+      `new_game_setup.entry_mode_ids 必须包含 single 和 endless，当前缺少：${missingStandardMode}`,
+    );
+  }
   const categories = parseUniqueIdObjects(
     source.categories,
     "new_game_setup.categories",
@@ -1013,6 +1044,7 @@ function parseNewGameSetup(
     },
     preset_names: presetNames,
     mode_options: modeOptions,
+    entry_mode_ids: entryModeIds,
     categories,
     desktop: parseNewGameSetupDesktop(source.desktop),
     mobile: parseNewGameSetupMobile(source.mobile),
@@ -1137,7 +1169,6 @@ function parsePublisherSplash(value: unknown): PublisherSplashConfig {
   const source = expectObject(value, "publisher_splash");
   return {
     title: expectString(source.title, "publisher_splash.title"),
-    subtitle: expectString(source.subtitle, "publisher_splash.subtitle"),
     background_asset: expectOptionalString(source.background_asset, "publisher_splash.background_asset"),
     background_opacity: expectRatio(
       source.background_opacity,
@@ -1145,9 +1176,7 @@ function parsePublisherSplash(value: unknown): PublisherSplashConfig {
     ),
     content_width: expectNumber(source.content_width, "publisher_splash.content_width", 1),
     title_height: expectNumber(source.title_height, "publisher_splash.title_height", 1),
-    subtitle_height: expectNumber(source.subtitle_height, "publisher_splash.subtitle_height", 1),
-    decoration_width: expectNumber(source.decoration_width, "publisher_splash.decoration_width", 1),
-    decoration_gap: expectNumber(source.decoration_gap, "publisher_splash.decoration_gap"),
+    title_font_size: expectNumber(source.title_font_size, "publisher_splash.title_font_size", 1),
   };
 }
 
@@ -1415,6 +1444,48 @@ function parseWebActions(value: unknown): readonly WebActionConfig[] {
   return actions;
 }
 
+/** 解析一条指挥台经营分类快捷路由。 */
+function parseManagementCategoryShortcut(
+  value: unknown,
+  index: number,
+): ManagementCategoryShortcutConfig {
+  const path = `dashboard_navigation.management_category_shortcuts[${String(index)}]`;
+  const source = expectObject(value, path);
+  return {
+    entry_id: expectString(source.entry_id, `${path}.entry_id`),
+    category_id: expectString(source.category_id, `${path}.category_id`),
+  };
+}
+
+/**
+ * 解析指挥台快捷路由，并拒绝重复入口与未展示的行动引用。
+ */
+function parseDashboardNavigation(
+  value: unknown,
+  knownEntryIds: ReadonlySet<string>,
+): DashboardNavigationConfig {
+  const source = expectObject(value, "dashboard_navigation");
+  const shortcuts = expectArray(
+    source.management_category_shortcuts,
+    "dashboard_navigation.management_category_shortcuts",
+  ).map(parseManagementCategoryShortcut);
+  const entryIds = new Set<string>();
+  for (const shortcut of shortcuts) {
+    if (entryIds.has(shortcut.entry_id)) {
+      throw new WebConfigError(
+        `dashboard_navigation.management_category_shortcuts 出现重复入口：${shortcut.entry_id}`,
+      );
+    }
+    if (!knownEntryIds.has(shortcut.entry_id)) {
+      throw new WebConfigError(
+        `dashboard_navigation.management_category_shortcuts 引用未知入口：${shortcut.entry_id}`,
+      );
+    }
+    entryIds.add(shortcut.entry_id);
+  }
+  return { management_category_shortcuts: shortcuts };
+}
+
 /** 解析 H5 界面文案。 */
 function parseTexts(value: unknown): TextConfig {
   const source = expectObject(value, "texts");
@@ -1441,6 +1512,16 @@ export function parseWebGameConfig(value: unknown): WebGameConfig {
     );
   }
   const controls = parseControls(source.controls);
+  const navigation = parseNavigationList(source.navigation);
+  const actions = parseWebActions(source.actions);
+  const actionGroups = expectArray(source.action_groups, "action_groups").map(
+    parseActionGroup,
+  );
+  const knownEntryIds = new Set([
+    ...navigation.map((entry) => entry.id),
+    ...actions.map((entry) => entry.id),
+    ...actionGroups.flatMap((group) => group.action_ids),
+  ]);
   return {
     schema_version: schemaVersion,
     engine: parseEngine(source.engine),
@@ -1461,13 +1542,32 @@ export function parseWebGameConfig(value: unknown): WebGameConfig {
     storage: parseStorage(source.storage),
     update_log: parseUpdateLog(source.update_log),
     web_exit: parseWebExit(source.web_exit),
-    navigation: parseNavigationList(source.navigation),
-    actions: parseWebActions(source.actions),
-    action_groups: expectArray(source.action_groups, "action_groups").map(
-      parseActionGroup,
+    navigation,
+    actions,
+    action_groups: actionGroups,
+    dashboard_navigation: parseDashboardNavigation(
+      source.dashboard_navigation,
+      knownEntryIds,
     ),
     texts: parseTexts(source.texts),
   };
+}
+
+/**
+ * 在组合根中校验 Web 快捷路由与领域经营分类的跨配置引用。
+ */
+export function validateDashboardNavigationReferences(
+  config: WebGameConfig,
+  managementCategoryIds: readonly string[],
+): void {
+  const knownCategoryIds = new Set(managementCategoryIds);
+  for (const shortcut of config.dashboard_navigation.management_category_shortcuts) {
+    if (!knownCategoryIds.has(shortcut.category_id)) {
+      throw new WebConfigError(
+        `dashboard_navigation.management_category_shortcuts 引用未知经营分类：${shortcut.category_id}`,
+      );
+    }
+  }
 }
 
 /** 跨配置校验预设姓名数量能覆盖所有模式的最大玩家数。 */

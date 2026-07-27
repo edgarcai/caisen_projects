@@ -44,7 +44,15 @@ export class CampaignProfileService {
       (candidate) => candidate.id === profile.trait_id,
     );
     this.content.city(profile.home_city_id);
-    if (difficulty === undefined || origin === undefined || trait === undefined) {
+    const homeCityAllowed = this.content.game.rules.world_map.home_city_ids.includes(
+      profile.home_city_id,
+    );
+    if (
+      difficulty === undefined
+      || origin === undefined
+      || trait === undefined
+      || !homeCityAllowed
+    ) {
       throw new GameApplicationError(
         this.content.text("invalid_campaign_profile"),
       );

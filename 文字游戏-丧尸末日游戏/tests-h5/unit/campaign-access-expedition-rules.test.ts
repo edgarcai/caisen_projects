@@ -133,10 +133,14 @@ describe("游戏模式能力隔离", () => {
 });
 
 describe("城市拓扑与通行矩阵", () => {
-  it("八座出生城市均按双向邻接解析所在、附近和远处关系及路费", () => {
-    const cities = startConfiguredGame().content.game.cities;
+  it("配置允许的出生城市均按双向邻接解析所在、附近和远处关系及路费", () => {
+    const application = startConfiguredGame();
+    const cities = application.content.game.cities;
+    const allowedHomeCityIds = application.content.game.rules.world_map.home_city_ids;
 
-    for (const homeCity of cities) {
+    for (const homeCityId of allowedHomeCityIds) {
+      const homeCity = cities.find((city) => city.id === homeCityId);
+      if (homeCity === undefined) throw new Error(`白名单引用未知城市 ${homeCityId}。`);
       const application = startConfiguredGame({ homeCityId: homeCity.id });
       const decisions = new Map(
         application.expeditionCities().map((decision) => [decision.city.id, decision]),
@@ -155,7 +159,11 @@ describe("城市拓扑与通行矩阵", () => {
     }
   });
 
-  it("环形拓扑中远城同时要求足量情报和路线", () => {
+  it("领域层拒绝以隔离岛屿作为出生城市绕过双载具限制", () => {
+    expect(() => startConfiguredGame({ homeCityId: "city_h" })).toThrow(/出生城市/);
+  });
+
+  it("大陆链远城要求情报与路线，路线图不能解锁岛屿", () => {
     const application = startConfiguredGame({ homeCityId: "city_a" });
     const state = requireState(application);
     const initial = new Map(
@@ -164,8 +172,7 @@ describe("城市拓扑与通行矩阵", () => {
 
     expect(initial.get("city_a")?.accessible).toBe(true);
     expect(initial.get("city_b")?.accessible).toBe(true);
-    expect(initial.get("city_h")?.accessible).toBe(true);
-    for (const cityId of ["city_c", "city_d", "city_e", "city_f", "city_g"]) {
+    for (const cityId of ["city_c", "city_d", "city_e", "city_f", "city_g", "city_h"]) {
       expect(initial.get(cityId)?.accessible, cityId).toBe(false);
     }
 
@@ -181,6 +188,7 @@ describe("城市拓扑与通行矩阵", () => {
     for (const cityId of ["city_c", "city_d", "city_e", "city_f", "city_g"]) {
       expect(unlocked.get(cityId)?.accessible, cityId).toBe(true);
     }
+    expect(unlocked.get("city_h")?.accessible).toBe(false);
   });
 
   it("非 A 出生时可用情报加路线图或载具重新开放远处 A 市", () => {
@@ -214,16 +222,18 @@ describe("城市拓扑与通行矩阵", () => {
     const transportState = requireState(transportApplication);
     transportState.shelter.newspapers = cityA.intelligence_newspapers_required;
     transportState.inventory.crafted_items.armored_car = 1;
+    transportState.inventory.equipped_transport_ids = ["armored_car"];
     expect(transportApplication.expeditionCities().find(
       (decision) => decision.city.id === "city_a",
     )).toMatchObject({ relation: "remote", accessible: true });
   });
 
-  it("陆路载具不能替代岛城海路，但摩托艇可以开放 H 市", () => {
+  it("岛屿无邻城，且必须同时装备海上与飞行载具", () => {
     const application = startConfiguredGame({ homeCityId: "city_d" });
     const state = requireState(application);
     state.shelter.newspapers = 10;
     state.inventory.crafted_items.armored_car = 1;
+    state.inventory.equipped_transport_ids = ["armored_car"];
 
     const landTransport = new Map(
       application.expeditionCities().map((decision) => [decision.city.id, decision]),
@@ -233,9 +243,47 @@ describe("城市拓扑与通行矩阵", () => {
     expect(landTransport.get("city_h")?.accessible).toBe(false);
 
     state.inventory.crafted_items.motorboat = 1;
+    state.inventory.equipped_transport_ids = ["motorboat"];
+    expect(application.expeditionCities().find(
+      (decision) => decision.city.id === "city_h",
+    )?.accessible).toBe(false);
+
+    state.inventory.crafted_items.helicopter = 1;
+    state.inventory.equipped_transport_ids = ["motorboat", "helicopter"];
     expect(application.expeditionCities().find(
       (decision) => decision.city.id === "city_h",
     )?.accessible).toBe(true);
+  });
+
+  it("载具设置按两槽容量装备与卸下，并实时驱动岛屿通行", () => {
+    const application = startConfiguredGame({ homeCityId: "city_d" });
+    const state = requireState(application);
+    state.shelter.newspapers = 10;
+    state.inventory.crafted_items.motorboat = 1;
+    state.inventory.crafted_items.helicopter = 1;
+    state.inventory.crafted_items.armored_car = 1;
+
+    expect(application.toggleTransport("motorboat").stateChanged).toBe(true);
+    expect(application.expeditionCities().find(
+      (decision) => decision.city.id === "city_h",
+    )?.accessible).toBe(false);
+    expect(application.toggleTransport("helicopter").stateChanged).toBe(true);
+    expect(application.expeditionCities().find(
+      (decision) => decision.city.id === "city_h",
+    )?.accessible).toBe(true);
+
+    const capacity = application.toggleTransport("armored_car");
+    expect(capacity.stateChanged).toBe(false);
+    expect(state.inventory.equipped_transport_ids).toEqual([
+      "motorboat",
+      "helicopter",
+    ]);
+
+    expect(application.toggleTransport("motorboat").stateChanged).toBe(true);
+    expect(state.inventory.equipped_transport_ids).toEqual(["helicopter"]);
+    expect(application.expeditionCities().find(
+      (decision) => decision.city.id === "city_h",
+    )?.accessible).toBe(false);
   });
 
   it("远城锁定原因使用内容配置中的通行道具分隔符", () => {
@@ -253,8 +301,9 @@ describe("城市拓扑与通行矩阵", () => {
 
     expect(decision.accessible).toBe(false);
     expect(decision.reason).toContain(
-      "区域安全路线图 / 浅水机动艇 / 轻型直升机",
+      "浅水机动艇 / 轻型直升机",
     );
+    expect(decision.reason).not.toContain("区域安全路线图");
   });
 });
 

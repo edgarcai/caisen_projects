@@ -3,6 +3,7 @@ import webConfigDocument from "../../config/web_config.json";
 import {
   parseWebGameConfig,
   validateCoverThemeAchievementReferences,
+  validateDashboardNavigationReferences,
   validateNamePresetCoverage,
 } from "../../src/config/configLoader";
 
@@ -21,6 +22,7 @@ interface MutableWebConfigDocument {
     };
     preset_names: string[];
     mode_options: Array<{ id: string; label: string; description: string }>;
+    entry_mode_ids: string[];
   };
   guided_tutorial: {
     header_step_width_ratio: number;
@@ -28,8 +30,15 @@ interface MutableWebConfigDocument {
   };
   publisher_splash: {
     background_opacity: number;
+    title_font_size: number;
   };
   navigation: MutableNavigationEntry[];
+  dashboard_navigation: {
+    management_category_shortcuts: Array<{
+      entry_id: string;
+      category_id: string;
+    }>;
+  };
   action_groups: Array<{ id: string; action_ids: string[] }>;
   assets: {
     cover_themes: {
@@ -56,6 +65,14 @@ interface MutableWebConfigDocument {
     settings_key: string;
     achievement_key: string;
   };
+  texts: {
+    return_menu_confirm_title: string;
+    return_menu_confirm_body: string;
+    companion_status_format: string;
+    management_detail_title: string;
+    management_detail_requirements_title: string;
+    management_detail_confirm: string;
+  };
 }
 
 /** 克隆权威配置，允许单项破坏后验证解析器快速失败。 */
@@ -69,6 +86,9 @@ describe("局内导航配置完整性", () => {
     const actionIds = parsed.action_groups.flatMap((group) => group.action_ids);
 
     expect(actionIds).not.toContain("story");
+    expect(parsed.action_groups.find((group) => group.id === "core")?.label).toBe(
+      "生存指令",
+    );
     expect(parsed.navigation.find((item) => item.id === "story")).toMatchObject({
       placements: ["mobile_bottom", "desktop_header"],
       modes: ["story"],
@@ -117,6 +137,58 @@ describe("局内导航配置完整性", () => {
     );
     expect(() => parseWebGameConfig(invalidHeaderAnchor)).toThrow(
       "layout.mobile.header_navigation_anchor",
+    );
+  });
+
+  it("严格校验设施管理快捷路由及跨配置分类引用", () => {
+    const parsed = parseWebGameConfig(webConfigDocument);
+    expect(parsed.dashboard_navigation.management_category_shortcuts).toEqual([
+      { entry_id: "facility_management", category_id: "upgrade" },
+    ]);
+    expect(() => {
+      validateDashboardNavigationReferences(parsed, [
+        "operation",
+        "activity",
+        "upgrade",
+      ]);
+    }).not.toThrow();
+
+    const duplicate = cloneWebConfig();
+    duplicate.dashboard_navigation.management_category_shortcuts.push({
+      entry_id: "facility_management",
+      category_id: "activity",
+    });
+    const unknownEntry = cloneWebConfig();
+    unknownEntry.dashboard_navigation.management_category_shortcuts[0] = {
+      entry_id: "unpublished_action",
+      category_id: "upgrade",
+    };
+
+    expect(() => parseWebGameConfig(duplicate)).toThrow("重复入口");
+    expect(() => parseWebGameConfig(unknownEntry)).toThrow("引用未知入口");
+    expect(() => {
+      validateDashboardNavigationReferences(parsed, ["operation", "activity"]);
+    }).toThrow("引用未知经营分类：upgrade");
+  });
+
+  it("系统确认与经营详情文案保持严格、完整且类别中性", () => {
+    const parsed = parseWebGameConfig(webConfigDocument);
+    expect(parsed.texts.return_menu_confirm_title).toBe("返回主菜单");
+    expect(parsed.texts.return_menu_confirm_body).toContain("不会额外保存");
+    expect(parsed.texts.management_detail_title).toBe("项目详情");
+    expect(parsed.texts.management_detail_requirements_title).toBe("执行需求");
+    expect(parsed.texts.management_detail_confirm).toBe("确认执行");
+
+    const missingTitle = cloneWebConfig();
+    Reflect.deleteProperty(missingTitle.texts, "return_menu_confirm_title");
+    const emptyBody = cloneWebConfig();
+    emptyBody.texts.return_menu_confirm_body = " ";
+
+    expect(() => parseWebGameConfig(missingTitle)).toThrow(
+      "texts.return_menu_confirm_title",
+    );
+    expect(() => parseWebGameConfig(emptyBody)).toThrow(
+      "texts.return_menu_confirm_body",
     );
   });
 });
@@ -180,7 +252,7 @@ describe("新游戏姓名配置完整性", () => {
 });
 
 describe("开局模式与教程目标完整性", () => {
-  it("解析四种真实模式，并拒绝未知或缺失模式", () => {
+  it("保留四种模式目录，但普通建档入口仅开放普通与无尽求生", () => {
     const parsed = parseWebGameConfig(webConfigDocument);
     expect(parsed.new_game_setup.mode_options.map((option) => option.id)).toEqual([
       "single",
@@ -188,6 +260,7 @@ describe("开局模式与教程目标完整性", () => {
       "story",
       "endless",
     ]);
+    expect(parsed.new_game_setup.entry_mode_ids).toEqual(["single", "endless"]);
 
     const unknown = cloneWebConfig();
     const missing = cloneWebConfig();
@@ -202,6 +275,23 @@ describe("开局模式与教程目标完整性", () => {
 
     expect(() => parseWebGameConfig(unknown)).toThrow("single / multiplayer / story / endless");
     expect(() => parseWebGameConfig(missing)).toThrow("必须覆盖");
+  });
+
+  it("拒绝普通建档入口白名单中的未知、重复与缺失必选模式", () => {
+    const unknown = cloneWebConfig();
+    const duplicate = cloneWebConfig();
+    const missingEndless = cloneWebConfig();
+    unknown.new_game_setup.entry_mode_ids = ["single", "endless", "sandbox"];
+    duplicate.new_game_setup.entry_mode_ids = ["single", "endless", "single"];
+    missingEndless.new_game_setup.entry_mode_ids = ["single"];
+
+    expect(() => parseWebGameConfig(unknown)).toThrow(
+      "single / multiplayer / story / endless",
+    );
+    expect(() => parseWebGameConfig(duplicate)).toThrow("不能包含重复值");
+    expect(() => parseWebGameConfig(missingEndless)).toThrow(
+      "必须包含 single 和 endless",
+    );
   });
 
   it("教程每个聚焦 ID 都对应指挥台实际稳定节点", () => {
@@ -225,14 +315,19 @@ describe("开局模式与教程目标完整性", () => {
   it("教程分栏和制作方背景透明度拒绝越界视觉比例", () => {
     const invalidTutorial = cloneWebConfig();
     const invalidSplash = cloneWebConfig();
+    const invalidSplashTitleSize = cloneWebConfig();
     invalidTutorial.guided_tutorial.header_step_width_ratio = 0;
     invalidSplash.publisher_splash.background_opacity = 1.01;
+    invalidSplashTitleSize.publisher_splash.title_font_size = 0;
 
     expect(() => parseWebGameConfig(invalidTutorial)).toThrow(
       "必须严格位于 0 到 1 之间",
     );
     expect(() => parseWebGameConfig(invalidSplash)).toThrow(
       "必须位于 0 到 1 之间",
+    );
+    expect(() => parseWebGameConfig(invalidSplashTitleSize)).toThrow(
+      "publisher_splash.title_font_size",
     );
   });
 });
