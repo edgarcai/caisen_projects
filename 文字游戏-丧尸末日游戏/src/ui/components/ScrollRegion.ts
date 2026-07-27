@@ -3,6 +3,10 @@ import type {
   LayaRuntimeLike,
   LayaSpriteLike,
 } from "../laya/LayaRuntime";
+import { findDisplayNodeByName } from "../laya/DisplayNodeLocator";
+
+/** 程序化聚焦时可选的纵向对齐策略。 */
+export type ScrollRevealAlignment = "nearest" | "start";
 
 /**
  * 在不依赖额外 Laya UI 包的情况下提供鼠标、触摸和滚轮滚动。
@@ -63,6 +67,36 @@ export class ScrollRegion {
     this.contentHeight = Math.max(this.viewportHeight, height);
     this.content.height = this.contentHeight;
     this.setOffset(this.offsetY);
+  }
+
+  /** 把指定后代滚入当前裁剪视口，供教程等程序化聚焦流程复用。 */
+  public revealNode(
+    nodeName: string,
+    padding = 0,
+    alignment: ScrollRevealAlignment = "nearest",
+  ): boolean {
+    const node = findDisplayNodeByName(this.content, nodeName);
+    if (node === null || !node.visible) {
+      return false;
+    }
+    const relativeY = descendantOffsetY(node, this.content);
+    if (relativeY === null) {
+      return false;
+    }
+    const safePadding = Math.min(
+      Math.max(0, padding),
+      Math.max(0, (this.viewportHeight - node.height) / 2),
+    );
+    const targetTop = Math.max(0, relativeY - safePadding);
+    const targetBottom = relativeY + node.height + safePadding;
+    if (alignment === "start") {
+      this.setOffset(targetTop);
+    } else if (targetTop < this.offsetY) {
+      this.setOffset(targetTop);
+    } else if (targetBottom > this.offsetY + this.viewportHeight) {
+      this.setOffset(targetBottom - this.viewportHeight);
+    }
+    return true;
   }
 
   /**
@@ -136,6 +170,23 @@ export class ScrollRegion {
     this.offsetY = Math.min(maximum, Math.max(0, value));
     this.content.y = -this.offsetY;
   }
+}
+
+/** 计算后代节点相对指定祖先的纵向平移；断链时拒绝猜测。 */
+function descendantOffsetY(
+  node: LayaNodeLike,
+  ancestor: LayaNodeLike,
+): number | null {
+  let current: LayaNodeLike | null = node;
+  let offsetY = 0;
+  while (current !== null) {
+    if (current === ancestor) {
+      return offsetY;
+    }
+    offsetY += current.y;
+    current = current.parent;
+  }
+  return null;
 }
 
 /**

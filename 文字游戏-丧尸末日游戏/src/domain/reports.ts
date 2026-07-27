@@ -72,6 +72,7 @@ export interface CombatReport {
 export type ManagementCategory =
   | "facility"
   | "job"
+  | "activity"
   | "trade_buy"
   | "trade_sell"
   | "recruit";

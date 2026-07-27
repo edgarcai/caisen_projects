@@ -125,6 +125,14 @@ export interface AssetConfig {
   readonly cover_height: number;
   readonly cover_themes: CoverThemesConfig;
   readonly skins: SkinConfig;
+  readonly companion_portraits: CompanionPortraitCatalogConfig;
+}
+
+/** 伙伴立绘的推荐尺寸与可缺省资源映射。 */
+export interface CompanionPortraitCatalogConfig {
+  readonly recommended_width: number;
+  readonly recommended_height: number;
+  readonly items: Readonly<Record<string, string>>;
 }
 
 /** 视觉主题色板。 */
@@ -176,6 +184,9 @@ export interface MotionConfig {
   readonly cover_drift_ms: number;
   readonly cover_menu_description_delay_ms: number;
   readonly toast_duration_ms: number;
+  readonly publisher_logo_fade_in_ms: number;
+  readonly publisher_logo_hold_ms: number;
+  readonly publisher_logo_fade_out_ms: number;
   readonly reduced_motion: boolean;
 }
 
@@ -227,10 +238,126 @@ export interface NativeNameInputConfig {
   readonly spellcheck: boolean;
 }
 
-/** 新游戏建档页使用的姓名输入与预设名称配置。 */
+/** 开局配置页允许导航的稳定分类。 */
+export type NewGameSetupCategoryId =
+  | "name"
+  | "mode"
+  | "difficulty"
+  | "origin"
+  | "trait"
+  | "city"
+  | "slot";
+
+/** 配置化的游戏模式选项。 */
+export interface NewGameModeOptionConfig {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+}
+
+/** 开局页单个分类的显示元数据。 */
+export interface NewGameSetupCategoryConfig {
+  readonly id: NewGameSetupCategoryId;
+  readonly label: string;
+  readonly description: string;
+}
+
+/** 开局页桌面三栏与底部摘要布局标尺。 */
+export interface NewGameSetupDesktopLayoutConfig {
+  readonly navigation_width: number;
+  readonly option_list_width: number;
+  readonly content_height: number;
+  readonly summary_height: number;
+  readonly panel_gap: number;
+  readonly row_height: number;
+  readonly panel_padding: number;
+}
+
+/** 开局页手机分步布局标尺。 */
+export interface NewGameSetupMobileLayoutConfig {
+  readonly step_header_height: number;
+  readonly option_area_height: number;
+  readonly preview_height: number;
+  readonly summary_height: number;
+  readonly row_height: number;
+  readonly panel_padding: number;
+}
+
+/** 开局页自身使用的配置化文案。 */
+export interface NewGameSetupCopyConfig {
+  readonly navigation_title: string;
+  readonly option_list_title: string;
+  readonly preview_title: string;
+  readonly summary_title: string;
+  readonly summary_format: string;
+  readonly step_format: string;
+  readonly previous_step: string;
+  readonly next_step: string;
+  readonly selected_mark: string;
+  readonly name_description: string;
+  readonly unavailable_mode: string;
+}
+
+/** 新游戏建档页使用的姓名、模式和响应式布局配置。 */
 export interface NewGameSetupConfig {
   readonly name_input: NativeNameInputConfig;
   readonly preset_names: readonly string[];
+  readonly mode_options: readonly NewGameModeOptionConfig[];
+  readonly categories: readonly NewGameSetupCategoryConfig[];
+  readonly desktop: NewGameSetupDesktopLayoutConfig;
+  readonly mobile: NewGameSetupMobileLayoutConfig;
+  readonly copy: NewGameSetupCopyConfig;
+}
+
+/** 单个战术引导步骤的配置。 */
+export interface GuidedTutorialStepConfig {
+  readonly id: string;
+  readonly speaker: string;
+  readonly title: string;
+  readonly instruction: string;
+  readonly target_test_id: string;
+}
+
+/** 通讯式分步引导页的文案与布局配置。 */
+export interface GuidedTutorialConfig {
+  readonly title: string;
+  readonly step_format: string;
+  readonly previous_label: string;
+  readonly next_label: string;
+  readonly complete_label: string;
+  readonly skip_label: string;
+  readonly missing_target_label: string;
+  readonly header_step_width_ratio: number;
+  readonly spotlight_padding: number;
+  readonly spotlight_border_width: number;
+  readonly dialog_panel_padding: number;
+  readonly desktop_dialog_width: number;
+  readonly desktop_dialog_height: number;
+  readonly mobile_dialog_height: number;
+  readonly fallback_target_width: number;
+  readonly fallback_target_height: number;
+  readonly steps: readonly GuidedTutorialStepConfig[];
+}
+
+/** 开局前的新手教程位置提示配置。 */
+export interface PreGameNoticeConfig {
+  readonly title: string;
+  readonly body: string;
+  readonly continue_label: string;
+  readonly tutorial_label: string;
+}
+
+/** 制作方开场 LOGO 的文案、资源与几何配置。 */
+export interface PublisherSplashConfig {
+  readonly title: string;
+  readonly subtitle: string;
+  readonly background_asset: string;
+  readonly background_opacity: number;
+  readonly content_width: number;
+  readonly title_height: number;
+  readonly subtitle_height: number;
+  readonly decoration_width: number;
+  readonly decoration_gap: number;
 }
 
 /** 单个响应式封面菜单结构。 */
@@ -300,6 +427,8 @@ export interface MobileLayoutConfig {
   readonly resource_bar_height: number;
   readonly quick_action_columns: number;
   readonly sheet_top_margin: number;
+  readonly log_preview_height: number;
+  readonly log_preview_entries: number;
 }
 
 /** 沉浸式二级页布局标尺。 */
@@ -360,7 +489,7 @@ export type NavigationPlacement =
   | "desktop_header";
 
 /** 局内导航允许出现的游戏模式。 */
-export type NavigationGameMode = "single" | "multiplayer" | "story";
+export type NavigationGameMode = "single" | "multiplayer" | "story" | "endless";
 
 /** 一个稳定且带位置、模式白名单的局内导航入口。 */
 export interface NavigationConfig {
@@ -541,6 +670,42 @@ export interface TextConfig {
   readonly save_slot_status_recoverable: string;
   readonly save_slot_status_corrupted: string;
   readonly save_slot_name_separator: string;
+  readonly companion_archive_title: string;
+  readonly companion_archive_body: string;
+  readonly companion_detail_title: string;
+  readonly companion_management: string;
+  readonly companion_management_title: string;
+  readonly companion_management_body: string;
+  readonly companion_equipment: string;
+  readonly companion_equipment_title: string;
+  readonly companion_weapon: string;
+  readonly companion_armor: string;
+  readonly companion_unequip: string;
+  readonly companion_interaction: string;
+  readonly companion_interaction_title: string;
+  readonly companion_locked_management: string;
+  readonly companion_secret_locked: string;
+  readonly companion_portrait_unavailable: string;
+  readonly companion_portrait_signal_format: string;
+  readonly companion_status_format: string;
+  readonly companion_equipment_format: string;
+  readonly companion_interaction_cooldown_format: string;
+  readonly management_detail_title: string;
+  readonly management_detail_requirements_title: string;
+  readonly management_detail_confirm: string;
+  readonly communication_log_title: string;
+  readonly communication_log_open: string;
+  readonly communication_log_empty: string;
+  readonly expedition_failure_title: string;
+  readonly expedition_failure_reason_format: string;
+  readonly expedition_failure_health_format: string;
+  readonly expedition_failure_summary_format: string;
+  readonly expedition_failure_carried_title: string;
+  readonly expedition_failure_loot_title: string;
+  readonly expedition_failure_item_format: string;
+  readonly expedition_failure_continue: string;
+  readonly expedition_step_warning: string;
+  readonly expedition_failure_steps_reason: string;
 }
 
 /** 经验证后供 H5 各层共享的根配置。 */
@@ -554,6 +719,9 @@ export interface WebGameConfig {
   readonly motion: MotionConfig;
   readonly controls: ControlConfig;
   readonly new_game_setup: NewGameSetupConfig;
+  readonly guided_tutorial: GuidedTutorialConfig;
+  readonly pre_game_notice: PreGameNoticeConfig;
+  readonly publisher_splash: PublisherSplashConfig;
   readonly layout: LayoutConfig;
   readonly storage: StorageConfig;
   readonly update_log: UpdateLogConfig;

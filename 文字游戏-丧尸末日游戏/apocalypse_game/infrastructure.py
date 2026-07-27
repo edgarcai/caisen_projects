@@ -415,6 +415,7 @@ class JsonSaveRepository:
             "negative_status",
             "antidotes",
         }
+        optional_player_fields = {"age", "lifespan"}
         required_shelter_fields = {
             "population",
             "group_hunger",
@@ -427,6 +428,7 @@ class JsonSaveRepository:
             "toys",
             "game_consoles",
         }
+        optional_shelter_fields = {"hope"}
         required_clock_fields = {"year", "month", "day", "hour"}
         required_story_fields = {
             "current_scene_id",
@@ -458,12 +460,18 @@ class JsonSaveRepository:
             raise SaveDataError("v2 game_state 字段集合不匹配")
         players = state_data.get("players")
         if not isinstance(players, list) or any(
-            not isinstance(player, Mapping) or set(player) != required_player_fields
+            not isinstance(player, Mapping)
+            or not required_player_fields <= set(player)
+            or not set(player) <= required_player_fields | optional_player_fields
             for player in players
         ):
             raise SaveDataError("v2 玩家字段集合不匹配")
         shelter = state_data.get("shelter")
-        if not isinstance(shelter, Mapping) or set(shelter) != required_shelter_fields:
+        if (
+            not isinstance(shelter, Mapping)
+            or not required_shelter_fields <= set(shelter)
+            or not set(shelter) <= required_shelter_fields | optional_shelter_fields
+        ):
             raise SaveDataError("v2 避难所字段集合不匹配")
         clock = state_data.get("clock")
         if not isinstance(clock, Mapping) or set(clock) != required_clock_fields:
@@ -533,6 +541,8 @@ class JsonSaveRepository:
             "parts",
             "negative_status",
             "antidotes",
+            "age",
+            "lifespan",
         )
         for index, player in enumerate(state.players):
             if not isinstance(player.name, str) or not player.name.strip():
@@ -545,6 +555,8 @@ class JsonSaveRepository:
                 )
             if player.health > limits["player_max_health"]:
                 raise SaveDataError("玩家生命超过配置上限")
+            if player.lifespan < player.age:
+                raise SaveDataError("玩家寿命不能小于当前年龄")
         player_names = [player.name.strip() for player in state.players]
         if len(set(player_names)) != len(player_names):
             raise SaveDataError("玩家姓名不能重复")
@@ -559,6 +571,7 @@ class JsonSaveRepository:
             "magazines",
             "toys",
             "game_consoles",
+            "hope",
         )
         for field_name in shelter_fields:
             self._require_integer(
@@ -568,6 +581,8 @@ class JsonSaveRepository:
             )
         if state.shelter.health > limits["shelter_max_health"]:
             raise SaveDataError("避难所耐久超过配置上限")
+        if state.shelter.hope > limits["shelter_max_hope"]:
+            raise SaveDataError("避难所希望超过配置上限")
         self._require_integer(state.shelter.activity, "shelter.activity")
 
         if state.ended:
@@ -659,6 +674,8 @@ class JsonSaveRepository:
             or state.shelter.group_hunger >= limits["group_hunger_game_over"]
             or state.shelter.activity <= limits["activity_min_game_over"]
             or state.shelter.activity >= limits["activity_max_game_over"]
+            or state.shelter.hope <= limits["hope_min_game_over"]
+            or any(player.age >= player.lifespan for player in state.players)
         )
         if not state.ended and has_ending_condition:
             raise SaveDataError("未结束存档包含失败状态")

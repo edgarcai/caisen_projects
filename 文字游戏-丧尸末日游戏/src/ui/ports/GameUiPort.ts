@@ -2,8 +2,10 @@
  * UI 可以展示的稳定页面标识。
  */
 export type GameScreenId =
+  | "publisher_splash"
   | "menu"
   | "name_input"
+  | "pre_game_notice"
   | "save_slots"
   | "update_log"
   | "connection"
@@ -14,7 +16,13 @@ export type GameScreenId =
   | "battle"
   | "management_categories"
   | "management_options"
+  | "management_option_detail"
   | "companions"
+  | "companion_detail"
+  | "companion_management"
+  | "companion_management_detail"
+  | "companion_equipment"
+  | "companion_interaction"
   | "supplies"
   | "tutorial"
   | "message"
@@ -32,6 +40,8 @@ export type GameScreenId =
   | "expedition_district_detail"
   | "expedition_prepare"
   | "expedition_status"
+  | "expedition_failure"
+  | "communication_log"
   | "history"
   | "rollback_confirm"
   | "exit_confirm"
@@ -40,7 +50,7 @@ export type GameScreenId =
 /**
  * 游戏支持的启动模式。
  */
-export type GameMode = "single" | "multiplayer" | "story";
+export type GameMode = "single" | "multiplayer" | "story" | "endless";
 
 /** 存档栏位页当前执行的稳定读写语义。 */
 export type SaveSlotsPageMode = "load" | "save";
@@ -271,9 +281,54 @@ export interface UiCompanionView {
   readonly id: string;
   readonly name: string;
   readonly role: string;
+  readonly portraitKey: string;
+  readonly portraitAssetPath: string;
   readonly statusLabel: string;
   readonly trustLabel: string;
+  readonly introduction: string;
   readonly biography: string;
+  readonly secret: string;
+  readonly secretUnlocked: boolean;
+  readonly canManage: boolean;
+  readonly interactionCooldownTurns: number;
+  readonly interactionCount: number;
+  readonly equippedWeapon: UiCompanionEquippedItemView | null;
+  readonly equippedArmor: UiCompanionEquippedItemView | null;
+  readonly weaponOptions: readonly UiCompanionEquipmentOptionView[];
+  readonly armorOptions: readonly UiCompanionEquipmentOptionView[];
+  readonly interactionOptions: readonly UiCompanionInteractionOptionView[];
+  readonly tone?: UiTone;
+}
+
+/** 伙伴可装备栏位的稳定语义。 */
+export type UiCompanionEquipmentSlot = "weapon" | "armor";
+
+/** 伙伴当前已穿戴的一件装备。 */
+export interface UiCompanionEquippedItemView {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+}
+
+/** 伙伴配装页中来自实时仓库的一个候选项。 */
+export interface UiCompanionEquipmentOptionView {
+  readonly id: string;
+  readonly name: string;
+  readonly slot: UiCompanionEquipmentSlot;
+  readonly description: string;
+  readonly availableQuantity: number;
+  readonly equipped: boolean;
+  readonly disabled: boolean;
+  readonly disabledReason?: string;
+}
+
+/** 伙伴互动页中的一个可执行选项。 */
+export interface UiCompanionInteractionOptionView {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly disabled: boolean;
+  readonly disabledReason?: string;
   readonly tone?: UiTone;
 }
 
@@ -356,6 +411,29 @@ export interface UiExpeditionStatusView {
   readonly carriedItems: Readonly<Record<string, number>>;
   readonly loot: Readonly<Record<string, number>>;
   readonly itemNames: Readonly<Record<string, string>>;
+  readonly eventStepCost: number;
+}
+
+/** 强制返程时一项携带物或战利品的结算明细。 */
+export interface UiExpeditionLossItemView {
+  readonly id: string;
+  readonly name: string;
+  readonly source: "carried" | "loot";
+  readonly before: number;
+  readonly kept: number;
+  readonly lost: number;
+}
+
+/** 步数不足导致强制返程的完整、只读结算。 */
+export interface UiExpeditionFailureView {
+  readonly reason: string;
+  readonly keptPercent: number;
+  readonly healthBefore: number;
+  readonly healthAfter: number;
+  readonly totalBefore: number;
+  readonly totalKept: number;
+  readonly totalLost: number;
+  readonly items: readonly UiExpeditionLossItemView[];
 }
 
 /**
@@ -434,6 +512,7 @@ export interface GameUiSnapshot {
   readonly expeditionCompanions: readonly UiExpeditionCompanionView[];
   readonly expeditionCarryItems: readonly UiExpeditionCarryItemView[];
   readonly expeditionStatus: UiExpeditionStatusView | null;
+  readonly expeditionFailure: UiExpeditionFailureView | null;
   readonly weeklyArchives: readonly UiWeeklyArchiveView[];
   readonly tutorial: UiDocumentView | null;
   readonly ending: UiDocumentView | null;
@@ -466,6 +545,17 @@ export type GameUiCommand =
     }
   | { readonly type: "expedition_continue" }
   | { readonly type: "expedition_safe_return" }
+  | {
+      readonly type: "companion_equip";
+      readonly companionId: string;
+      readonly slot: UiCompanionEquipmentSlot;
+      readonly itemId: string | null;
+    }
+  | {
+      readonly type: "companion_interact";
+      readonly companionId: string;
+      readonly interactionId: string;
+    }
   | { readonly type: "story_choice"; readonly choiceId: string }
   | { readonly type: "exploration_prepare"; readonly cityId: string }
   | { readonly type: "exploration_resolve"; readonly choiceId: string }

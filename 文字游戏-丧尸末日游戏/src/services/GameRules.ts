@@ -52,12 +52,15 @@ export class GameRules {
     }
     const hungerCosts = this.actionHungerCosts(actionType);
     const survivalCostPercent = this.survivalCostPercent(state);
+    const shouldAdvanceInteractionCooldowns = actionType
+      !== this.content.game.rules.companion_interaction_action_type;
     const messages: string[] = [];
     for (let index = 0; index < turns; index += 1) {
       messages.push(...this.advanceSingleTurn(
         state,
         hungerCosts,
         survivalCostPercent,
+        shouldAdvanceInteractionCooldowns,
       ));
       if (isEnded(state)) {
         return messages;
@@ -79,6 +82,8 @@ export class GameRules {
   /** 统一维护库存非负、生命上限和避难所耐久上限。 */
   public normalize(state: GameState): void {
     const playerFields = [
+      "age",
+      "lifespan",
       "health",
       "medical_supplies",
       "food",
@@ -97,6 +102,10 @@ export class GameRules {
     state.shelter.health = Math.max(
       0,
       Math.min(state.shelter.health, this.limits.shelter_max_health),
+    );
+    state.shelter.hope = Math.max(
+      0,
+      Math.min(state.shelter.hope, this.limits.shelter_max_hope),
     );
     state.shelter.group_hunger = Math.max(0, state.shelter.group_hunger);
     const shelterFields = [
@@ -118,12 +127,21 @@ export class GameRules {
     if (state.shelter.health <= 0) {
       return this.failureEnding("shelter", state.mode);
     }
+    if (state.shelter.hope <= this.limits.hope_min_game_over) {
+      return this.failureEnding("hope", state.mode);
+    }
     for (const player of state.players) {
       if (player.health <= 0) {
         return this.failureEnding("player_health", state.mode, { player_name: player.name });
       }
       if (player.hunger >= this.limits.player_hunger_game_over) {
         return this.failureEnding("player_hunger", state.mode, { player_name: player.name });
+      }
+      if (player.age >= player.lifespan) {
+        return this.failureEnding("lifespan", state.mode, {
+          player_name: player.name,
+          lifespan: player.lifespan,
+        });
       }
     }
     if (state.shelter.group_hunger >= this.limits.group_hunger_game_over) {
@@ -148,6 +166,7 @@ export class GameRules {
     state: GameState,
     hungerCosts: GameContent["game"]["rules"]["action_hunger_costs"][string],
     survivalCostPercent: number,
+    shouldAdvanceInteractionCooldowns: boolean,
   ): string[] {
     const { turn_costs: costs, time } = this.content.game.rules;
     const negativePercent = 100 + this.modifier(
@@ -187,6 +206,19 @@ export class GameRules {
       100,
       survivalCostPercent,
     );
+    state.shelter.hope -= this.scaledSurvivalCost(
+      costs.hope_loss,
+      100,
+      survivalCostPercent,
+    );
+    if (shouldAdvanceInteractionCooldowns) {
+      for (const companion of state.companions) {
+        companion.interaction_cooldown_turns = Math.max(
+          0,
+          companion.interaction_cooldown_turns - 1,
+        );
+      }
+    }
     state.turn_number += 1;
 
     const completedClock = structuredClone(state.clock);
@@ -206,6 +238,14 @@ export class GameRules {
     }
     if (advance.yearChanged) {
       messages.push(this.content.text("turn_year"));
+      for (const player of state.players) {
+        player.age += 1;
+        messages.push(this.content.text("player_aged", {
+          player_name: player.name,
+          age: player.age,
+          lifespan: player.lifespan,
+        }));
+      }
     }
     const ending = this.checkFailure(state);
     if (ending !== null) {

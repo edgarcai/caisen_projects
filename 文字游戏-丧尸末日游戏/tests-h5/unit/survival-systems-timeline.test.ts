@@ -59,14 +59,28 @@ function corruptedStorage(
 
 /** 从 v3 聚合中只选择 v2 存档允许出现的字段。 */
 function asV2State(state: GameState): Record<string, unknown> {
+  const players = structuredClone(state.players) as unknown as Record<string, unknown>[];
+  for (const player of players) {
+    delete player.age;
+    delete player.lifespan;
+  }
+  const shelter = structuredClone(state.shelter) as unknown as Record<string, unknown>;
+  delete shelter.hope;
+  const companions = structuredClone(state.companions) as unknown as Record<string, unknown>[];
+  for (const companion of companions) {
+    delete companion.equipped_weapon_id;
+    delete companion.equipped_armor_id;
+    delete companion.interaction_cooldown_turns;
+    delete companion.interaction_count;
+  }
   return {
     mode: state.mode,
-    players: structuredClone(state.players),
+    players,
     active_player_index: state.active_player_index,
-    shelter: structuredClone(state.shelter),
+    shelter,
     clock: structuredClone(state.clock),
     story: structuredClone(state.story),
-    companions: structuredClone(state.companions),
+    companions,
     facility_levels: structuredClone(state.facility_levels),
     battle: structuredClone(state.battle),
     pending_exploration: structuredClone(state.pending_exploration),
@@ -221,7 +235,7 @@ describe("研发、制作与仓库不变量", () => {
 
   it("武器与防具的配置加成同时参与玩家伤害和首领反击结算", () => {
     const baseline = startedApplication(
-      new ScriptedRandomSource([100, 100, 100]),
+      new ScriptedRandomSource([90, 100, 100, 100]),
       "story",
     );
     const baselineState = requireState(baseline);
@@ -243,7 +257,7 @@ describe("研发、制作与仓库不变量", () => {
     };
 
     const equipped = startedApplication(
-      new ScriptedRandomSource([100, 100, 100]),
+      new ScriptedRandomSource([90, 100, 100, 100]),
       "story",
     );
     const equippedState = requireState(equipped);
@@ -293,8 +307,8 @@ describe("配置化远征", () => {
       cityId: "city_d",
       districtId: defaultDistrictId(application, "city_d"),
       travelStepCost: 3,
-      maximumSteps: 14,
-      remainingSteps: 9,
+      maximumSteps: 17,
+      remainingSteps: 12,
       companionIds: ["haocai"],
       carriedItems: { field_ration: 2 },
     });
@@ -316,14 +330,14 @@ describe("配置化远征", () => {
     expect(safe.expeditionStatus()).toMatchObject({
       districtId: safeDistrictId,
       travelStepCost: 1,
-      maximumSteps: 6,
-      remainingSteps: 4,
+      maximumSteps: 9,
+      remainingSteps: 7,
     });
     expect(dangerous.expeditionStatus()).toMatchObject({
       districtId: dangerousDistrictId,
       travelStepCost: 3,
-      maximumSteps: 6,
-      remainingSteps: 0,
+      maximumSteps: 9,
+      remainingSteps: 3,
     });
   });
 
@@ -367,7 +381,7 @@ describe("配置化远征", () => {
   });
 
   it("多人轮换后仍由出发所长接收远征战利品", () => {
-    const random = new ScriptedRandomSource([50, 60], [0, 0]);
+    const random = new ScriptedRandomSource([90, 90, 50, 60], [0, 0]);
     const application = buildH5Harness({ random }).application;
     application.startNewGame(["白菜", "豪菜"], "multiplayer");
     const state = requireState(application);
@@ -428,7 +442,7 @@ describe("配置化远征", () => {
   });
 
   it("步数不足时全部远征物资只保留20%并把生命钳制到7至45", () => {
-    const random = new ScriptedRandomSource([45]);
+    const random = new ScriptedRandomSource([90, 45]);
     const application = startedApplication(random);
     const state = requireState(application);
     const player = requirePlayer(state);
@@ -450,7 +464,7 @@ describe("配置化远征", () => {
 
     expect(report.stateChanged).toBe(true);
     expect(report.messages.join("\n")).toContain("20%远征物资");
-    expect(requirePlayer(state).food).toBe(102);
+    expect(requirePlayer(state).food).toBe(101);
     expect(requirePlayer(state).health).toBe(45);
     expect(requirePlayer(state).health).toBeGreaterThanOrEqual(7);
     expect(requirePlayer(state).health).toBeLessThanOrEqual(45);

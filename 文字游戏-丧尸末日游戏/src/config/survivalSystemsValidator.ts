@@ -160,9 +160,10 @@ function validateExpedition(config: SurvivalSystemsConfigDocument): void {
   );
   requireInteger(expedition.maximum_carried_units, "expedition.maximum_carried_units", 0);
   requireInteger(expedition.event_step_cost, "expedition.event_step_cost", 1);
-  const keepPercent = requireFiniteNumber(
+  const keepPercent = requireInteger(
     expedition.forced_return_keep_percent,
     "expedition.forced_return_keep_percent",
+    0,
   );
   if (keepPercent < 0 || keepPercent > 100) {
     throw new Error("expedition.forced_return_keep_percent 必须位于 0 到 100。 ");

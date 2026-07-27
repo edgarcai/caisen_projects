@@ -26,6 +26,7 @@ import type {
   UiCraftingRecipeView,
   UiExpeditionCarryItemView,
   UiExpeditionCompanionView,
+  UiExpeditionFailureView,
   UiExpeditionStatusView,
   UiHistoryEntryView,
   UiManagementCategoryView,
@@ -180,6 +181,7 @@ export class GameUiAdapter implements GameUiPort {
       expeditionCompanions: state === null ? [] : this.expeditionCompanionViews(),
       expeditionCarryItems: state === null ? [] : this.expeditionCarryItemViews(),
       expeditionStatus: state === null ? null : this.expeditionStatusView(),
+      expeditionFailure: state === null ? null : this.expeditionFailureView(),
       weeklyArchives: state === null ? [] : this.weeklyArchiveViews(),
       tutorial: {
         title: this.actionLabel("tutorial"),
@@ -312,6 +314,21 @@ export class GameUiAdapter implements GameUiPort {
       }
       case "equip_item": {
         const report = this.application.equipItem(command.itemId);
+        return { accepted: report.stateChanged, report };
+      }
+      case "companion_equip": {
+        const report = this.application.equipCompanion(
+          command.companionId,
+          command.slot,
+          command.itemId,
+        );
+        return { accepted: report.stateChanged, report };
+      }
+      case "companion_interact": {
+        const report = this.application.interactWithCompanion(
+          command.companionId,
+          command.interactionId,
+        );
         return { accepted: report.stateChanged, report };
       }
       case "expedition_begin": {
@@ -450,16 +467,22 @@ export class GameUiAdapter implements GameUiPort {
     };
   }
 
-  /** 返回由主配置定义的单人、多人和剧情模式输入框数量。 */
+  /** 返回由主配置定义的全部游戏模式输入框数量。 */
   private playerCounts(): Readonly<Record<GameMode, number>> {
     const rules = this.application.content.game.rules.player_counts;
     const single = rules.single?.maximum;
     const multiplayer = rules.multiplayer?.maximum;
     const story = rules.story?.maximum;
-    if (single === undefined || multiplayer === undefined || story === undefined) {
+    const endless = rules.endless?.maximum;
+    if (
+      single === undefined
+      || multiplayer === undefined
+      || story === undefined
+      || endless === undefined
+    ) {
       throw new Error("游戏模式缺少玩家数量配置。");
     }
-    return { single, multiplayer, story };
+    return { single, multiplayer, story, endless };
   }
 
   /** 把领域配置中的难度、起源、特性与城市转换为开局选择模型。 */
@@ -953,31 +976,96 @@ export class GameUiAdapter implements GameUiPort {
 
   /** 把伙伴状态、信任与档案转换为独立资料卡。 */
   private companionViews(state: GameState): UiCompanionView[] {
-    return state.companions.map((companion) => {
-      const profile = this.application.content.story.companions.find(
-        (candidate) => candidate.companion_id === companion.companion_id,
+    const catalog = new Map(
+      this.application.warehouseItemCatalog().map((item) => [item.itemId, item]),
+    );
+    return this.application.companionManagementViews().map((companion) => {
+      const stateCompanion = state.companions.find(
+        (candidate) => candidate.companion_id === companion.companionId,
       );
-      if (profile === undefined) {
-        throw new Error(`缺少伙伴展示配置：${companion.companion_id}`);
+      if (stateCompanion === undefined) {
+        throw new Error(`缺少伙伴状态：${companion.companionId}`);
       }
-      const secret = companion.trust >= this.presentation.interface.h5.locked_secret_trust
-        ? profile.secret
-        : this.presentation.interface.h5.locked_secret_text;
+      const secret = companion.secretUnlocked
+        ? companion.secret
+        : this.webConfig.texts.companion_secret_locked;
+      const equipmentOptions = (slot: "weapon" | "armor") => companion.status === "active"
+        ? this.application.companionEquipmentOptions(companion.companionId, slot)
+        : [];
+      const equippedItem = (itemId: string | null, name: string | null) => {
+        if (itemId === null || name === null) return null;
+        return {
+          id: itemId,
+          name,
+          description: catalog.get(itemId)?.description ?? "",
+        };
+      };
       return {
-        id: companion.companion_id,
-        name: profile.name,
-        role: profile.role,
+        id: companion.companionId,
+        name: companion.name,
+        role: companion.role,
+        portraitKey: companion.portraitKey,
+        portraitAssetPath:
+          this.webConfig.assets.companion_portraits.items[companion.portraitKey] ?? "",
         statusLabel:
           this.presentation.interface.h5.companion_status_labels[companion.status]
           ?? companion.status,
         trustLabel: formatTemplate(this.presentation.interface.h5.trust_format, {
           trust: companion.trust,
         }),
+        introduction: companion.introduction,
         biography: formatTemplate(
           this.presentation.interface.h5.companion_biography_format,
-          { introduction: profile.introduction, secret },
+          { introduction: companion.introduction, secret },
         ),
-        tone: this.companionTone(companion),
+        secret,
+        secretUnlocked: companion.secretUnlocked,
+        canManage: companion.status === "active",
+        interactionCooldownTurns: companion.interactionCooldownTurns,
+        interactionCount: companion.interactionCount,
+        equippedWeapon: equippedItem(
+          companion.equippedWeaponId,
+          companion.equippedWeaponName,
+        ),
+        equippedArmor: equippedItem(
+          companion.equippedArmorId,
+          companion.equippedArmorName,
+        ),
+        weaponOptions: equipmentOptions("weapon").map((option) => ({
+          id: option.itemId,
+          name: option.name,
+          slot: option.slot,
+          description: option.description,
+          availableQuantity: option.availableQuantity,
+          equipped: option.equipped,
+          disabled: !option.available,
+          disabledReason: option.available
+            ? undefined
+            : this.application.content.text("management_failed"),
+        })),
+        armorOptions: equipmentOptions("armor").map((option) => ({
+          id: option.itemId,
+          name: option.name,
+          slot: option.slot,
+          description: option.description,
+          availableQuantity: option.availableQuantity,
+          equipped: option.equipped,
+          disabled: !option.available,
+          disabledReason: option.available
+            ? undefined
+            : this.application.content.text("management_failed"),
+        })),
+        interactionOptions: this.application
+          .companionInteractionOptions(companion.companionId)
+          .map((option) => ({
+            id: option.interactionId,
+            label: option.label,
+            description: option.description,
+            disabled: !option.available,
+            disabledReason: option.unavailableReason || undefined,
+            tone: option.available ? "success" as const : "default" as const,
+          })),
+        tone: this.companionTone(stateCompanion),
       };
     });
   }
@@ -1069,6 +1157,33 @@ export class GameUiAdapter implements GameUiPort {
       carriedItems: { ...status.carriedItems },
       loot: { ...status.loot },
       itemNames: { ...status.itemNames },
+      eventStepCost: this.application.expeditionEventStepCost(
+        status.cityId,
+        status.districtId,
+      ),
+    };
+  }
+
+  /** 把最近一次步数耗尽损失投影为独立失败页模型。 */
+  private expeditionFailureView(): UiExpeditionFailureView | null {
+    const failure = this.application.lastExpeditionFailure();
+    if (failure === null) return null;
+    return {
+      reason: this.webConfig.texts.expedition_failure_steps_reason,
+      keptPercent: failure.kept_percent,
+      healthBefore: failure.health_before,
+      healthAfter: failure.health_after,
+      totalBefore: failure.total_original,
+      totalKept: failure.total_kept,
+      totalLost: failure.total_lost,
+      items: failure.items.map((item) => ({
+        id: `${item.source}:${item.item_id}`,
+        name: item.item_name,
+        source: item.source,
+        before: item.original_quantity,
+        kept: item.kept_quantity,
+        lost: item.lost_quantity,
+      })),
     };
   }
 
@@ -1179,7 +1294,8 @@ export class GameUiAdapter implements GameUiPort {
       id: this.managementOptionId(option),
       label: option.label,
       description: option.description,
-      disabled: !option.available,
+      disabled: false,
+      lockedAppearance: !option.available,
       disabledReason: option.available
         ? undefined
         : this.application.content.text("management_failed"),
@@ -1204,7 +1320,8 @@ export class GameUiAdapter implements GameUiPort {
       id: `${categoryId}${MANAGEMENT_OPTION_SEPARATOR}${actionId}`,
       label: action.label,
       description: "",
-      disabled: blockedReason !== null,
+      disabled: false,
+      lockedAppearance: blockedReason !== null,
       disabledReason: blockedReason ?? undefined,
       tone: this.actionTone(action.style),
     };

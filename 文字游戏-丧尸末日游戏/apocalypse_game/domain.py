@@ -24,6 +24,8 @@ class PlayerState:
     parts: int
     negative_status: int
     antidotes: int
+    age: int = 25
+    lifespan: int = 95
 
     def to_dict(self) -> Dict[str, Any]:
         """把玩家状态转换为可写入 JSON 的字典。"""
@@ -51,6 +53,7 @@ class ShelterState:
     magazines: int
     toys: int
     game_consoles: int
+    hope: int = 60
 
     def to_dict(self) -> Dict[str, Any]:
         """把避难所状态转换为可写入 JSON 的字典。"""

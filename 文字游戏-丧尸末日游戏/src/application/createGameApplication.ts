@@ -4,6 +4,7 @@ import v1ToV2MigrationDocument from "../../config/save_migrations/v1_to_v2.json"
 import v2ToV3MigrationDocument from "../../config/save_migrations/v2_to_v3.json";
 import v3ToV4MigrationDocument from "../../config/save_migrations/v3_to_v4.json";
 import v4ToV5MigrationDocument from "../../config/save_migrations/v4_to_v5.json";
+import v5ToV6MigrationDocument from "../../config/save_migrations/v5_to_v6.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import webDocument from "../../config/web_config.json";
@@ -18,6 +19,7 @@ import type {
   V2ToV3SaveMigrationConfig,
   V3ToV4SaveMigrationConfig,
   V4ToV5SaveMigrationConfig,
+  V5ToV6SaveMigrationConfig,
 } from "../domain/content";
 import type { SurvivalSystemsConfigDocument } from "../domain/survival-systems";
 import type {
@@ -34,12 +36,14 @@ import {
   SaveStateValidator,
   V1ToV2SaveMigrator,
   V2ToV3SaveMigrator,
+  V5ToV6SaveMigrator,
 } from "../infrastructure";
 import { V3ToV4SaveMigrator } from "../infrastructure/V3ToV4SaveMigrator";
 import { V4ToV5SaveMigrator } from "../infrastructure/V4ToV5SaveMigrator";
 import {
   AchievementService,
   CampaignProfileService,
+  CompanionManagementService,
   ChronicleService,
   CityAccessService,
   CombatService,
@@ -88,6 +92,7 @@ export function createGameApplication(
   const v2ToV3Migration = v2ToV3MigrationDocument as unknown as V2ToV3SaveMigrationConfig;
   const v3ToV4Migration: V3ToV4SaveMigrationConfig = v3ToV4MigrationDocument;
   const v4ToV5Migration: V4ToV5SaveMigrationConfig = v4ToV5MigrationDocument;
+  const v5ToV6Migration: V5ToV6SaveMigrationConfig = v5ToV6MigrationDocument;
   const storageConfig = webDocument.storage as unknown as StorageDocument;
   const survivalSystems = validateSurvivalSystemsConfig(survivalSystemsDocument);
   validateWorldMapConfig(game, events);
@@ -108,6 +113,12 @@ export function createGameApplication(
     survivalSystems,
     operations,
     createKeyItemWarehouseCatalog(story),
+  );
+  const companionManagement = new CompanionManagementService(
+    content,
+    inventory,
+    operations,
+    storyService,
   );
   const researchCrafting = new ResearchCraftingService(survivalSystems, operations);
   const expedition = new ExpeditionService(
@@ -138,6 +149,7 @@ export function createGameApplication(
     v2ToV3Migration,
     v3ToV4Migration,
     v4ToV5Migration,
+    v5ToV6Migration,
   );
   return new GameApplication(
     content,
@@ -146,6 +158,7 @@ export function createGameApplication(
     storyService,
     combat,
     shelter,
+    companionManagement,
     chronicle,
     inventory,
     equipment,
@@ -170,6 +183,7 @@ function createRepository(
   v2ToV3Migration: V2ToV3SaveMigrationConfig,
   v3ToV4Migration: V3ToV4SaveMigrationConfig,
   v4ToV5Migration: V4ToV5SaveMigrationConfig,
+  v5ToV6Migration: V5ToV6SaveMigrationConfig,
 ): SaveRepository {
   const validator = new SaveStateValidator(
     game.rules,
@@ -182,7 +196,7 @@ function createRepository(
   return new LocalStorageSaveRepository({
     storage: options.storage ?? browserStorageOrMemory(),
     storageKey: options.storageKey ?? storageConfig.key,
-    schemaVersion: storageConfig.schema_version,
+    schemaVersion: game.save_schema_version,
     slotCount: options.slotCount ?? storageConfig.save_slot_count,
     backupSlots: options.backupSlots ?? storageConfig.backup_slots,
     validator,
@@ -191,6 +205,7 @@ function createRepository(
       new V2ToV3SaveMigrator(v2ToV3Migration),
       new V3ToV4SaveMigrator(v3ToV4Migration),
       new V4ToV5SaveMigrator(v4ToV5Migration, game.cities),
+      new V5ToV6SaveMigrator(v5ToV6Migration),
     ],
     now: options.now,
   });

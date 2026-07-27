@@ -79,7 +79,7 @@ def build_test_application(
         rules=GameRules(config, shelter_service),
         repository=JsonSaveRepository(
             save_path,
-            config.data["save_schema_version"],
+            config.desktop_save_schema_version,
             validation_rules,
             migrators=[
                 V1ToV2SaveMigrator.from_path(

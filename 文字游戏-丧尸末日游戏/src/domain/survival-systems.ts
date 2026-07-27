@@ -228,6 +228,52 @@ export interface ExpeditionStatusView {
   readonly itemNames: Readonly<Record<string, string>>;
 }
 
+/** 伙伴可使用的稳定装备槽位。 */
+export type CompanionEquipmentSlot = "weapon" | "armor";
+
+/** 伙伴档案页与管理页共用的完整读模型。 */
+export interface CompanionManagementView {
+  readonly companionId: string;
+  readonly name: string;
+  readonly role: string;
+  readonly portraitKey: string;
+  readonly introduction: string;
+  readonly secret: string;
+  readonly secretUnlocked: boolean;
+  readonly status: string;
+  readonly trust: number;
+  readonly equippedWeaponId: string | null;
+  readonly equippedArmorId: string | null;
+  readonly equippedWeaponName: string | null;
+  readonly equippedArmorName: string | null;
+  readonly interactionCooldownTurns: number;
+  readonly interactionCount: number;
+}
+
+/** 伙伴一个槽位可选装备的实时库存投影。 */
+export interface CompanionEquipmentOptionView {
+  readonly itemId: string;
+  readonly name: string;
+  readonly slot: CompanionEquipmentSlot;
+  readonly description: string;
+  readonly availableQuantity: number;
+  readonly equipped: boolean;
+  readonly available: boolean;
+}
+
+/** 伙伴互动选项的收益、冷却和可用状态。 */
+export interface CompanionInteractionOptionView {
+  readonly interactionId: string;
+  readonly label: string;
+  readonly description: string;
+  readonly available: boolean;
+  readonly unavailableReason: string;
+  readonly trustGain: number;
+  readonly hopeGain: number;
+  readonly cooldownTurns: number;
+  readonly turnsConsumed: number;
+}
+
 /** 研发、制作或返程操作的原子结算结果。 */
 export interface SurvivalSystemResolution {
   readonly applied: boolean;

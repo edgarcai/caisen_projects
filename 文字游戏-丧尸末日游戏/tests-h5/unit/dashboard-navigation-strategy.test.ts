@@ -59,6 +59,7 @@ describe("局内仪表盘导航策略", () => {
       "crafting",
       "expedition",
       "history",
+      "communication_log",
     ]);
     expect(
       DASHBOARD_ACTION_IDS.every(

@@ -6,10 +6,14 @@ import type {
   CoverMenuLayoutConfig,
   ControlConfig,
   EngineConfig,
+  GuidedTutorialConfig,
   LayoutConfig,
   MotionConfig,
   NavigationConfig,
   NewGameSetupConfig,
+  NewGameSetupCategoryId,
+  PreGameNoticeConfig,
+  PublisherSplashConfig,
   QualityViewport,
   ResponsiveConfig,
   SafeAreaInsets,
@@ -52,7 +56,12 @@ const NAVIGATION_PLACEMENTS = [
   "mobile_header",
   "desktop_header",
 ] as const;
-const NAVIGATION_GAME_MODES = ["single", "multiplayer", "story"] as const;
+const NAVIGATION_GAME_MODES = [
+  "single",
+  "multiplayer",
+  "story",
+  "endless",
+] as const;
 const WEB_EXIT_STRATEGIES = [
   "close_only",
   "history_back",
@@ -70,6 +79,15 @@ const NAME_INPUT_AUTOCAPITALIZE_VALUES = [
   "words",
   "characters",
 ] as const;
+const NEW_GAME_SETUP_CATEGORIES = [
+  "name",
+  "mode",
+  "difficulty",
+  "origin",
+  "trait",
+  "city",
+  "slot",
+] as const satisfies readonly NewGameSetupCategoryId[];
 
 const SKIN_KEYS = [
   "cover_button_idle",
@@ -179,6 +197,8 @@ const MOBILE_LAYOUT_KEYS = [
   "resource_bar_height",
   "quick_action_columns",
   "sheet_top_margin",
+  "log_preview_height",
+  "log_preview_entries",
 ] as const;
 const PAGE_LAYOUT_KEYS = [
   "max_content_width",
@@ -343,6 +363,42 @@ const TEXT_KEYS = [
   "save_slot_status_recoverable",
   "save_slot_status_corrupted",
   "save_slot_name_separator",
+  "companion_archive_title",
+  "companion_archive_body",
+  "companion_detail_title",
+  "companion_management",
+  "companion_management_title",
+  "companion_management_body",
+  "companion_equipment",
+  "companion_equipment_title",
+  "companion_weapon",
+  "companion_armor",
+  "companion_unequip",
+  "companion_interaction",
+  "companion_interaction_title",
+  "companion_locked_management",
+  "companion_secret_locked",
+  "companion_portrait_unavailable",
+  "companion_portrait_signal_format",
+  "companion_status_format",
+  "companion_equipment_format",
+  "companion_interaction_cooldown_format",
+  "management_detail_title",
+  "management_detail_requirements_title",
+  "management_detail_confirm",
+  "communication_log_title",
+  "communication_log_open",
+  "communication_log_empty",
+  "expedition_failure_title",
+  "expedition_failure_reason_format",
+  "expedition_failure_health_format",
+  "expedition_failure_summary_format",
+  "expedition_failure_carried_title",
+  "expedition_failure_loot_title",
+  "expedition_failure_item_format",
+  "expedition_failure_continue",
+  "expedition_step_warning",
+  "expedition_failure_steps_reason",
 ] as const;
 
 /** 表示 H5 配置无法加载或不符合契约。 */
@@ -418,6 +474,15 @@ function expectRatio(value: unknown, path: string): number {
   const ratio = expectNumber(value, path);
   if (ratio > 1) {
     throw new WebConfigError(`${path} 必须位于 0 到 1 之间`);
+  }
+  return ratio;
+}
+
+/** 读取严格位于零到一之间的分栏比例，避免任一栏宽度归零。 */
+function expectSplitRatio(value: unknown, path: string): number {
+  const ratio = expectRatio(value, path);
+  if (ratio <= 0 || ratio >= 1) {
+    throw new WebConfigError(`${path} 必须严格位于 0 到 1 之间`);
   }
   return ratio;
 }
@@ -736,6 +801,39 @@ function parseAssets(value: unknown): AssetConfig {
       SKIN_KEYS,
       "assets.skins",
     ),
+    companion_portraits: parseCompanionPortraits(source.companion_portraits),
+  };
+}
+
+/** 解析允许缺省空路径的伙伴立绘映射。 */
+function parseCompanionPortraits(
+  value: unknown,
+): AssetConfig["companion_portraits"] {
+  const source = expectObject(value, "assets.companion_portraits");
+  const itemSource = expectObject(source.items, "assets.companion_portraits.items");
+  const items: Record<string, string> = {};
+  for (const [portraitKey, assetPath] of Object.entries(itemSource)) {
+    const stableKey = expectString(portraitKey, "assets.companion_portraits.items key");
+    items[stableKey] = expectOptionalString(
+      assetPath,
+      `assets.companion_portraits.items.${stableKey}`,
+    );
+  }
+  if (Object.keys(items).length === 0) {
+    throw new WebConfigError("assets.companion_portraits.items 至少需要一个立绘键");
+  }
+  return {
+    recommended_width: expectInteger(
+      source.recommended_width,
+      "assets.companion_portraits.recommended_width",
+      1,
+    ),
+    recommended_height: expectInteger(
+      source.recommended_height,
+      "assets.companion_portraits.recommended_height",
+      1,
+    ),
+    items,
   };
 }
 
@@ -780,6 +878,18 @@ function parseMotion(value: unknown): MotionConfig {
     toast_duration_ms: expectNumber(
       source.toast_duration_ms,
       "motion.toast_duration_ms",
+    ),
+    publisher_logo_fade_in_ms: expectNumber(
+      source.publisher_logo_fade_in_ms,
+      "motion.publisher_logo_fade_in_ms",
+    ),
+    publisher_logo_hold_ms: expectNumber(
+      source.publisher_logo_hold_ms,
+      "motion.publisher_logo_hold_ms",
+    ),
+    publisher_logo_fade_out_ms: expectNumber(
+      source.publisher_logo_fade_out_ms,
+      "motion.publisher_logo_fade_out_ms",
     ),
     reduced_motion: expectBoolean(source.reduced_motion, "motion.reduced_motion"),
   };
@@ -831,6 +941,40 @@ function parseNewGameSetup(
       );
     }
   });
+  const modeOptions = parseUniqueIdObjects(
+    source.mode_options,
+    "new_game_setup.mode_options",
+    (entry, path) => ({
+      id: expectEnum(entry.id, NAVIGATION_GAME_MODES, `${path}.id`),
+      label: expectString(entry.label, `${path}.label`),
+      description: expectString(entry.description, `${path}.description`),
+    }),
+  );
+  const configuredModeIds = new Set(modeOptions.map((option) => option.id));
+  if (NAVIGATION_GAME_MODES.some((modeId) => !configuredModeIds.has(modeId))) {
+    throw new WebConfigError(
+      "new_game_setup.mode_options 必须覆盖 single / multiplayer / story / endless",
+    );
+  }
+  const categories = parseUniqueIdObjects(
+    source.categories,
+    "new_game_setup.categories",
+    (entry, path) => ({
+      id: expectEnum(entry.id, NEW_GAME_SETUP_CATEGORIES, `${path}.id`),
+      label: expectString(entry.label, `${path}.label`),
+      description: expectString(entry.description, `${path}.description`),
+    }),
+  );
+  const configuredCategoryIds = new Set(categories.map((entry) => entry.id));
+  if (
+    NEW_GAME_SETUP_CATEGORIES.some(
+      (categoryId) => !configuredCategoryIds.has(categoryId),
+    )
+  ) {
+    throw new WebConfigError(
+      "new_game_setup.categories 必须覆盖全部开局分类",
+    );
+  }
   return {
     name_input: {
       html_type: expectEnum(
@@ -868,6 +1012,142 @@ function parseNewGameSetup(
       ),
     },
     preset_names: presetNames,
+    mode_options: modeOptions,
+    categories,
+    desktop: parseNewGameSetupDesktop(source.desktop),
+    mobile: parseNewGameSetupMobile(source.mobile),
+    copy: parseNewGameSetupCopy(source.copy),
+  };
+}
+
+/** 解析拥有稳定且不重复 ID 的配置对象数组。 */
+function parseUniqueIdObjects<TEntry extends { readonly id: string }>(
+  value: unknown,
+  path: string,
+  parseEntry: (source: JsonObject, entryPath: string) => TEntry,
+): readonly TEntry[] {
+  const entries = expectArray(value, path).map((valueEntry, index) =>
+    parseEntry(expectObject(valueEntry, `${path}[${String(index)}]`), `${path}[${String(index)}]`)
+  );
+  if (entries.length === 0) {
+    throw new WebConfigError(`${path} 至少需要一个选项`);
+  }
+  if (new Set(entries.map((entry) => entry.id)).size !== entries.length) {
+    throw new WebConfigError(`${path} 不能包含重复 ID`);
+  }
+  return entries;
+}
+
+/** 解析开局页桌面三栏布局标尺。 */
+function parseNewGameSetupDesktop(value: unknown): NewGameSetupConfig["desktop"] {
+  const source = expectObject(value, "new_game_setup.desktop");
+  return {
+    navigation_width: expectNumber(source.navigation_width, "new_game_setup.desktop.navigation_width", 1),
+    option_list_width: expectNumber(source.option_list_width, "new_game_setup.desktop.option_list_width", 1),
+    content_height: expectNumber(source.content_height, "new_game_setup.desktop.content_height", 1),
+    summary_height: expectNumber(source.summary_height, "new_game_setup.desktop.summary_height", 1),
+    panel_gap: expectNumber(source.panel_gap, "new_game_setup.desktop.panel_gap"),
+    row_height: expectNumber(source.row_height, "new_game_setup.desktop.row_height", 1),
+    panel_padding: expectNumber(source.panel_padding, "new_game_setup.desktop.panel_padding"),
+  };
+}
+
+/** 解析开局页手机分步布局标尺。 */
+function parseNewGameSetupMobile(value: unknown): NewGameSetupConfig["mobile"] {
+  const source = expectObject(value, "new_game_setup.mobile");
+  return {
+    step_header_height: expectNumber(source.step_header_height, "new_game_setup.mobile.step_header_height", 1),
+    option_area_height: expectNumber(source.option_area_height, "new_game_setup.mobile.option_area_height", 1),
+    preview_height: expectNumber(source.preview_height, "new_game_setup.mobile.preview_height", 1),
+    summary_height: expectNumber(source.summary_height, "new_game_setup.mobile.summary_height", 1),
+    row_height: expectNumber(source.row_height, "new_game_setup.mobile.row_height", 1),
+    panel_padding: expectNumber(source.panel_padding, "new_game_setup.mobile.panel_padding"),
+  };
+}
+
+/** 解析开局页布局中不依赖领域的文案。 */
+function parseNewGameSetupCopy(value: unknown): NewGameSetupConfig["copy"] {
+  const source = expectObject(value, "new_game_setup.copy");
+  return {
+    navigation_title: expectString(source.navigation_title, "new_game_setup.copy.navigation_title"),
+    option_list_title: expectString(source.option_list_title, "new_game_setup.copy.option_list_title"),
+    preview_title: expectString(source.preview_title, "new_game_setup.copy.preview_title"),
+    summary_title: expectString(source.summary_title, "new_game_setup.copy.summary_title"),
+    summary_format: expectString(source.summary_format, "new_game_setup.copy.summary_format"),
+    step_format: expectString(source.step_format, "new_game_setup.copy.step_format"),
+    previous_step: expectString(source.previous_step, "new_game_setup.copy.previous_step"),
+    next_step: expectString(source.next_step, "new_game_setup.copy.next_step"),
+    selected_mark: expectString(source.selected_mark, "new_game_setup.copy.selected_mark"),
+    name_description: expectString(source.name_description, "new_game_setup.copy.name_description"),
+    unavailable_mode: expectString(source.unavailable_mode, "new_game_setup.copy.unavailable_mode"),
+  };
+}
+
+/** 解析通讯式分步教程及其聚焦目标。 */
+function parseGuidedTutorial(value: unknown): GuidedTutorialConfig {
+  const source = expectObject(value, "guided_tutorial");
+  const steps = parseUniqueIdObjects(
+    source.steps,
+    "guided_tutorial.steps",
+    (entry, path) => ({
+      id: expectString(entry.id, `${path}.id`),
+      speaker: expectString(entry.speaker, `${path}.speaker`),
+      title: expectString(entry.title, `${path}.title`),
+      instruction: expectString(entry.instruction, `${path}.instruction`),
+      target_test_id: expectString(entry.target_test_id, `${path}.target_test_id`),
+    }),
+  );
+  return {
+    title: expectString(source.title, "guided_tutorial.title"),
+    step_format: expectString(source.step_format, "guided_tutorial.step_format"),
+    previous_label: expectString(source.previous_label, "guided_tutorial.previous_label"),
+    next_label: expectString(source.next_label, "guided_tutorial.next_label"),
+    complete_label: expectString(source.complete_label, "guided_tutorial.complete_label"),
+    skip_label: expectString(source.skip_label, "guided_tutorial.skip_label"),
+    missing_target_label: expectString(source.missing_target_label, "guided_tutorial.missing_target_label"),
+    header_step_width_ratio: expectSplitRatio(
+      source.header_step_width_ratio,
+      "guided_tutorial.header_step_width_ratio",
+    ),
+    spotlight_padding: expectNumber(source.spotlight_padding, "guided_tutorial.spotlight_padding"),
+    spotlight_border_width: expectNumber(source.spotlight_border_width, "guided_tutorial.spotlight_border_width", 1),
+    dialog_panel_padding: expectNumber(source.dialog_panel_padding, "guided_tutorial.dialog_panel_padding"),
+    desktop_dialog_width: expectNumber(source.desktop_dialog_width, "guided_tutorial.desktop_dialog_width", 1),
+    desktop_dialog_height: expectNumber(source.desktop_dialog_height, "guided_tutorial.desktop_dialog_height", 1),
+    mobile_dialog_height: expectNumber(source.mobile_dialog_height, "guided_tutorial.mobile_dialog_height", 1),
+    fallback_target_width: expectNumber(source.fallback_target_width, "guided_tutorial.fallback_target_width", 1),
+    fallback_target_height: expectNumber(source.fallback_target_height, "guided_tutorial.fallback_target_height", 1),
+    steps,
+  };
+}
+
+/** 解析开局前的教程位置通知。 */
+function parsePreGameNotice(value: unknown): PreGameNoticeConfig {
+  const source = expectObject(value, "pre_game_notice");
+  return {
+    title: expectString(source.title, "pre_game_notice.title"),
+    body: expectString(source.body, "pre_game_notice.body"),
+    continue_label: expectString(source.continue_label, "pre_game_notice.continue_label"),
+    tutorial_label: expectString(source.tutorial_label, "pre_game_notice.tutorial_label"),
+  };
+}
+
+/** 解析制作方开场 LOGO 的代码文字与几何配置。 */
+function parsePublisherSplash(value: unknown): PublisherSplashConfig {
+  const source = expectObject(value, "publisher_splash");
+  return {
+    title: expectString(source.title, "publisher_splash.title"),
+    subtitle: expectString(source.subtitle, "publisher_splash.subtitle"),
+    background_asset: expectOptionalString(source.background_asset, "publisher_splash.background_asset"),
+    background_opacity: expectRatio(
+      source.background_opacity,
+      "publisher_splash.background_opacity",
+    ),
+    content_width: expectNumber(source.content_width, "publisher_splash.content_width", 1),
+    title_height: expectNumber(source.title_height, "publisher_splash.title_height", 1),
+    subtitle_height: expectNumber(source.subtitle_height, "publisher_splash.subtitle_height", 1),
+    decoration_width: expectNumber(source.decoration_width, "publisher_splash.decoration_width", 1),
+    decoration_gap: expectNumber(source.decoration_gap, "publisher_splash.decoration_gap"),
   };
 }
 
@@ -1174,6 +1454,9 @@ export function parseWebGameConfig(value: unknown): WebGameConfig {
       source.new_game_setup,
       controls.max_player_name_characters,
     ),
+    guided_tutorial: parseGuidedTutorial(source.guided_tutorial),
+    pre_game_notice: parsePreGameNotice(source.pre_game_notice),
+    publisher_splash: parsePublisherSplash(source.publisher_splash),
     layout: parseLayout(source.layout),
     storage: parseStorage(source.storage),
     update_log: parseUpdateLog(source.update_log),

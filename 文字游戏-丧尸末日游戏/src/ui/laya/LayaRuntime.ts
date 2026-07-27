@@ -44,8 +44,10 @@ export interface LayaNodeLike {
   mouseEnabled: boolean;
   zOrder: number;
   parent: LayaNodeLike | null;
+  readonly numChildren?: number;
   scrollRect?: LayaRectangleLike;
   addChild<T extends LayaNodeLike>(child: T): T;
+  getChildAt?(index: number): LayaNodeLike;
   getChildByName?(name: string): LayaNodeLike | null;
   removeChildren(beginIndex?: number, endIndex?: number): LayaNodeLike;
   removeSelf(): LayaNodeLike;

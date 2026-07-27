@@ -1,6 +1,6 @@
 import { DomainError } from "./errors";
 
-export type GameMode = "single" | "multiplayer" | "story";
+export type GameMode = "single" | "multiplayer" | "story" | "endless";
 
 /** 一局游戏与所长姓名分离保存的开局档案。 */
 export interface CampaignProfileState {
@@ -20,6 +20,8 @@ export interface NewGameSetup {
 
 export interface PlayerState {
   name: string;
+  age: number;
+  lifespan: number;
   health: number;
   attack: number;
   defense: number;
@@ -36,6 +38,7 @@ export interface PlayerState {
 
 export interface ShelterState {
   population: number;
+  hope: number;
   group_hunger: number;
   health: number;
   defense_damage: number;
@@ -78,6 +81,10 @@ export interface CompanionState {
   companion_id: string;
   trust: number;
   status: CompanionStatus;
+  equipped_weapon_id: string | null;
+  equipped_armor_id: string | null;
+  interaction_cooldown_turns: number;
+  interaction_count: number;
 }
 
 export interface BattleState {
@@ -120,6 +127,28 @@ export interface ExpeditionState {
   remaining_steps: number;
   maximum_steps: number;
   events_resolved: number;
+}
+
+/** 强制返程时一种物资的可审计损失。 */
+export interface ExpeditionLossItemState {
+  source: "carried" | "loot";
+  item_id: string;
+  item_name: string;
+  original_quantity: number;
+  kept_quantity: number;
+  lost_quantity: number;
+}
+
+/** 步数耗尽后供失败页和存档共用的结构化摘要。 */
+export interface ExpeditionFailureState {
+  reason: "steps_exhausted";
+  kept_percent: number;
+  health_before: number;
+  health_after: number;
+  total_original: number;
+  total_kept: number;
+  total_lost: number;
+  items: ExpeditionLossItemState[];
 }
 
 export interface CommunicationLogEntry {
@@ -165,6 +194,7 @@ export interface RestorableGameState {
   inventory: InventoryState;
   research: ResearchState;
   expedition: ExpeditionState | null;
+  last_expedition_failure: ExpeditionFailureState | null;
 }
 
 export interface CheckpointState {

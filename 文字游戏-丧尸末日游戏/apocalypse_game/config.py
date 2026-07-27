@@ -24,6 +24,8 @@ PLAYER_EFFECT_FIELDS = frozenset(
         "parts",
         "negative_status",
         "antidotes",
+        "age",
+        "lifespan",
     }
 )
 SHELTER_EFFECT_FIELDS = frozenset(
@@ -38,6 +40,7 @@ SHELTER_EFFECT_FIELDS = frozenset(
         "magazines",
         "toys",
         "game_consoles",
+        "hope",
     }
 )
 STORY_EFFECT_FIELDS = frozenset({"humanity", "evidence", "infection_pressure"})
@@ -142,6 +145,12 @@ class GameConfig:
         if not isinstance(relative_path, str) or not relative_path:
             raise ConfigError("缺少路径配置：{}".format(path_key))
         return _resolve_project_path(self.project_root, relative_path, path_key)
+
+    @property
+    def desktop_save_schema_version(self) -> int:
+        """返回旧桌面版独立使用的存档结构版本。"""
+
+        return self.section("runtime")["desktop_save_schema_version"]
 
     def city(self, city_id: str) -> Mapping[str, Any]:
         """按英文城市标识查找城市配置。"""
@@ -295,6 +304,15 @@ class ConfigLoader:
         minimum_tk = data["runtime"].get("minimum_tk_version")
         if isinstance(minimum_tk, bool) or not isinstance(minimum_tk, (int, float)):
             raise ConfigError("runtime.minimum_tk_version 必须是数字")
+        desktop_save_version = data["runtime"].get("desktop_save_schema_version")
+        if (
+            not _is_integer(desktop_save_version)
+            or desktop_save_version < 1
+            or desktop_save_version > data["save_schema_version"]
+        ):
+            raise ConfigError(
+                "runtime.desktop_save_schema_version 必须是不超过主存档版本的正整数"
+            )
         paths = data["paths"]
         for path_key in (
             "events",
@@ -848,7 +866,7 @@ class ConfigLoader:
             "activity_high",
             "combat",
         }
-        if set(failures) != required_failure_ids:
+        if not required_failure_ids <= set(failures):
             raise ConfigError("rules.failure_endings 必须完整配置所有失败类型")
         for failure_id, failure in failures.items():
             if not isinstance(failure, Mapping):

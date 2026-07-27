@@ -182,6 +182,57 @@ class ApplicationTests(unittest.TestCase):
             rules.check_game_over(state),
         )
 
+    def test_hope_and_lifespan_boundaries_are_inclusive(self) -> None:
+        """希望归零或年龄达到寿命时应立即触发对应失败。"""
+
+        self.application.start_new_game(["白菜"], "single")
+        state = self.application.state
+        rules = GameRules(ConfigLoader.load(CONFIG_PATH))
+        state.shelter.hope = 1
+        self.assertIsNone(rules.check_game_over(state))
+        state.shelter.hope = 0
+        self.assertEqual(
+            self.application.config.text("game_over_hope"),
+            rules.check_game_over(state),
+        )
+
+        state.shelter.hope = self.application.config.section("defaults")["shelter"][
+            "hope"
+        ]
+        state.active_player.age = state.active_player.lifespan
+        self.assertEqual(
+            self.application.config.text(
+                "game_over_lifespan",
+                player_name="白菜",
+                lifespan=state.active_player.lifespan,
+            ),
+            rules.check_game_over(state),
+        )
+
+    def test_year_boundary_increases_player_age(self) -> None:
+        """跨年行动应把每位所长年龄增加一岁并记录提示。"""
+
+        self.application.start_new_game(["白菜"], "single")
+        state = self.application.state
+        state.clock.year = 2166
+        state.clock.month = 12
+        state.clock.day = 31
+        state.clock.hour = 17
+        initial_age = state.active_player.age
+
+        messages = GameRules(ConfigLoader.load(CONFIG_PATH)).advance_turn(state)
+
+        self.assertEqual(initial_age + 1, state.active_player.age)
+        self.assertIn(
+            self.application.config.text(
+                "player_aged",
+                player_name="白菜",
+                age=state.active_player.age,
+                lifespan=state.active_player.lifespan,
+            ),
+            messages,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

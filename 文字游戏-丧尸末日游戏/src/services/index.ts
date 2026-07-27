@@ -4,6 +4,7 @@ export * from "./GameClock";
 export * from "./ChronicleService";
 export * from "./GameRules";
 export * from "./CampaignProfileService";
+export * from "./CompanionManagementService";
 export * from "./CityAccessService";
 export * from "./GameModeCapabilityPolicy";
 export * from "./ExplorationService";

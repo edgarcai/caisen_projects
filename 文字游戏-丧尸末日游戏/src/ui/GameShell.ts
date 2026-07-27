@@ -11,6 +11,7 @@ import type {
   LayaSpriteLike,
   LayaStageLike,
 } from "./laya/LayaRuntime";
+import { resolveVisibleDisplayNodeBounds } from "./laya/DisplayNodeLocator";
 import { PageStack } from "./navigation/PageStack";
 import type { GameRoute } from "./navigation/PageStack";
 import {
@@ -30,24 +31,39 @@ import {
   resolveExpeditionProgressScreen,
 } from "./navigation/ExpeditionNavigation";
 import { createChoicePage } from "./pages/ChoicePage";
-import { createCompanionsPage } from "./pages/CompanionsPage";
+import {
+  createCompanionDetailPage,
+  createCompanionEquipmentPage,
+  createCompanionInteractionPage,
+  createCompanionManagementDetailPage,
+  createCompanionManagementPage,
+  createCompanionsPage,
+} from "./pages/CompanionsPage";
 import { createConfirmPage } from "./pages/ConfirmPage";
 import { ConnectionPage } from "./pages/ConnectionPage";
 import { CoverPage } from "./pages/CoverPage";
-import { DashboardPage } from "./pages/DashboardPage";
+import {
+  buildCommunicationLogDocument,
+  DashboardPage,
+} from "./pages/DashboardPage";
 import { createDocumentPage } from "./pages/DocumentPage";
 import {
   createExpeditionCityDetailPage,
   createExpeditionCityListPage,
   createExpeditionDistrictDetailPage,
   createExpeditionDistrictListPage,
+  createExpeditionFailurePage,
   createExpeditionPreparePage,
   createExpeditionStatusPage,
   resolveExpeditionDistrict,
   type ExpeditionDraft,
 } from "./pages/ExpeditionPages";
+import { createGuidedTutorialPage } from "./pages/GuidedTutorialPage";
+import { createManagementOptionDetailPage } from "./pages/ManagementPages";
 import { createNewGameSetupPage } from "./pages/NewGameSetupPage";
 import type { PageView } from "./pages/PageView";
+import { createPreGameNoticePage } from "./pages/PreGameNoticePage";
+import { createPublisherSplashPage } from "./pages/PublisherSplashPage";
 import { createSaveSlotsPage } from "./pages/SaveSlotsPage";
 import { createSuppliesPage } from "./pages/SuppliesPage";
 import {
@@ -73,6 +89,7 @@ import type {
   SaveSlotsPageMode,
   UiCampaignProfileSelection,
   UiActionGroupView,
+  UiCompanionEquipmentSlot,
   UiDocumentView,
   UiNavigationDirective,
   UiOptionView,
@@ -87,6 +104,14 @@ import type {
 interface RenderedPage {
   readonly route: GameRoute;
   readonly view: PageView;
+}
+
+/** 建档页与开局提示之间暂存的完整不可变开局协议。 */
+interface PendingNewGameRequest {
+  readonly mode: GameMode;
+  readonly playerNames: readonly string[];
+  readonly profile: UiCampaignProfileSelection;
+  readonly saveSlotId: number;
 }
 
 /**
@@ -115,6 +140,7 @@ export class GameShell {
   private readonly resizeCoordinator: DeferredResizeCoordinator;
   private viewportListenersInstalled: boolean;
   private expeditionDraft: ExpeditionDraft;
+  private pendingNewGameRequest: PendingNewGameRequest | null;
 
   /**
    * 保存舞台、配置和倒置端口，但不在构造阶段触发领域请求。
@@ -140,7 +166,7 @@ export class GameShell {
       config.controls,
     );
     this.host = this.factory.container("game-ui-root");
-    this.navigation = new PageStack({ screen: "menu" });
+    this.navigation = new PageStack({ screen: "publisher_splash" });
     this.snapshot = null;
     this.renderedPages = [];
     this.preferences = settingsPort.load({
@@ -164,6 +190,7 @@ export class GameShell {
     );
     this.viewportListenersInstalled = false;
     this.expeditionDraft = emptyExpeditionDraft();
+    this.pendingNewGameRequest = null;
   }
 
   /**
@@ -187,9 +214,6 @@ export class GameShell {
     ]);
     this.snapshot = snapshot;
     this.canLoad = canLoad;
-    if (this.config.update_log.auto_open) {
-      this.navigation.push({ screen: "update_log" });
-    }
     this.render(true);
   }
 
@@ -362,10 +386,35 @@ export class GameShell {
     snapshot: GameUiSnapshot,
   ): PageView {
     switch (route.screen) {
+      case "publisher_splash":
+        return createPublisherSplashPage(
+          this.runtime,
+          this.factory,
+          this.config,
+          layout,
+          this.completePublisherSplash,
+          this.preferences.reducedMotion,
+        );
       case "menu":
         return this.createCover(layout, snapshot);
       case "name_input":
         return this.createNameInput(route, layout, snapshot);
+      case "pre_game_notice":
+        return createPreGameNoticePage(
+          this.runtime,
+          this.factory,
+          this.config,
+          layout,
+          {
+            back: this.closePreGameNotice,
+            continueGame: (): void => {
+              void this.startPendingNewGame(false);
+            },
+            openTutorial: (): void => {
+              void this.startPendingNewGame(true);
+            },
+          },
+        );
       case "update_log":
         return this.createDocumentRoute(
           layout,
@@ -392,8 +441,20 @@ export class GameShell {
         return this.createManagementCategories(layout, snapshot);
       case "management_options":
         return this.createManagementOptions(route, layout, snapshot);
+      case "management_option_detail":
+        return this.createManagementOptionDetail(route, layout, snapshot);
       case "companions":
         return this.createCompanions(layout, snapshot);
+      case "companion_detail":
+        return this.createCompanionDetail(route, layout, snapshot);
+      case "companion_management":
+        return this.createCompanionManagement(layout, snapshot);
+      case "companion_management_detail":
+        return this.createCompanionManagementDetail(route, layout, snapshot);
+      case "companion_equipment":
+        return this.createCompanionEquipment(route, layout, snapshot);
+      case "companion_interaction":
+        return this.createCompanionInteraction(route, layout, snapshot);
       case "supplies":
         return this.createSupplies(layout, snapshot);
       case "warehouse":
@@ -414,15 +475,32 @@ export class GameShell {
         return this.createExpeditionPrepare(layout, snapshot);
       case "expedition_status":
         return this.createExpeditionStatus(layout, snapshot);
+      case "expedition_failure":
+        return this.createExpeditionFailure(layout, snapshot);
+      case "communication_log":
+        return this.createDocumentRoute(
+          layout,
+          "page-communication-log",
+          buildCommunicationLogDocument(this.config, snapshot.logs),
+          this.config.texts.back,
+          this.goBack,
+        );
       case "history":
         return this.createHistory(layout, snapshot);
       case "tutorial":
-        return this.createDocumentRoute(
+        return createGuidedTutorialPage(
+          this.runtime,
+          this.factory,
+          this.config,
           layout,
-          "page-tutorial",
-          snapshot.tutorial ?? this.emptyDocument(this.findActionLabel("tutorial")),
-          this.config.texts.close,
-          this.goBack,
+          (targetTestId) => {
+            this.revealTutorialTarget(targetTestId);
+            return resolveVisibleDisplayNodeBounds(this.host, targetTestId);
+          },
+          {
+            onComplete: this.closeGuidedTutorial,
+            onSkip: this.closeGuidedTutorial,
+          },
         );
       case "message":
         return this.createDocumentRoute(
@@ -514,12 +592,17 @@ export class GameShell {
       this.config,
       layout,
       mode,
-      snapshot.playerCounts[mode],
+      snapshot.playerCounts,
       snapshot.campaignProfileOptions,
       snapshot.saveSlots,
       this.goBack,
-      (names, profile, slotId): void => {
-        void this.startGame(mode, names, profile, slotId);
+      (names, profile, slotId, selectedMode): void => {
+        this.openPreGameNotice({
+          mode: selectedMode,
+          playerNames: [...names],
+          profile: { ...profile },
+          saveSlotId: slotId,
+        });
       },
       (): void => {
         this.nativeTextInputPolicy.prepare();
@@ -756,7 +839,40 @@ export class GameShell {
         title: prompt.title,
         prompt,
         onBack: this.goBack,
-        onSelect: (option): void => {
+        onSelect: (option): void => { this.openManagementOptionDetail(
+          categoryId,
+          option.id,
+        ); },
+      },
+    );
+  }
+
+  /** 创建经营项目的需求与说明页，确认后才执行一次。 */
+  private createManagementOptionDetail(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const categoryId = route.context?.categoryId ?? "";
+    const optionId = route.context?.optionId ?? "";
+    const option = snapshot.managementCategories
+      .find((category) => category.id === categoryId)
+      ?.options.find((candidate) => candidate.id === optionId);
+    if (option === undefined) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.management_detail_title,
+      );
+    }
+    return createManagementOptionDetailPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      option,
+      {
+        back: this.goBack,
+        confirm: (): void => {
           void this.performManagementAction(categoryId, option.id);
         },
       },
@@ -775,9 +891,138 @@ export class GameShell {
       this.factory,
       this.config,
       layout,
-      this.findActionLabel("companions"),
       snapshot.companions,
-      this.goBack,
+      {
+        back: this.goBack,
+        openCompanion: this.openCompanionDetail,
+        openManagement: this.openCompanionManagement,
+      },
+    );
+  }
+
+  /** 创建单个伙伴的立绘与公开/解锁档案页。 */
+  private createCompanionDetail(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const companion = this.companion(snapshot, route.context?.companionId);
+    if (companion === null) {
+      return this.createMissingSelectionPage(layout, this.config.texts.companion_detail_title);
+    }
+    return createCompanionDetailPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      companion,
+      {
+        back: this.goBack,
+        manage: this.openCompanionManagementDetail,
+      },
+    );
+  }
+
+  /** 创建伙伴管理的成员选择页。 */
+  private createCompanionManagement(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createCompanionManagementPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.companions,
+      {
+        back: this.goBack,
+        openCompanion: this.openCompanionManagementDetail,
+      },
+    );
+  }
+
+  /** 创建单个伙伴的配装与互动分流页。 */
+  private createCompanionManagementDetail(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const companion = this.companion(snapshot, route.context?.companionId);
+    if (companion === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.companion_management_title,
+      );
+    }
+    return createCompanionManagementDetailPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      companion,
+      {
+        back: this.goBack,
+        openEquipment: this.openCompanionEquipment,
+        openInteraction: this.openCompanionInteraction,
+      },
+    );
+  }
+
+  /** 创建使用实时仓库目录的单栏位配装页。 */
+  private createCompanionEquipment(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const companion = this.companion(snapshot, route.context?.companionId);
+    const slot = route.context?.equipmentSlot;
+    if (companion === null || slot === undefined) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.companion_equipment_title,
+      );
+    }
+    return createCompanionEquipmentPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      companion,
+      slot,
+      {
+        back: this.goBack,
+        equip: (companionId, equipmentSlot, itemId): void => {
+          void this.equipCompanion(companionId, equipmentSlot, itemId);
+        },
+      },
+    );
+  }
+
+  /** 创建带冷却和条件的伙伴互动页。 */
+  private createCompanionInteraction(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const companion = this.companion(snapshot, route.context?.companionId);
+    if (companion === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.companion_interaction_title,
+      );
+    }
+    return createCompanionInteractionPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      companion,
+      {
+        back: this.goBack,
+        interact: (companionId, interactionId): void => {
+          void this.interactWithCompanion(companionId, interactionId);
+        },
+      },
     );
   }
 
@@ -999,13 +1244,21 @@ export class GameShell {
 
   /** 为失效路由提供可返回的安全页面，避免旧草稿导致渲染崩溃。 */
   private createMissingExpeditionSelection(layout: ResponsiveLayout): PageView {
+    return this.createMissingSelectionPage(
+      layout,
+      this.config.texts.expedition_prepare_title,
+    );
+  }
+
+  /** 为任意失效上下文创建可返回的配置化降级页。 */
+  private createMissingSelectionPage(
+    layout: ResponsiveLayout,
+    title: string,
+  ): PageView {
     return this.createDocumentRoute(
       layout,
-      "page-expedition-selection-missing",
-      {
-        title: this.config.texts.expedition_prepare_title,
-        body: this.config.texts.expedition_unselected,
-      },
+      "page-selection-missing",
+      { title, body: this.config.texts.expedition_unselected },
       this.config.texts.back,
       this.goBack,
     );
@@ -1018,6 +1271,14 @@ export class GameShell {
   ) {
     const cityId = routeCityId ?? this.expeditionDraft.cityId;
     return snapshot.cities.find((city) => city.id === cityId) ?? null;
+  }
+
+  /** 按路由上下文解析伙伴，失效 ID 不隐式切换成其他人。 */
+  private companion(
+    snapshot: GameUiSnapshot,
+    companionId?: string,
+  ): GameUiSnapshot["companions"][number] | null {
+    return snapshot.companions.find((candidate) => candidate.id === companionId) ?? null;
   }
 
   /** 创建继续深入与安全返程的远征状态页。 */
@@ -1051,6 +1312,27 @@ export class GameShell {
         continueExpedition: (): void => { void this.continueExpedition(); },
         safeReturn: (): void => { void this.safeReturnExpedition(); },
       },
+    );
+  }
+
+  /** 创建步数耗尽后必须确认的物资与生命损失结算页。 */
+  private createExpeditionFailure(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    if (snapshot.expeditionFailure === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.expedition_failure_title,
+      );
+    }
+    return createExpeditionFailurePage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.expeditionFailure,
+      { returnToDashboard: this.returnToDashboard },
     );
   }
 
@@ -1164,8 +1446,7 @@ export class GameShell {
         ...(inGame
           ? {
               openTutorial: (): void => {
-                this.navigation.push({ screen: "tutorial" });
-                this.render();
+                this.openGuidedTutorial();
               },
               openReturnMenu: (): void => {
                 this.navigation.push({ screen: "return_menu_confirm" });
@@ -1228,9 +1509,61 @@ export class GameShell {
    * 打开指定模式的姓名输入页。
    */
   private openNameInput(mode: GameMode): void {
+    this.pendingNewGameRequest = null;
     this.navigation.push({ screen: "name_input", context: { mode } });
     this.render();
   }
+
+  /** 暂存完整建档选择，并把教程位置提示压在建档页之上。 */
+  private openPreGameNotice(request: PendingNewGameRequest): void {
+    this.pendingNewGameRequest = request;
+    this.navigation.push({ screen: "pre_game_notice" });
+    this.render();
+  }
+
+  /** 关闭开局提示并回到仍保留输入状态的建档页。 */
+  private readonly closePreGameNotice = (): void => {
+    this.pendingNewGameRequest = null;
+    this.goBack();
+  };
+
+  /** 从设置退出覆盖页链，确保教程直接叠加在真实指挥台上。 */
+  private openGuidedTutorial(): void {
+    this.navigation.reset({ screen: "dashboard" });
+    this.navigation.push({ screen: "tutorial" });
+    this.render(true);
+  }
+
+  /** 让紧凑布局中的教程目标先滚入视口，再计算聚焦边界。 */
+  private revealTutorialTarget(targetTestId: string): void {
+    const dashboard = [...this.renderedPages]
+      .reverse()
+      .find((entry) => entry.route.screen === "dashboard")?.view;
+    if (dashboard instanceof DashboardPage) {
+      dashboard.revealTutorialTarget(
+        targetTestId,
+        this.config.guided_tutorial.spotlight_padding,
+      );
+    }
+  }
+
+  /** 完成或跳过分步引导后回到它下方的指挥台。 */
+  private readonly closeGuidedTutorial = (): void => {
+    this.navigation.pop();
+    this.render(true);
+  };
+
+  /** 播放制作方开场后再建立封面与自动更新日志层级。 */
+  private readonly completePublisherSplash = (): void => {
+    if (this.navigation.current().screen !== "publisher_splash") {
+      return;
+    }
+    this.navigation.reset({ screen: "menu" });
+    if (this.config.update_log.auto_open) {
+      this.navigation.push({ screen: "update_log" });
+    }
+    this.render(true);
+  };
 
   /** 按读取或写入语义打开六栏存档覆盖页。 */
   private openSaveSlots(mode: SaveSlotsPageMode): void {
@@ -1275,6 +1608,57 @@ export class GameShell {
     });
     this.render();
   }
+
+  /** 在经营项目执行前先压入需求详情页。 */
+  private openManagementOptionDetail(categoryId: string, optionId: string): void {
+    this.navigation.push({
+      screen: "management_option_detail",
+      context: { categoryId, optionId },
+    });
+    this.render();
+  }
+
+  /** 从伙伴列表压入指定人物的完整档案。 */
+  private readonly openCompanionDetail = (companionId: string): void => {
+    this.navigation.push({ screen: "companion_detail", context: { companionId } });
+    this.render();
+  };
+
+  /** 从档案页进入伙伴管理的成员选择页。 */
+  private readonly openCompanionManagement = (): void => {
+    this.navigation.push({ screen: "companion_management" });
+    this.render();
+  };
+
+  /** 打开指定伙伴的配装与互动分流。 */
+  private readonly openCompanionManagementDetail = (companionId: string): void => {
+    this.navigation.push({
+      screen: "companion_management_detail",
+      context: { companionId },
+    });
+    this.render();
+  };
+
+  /** 打开指定伙伴的武器或防具实时仓库列表。 */
+  private readonly openCompanionEquipment = (
+    companionId: string,
+    equipmentSlot: UiCompanionEquipmentSlot,
+  ): void => {
+    this.navigation.push({
+      screen: "companion_equipment",
+      context: { companionId, equipmentSlot },
+    });
+    this.render();
+  };
+
+  /** 打开指定伙伴的可用互动列表。 */
+  private readonly openCompanionInteraction = (companionId: string): void => {
+    this.navigation.push({
+      screen: "companion_interaction",
+      context: { companionId },
+    });
+    this.render();
+  };
 
   /** 根据待决事件和远征上下文打开正确的探索页。 */
   private openExpedition(): void {
@@ -1364,11 +1748,31 @@ export class GameShell {
     playerNames: readonly string[],
     profile: UiCampaignProfileSelection,
     saveSlotId: number,
+    showTutorial = false,
   ): Promise<void> {
     this.expeditionDraft = emptyExpeditionDraft();
     await this.execute(
       { type: "start_game", mode, playerNames, profile, saveSlotId },
-      (): void => { this.beginConnectionTransition(); },
+      (): void => {
+        this.pendingNewGameRequest = null;
+        this.beginConnectionTransition(showTutorial);
+      },
+    );
+  }
+
+  /** 按开局提示选择启动战役，并决定通讯完成后是否叠加引导。 */
+  private async startPendingNewGame(showTutorial: boolean): Promise<void> {
+    const request = this.pendingNewGameRequest;
+    if (request === null) {
+      this.closePreGameNotice();
+      return;
+    }
+    await this.startGame(
+      request.mode,
+      request.playerNames,
+      request.profile,
+      request.saveSlotId,
+      showTutorial,
     );
   }
 
@@ -1384,7 +1788,7 @@ export class GameShell {
   }
 
   /** 以配置化时长启动通讯过场，完成后进入指挥台或已生成结局。 */
-  private beginConnectionTransition(): void {
+  private beginConnectionTransition(showTutorial = false): void {
     this.clearConnectionTimer();
     this.navigation.reset({ screen: "connection" });
     this.connectionTimer = globalThis.setTimeout(() => {
@@ -1395,6 +1799,8 @@ export class GameShell {
       this.navigation.reset({ screen: "dashboard" });
       if (this.requireSnapshot().ended) {
         this.navigation.push({ screen: "ending" });
+      } else if (showTutorial) {
+        this.navigation.push({ screen: "tutorial" });
       }
       this.render(true);
     }, this.connectionDuration());
@@ -1615,6 +2021,31 @@ export class GameShell {
     );
   }
 
+  /** 向应用层提交伙伴栏位装备或卸下意图。 */
+  private async equipCompanion(
+    companionId: string,
+    slot: UiCompanionEquipmentSlot,
+    itemId: string | null,
+  ): Promise<void> {
+    await this.execute(
+      { type: "companion_equip", companionId, slot, itemId },
+      (): void => undefined,
+      true,
+    );
+  }
+
+  /** 向应用层提交一次配置化伙伴互动。 */
+  private async interactWithCompanion(
+    companionId: string,
+    interactionId: string,
+  ): Promise<void> {
+    await this.execute(
+      { type: "companion_interact", companionId, interactionId },
+      (): void => undefined,
+      true,
+    );
+  }
+
   /** 保存远征目标城市并进入详情页，区划选择随城市切换而重置。 */
   private readonly openExpeditionCity = (cityId: string): void => {
     this.expeditionDraft = {
@@ -1709,6 +2140,12 @@ export class GameShell {
     }
   }
 
+  /** 从失败结算或浮层安全回到指挥台根页。 */
+  private readonly returnToDashboard = (): void => {
+    this.navigation.reset({ screen: "dashboard" });
+    this.render();
+  };
+
   /**
    * 执行一个战斗回合。
    */
@@ -1758,6 +2195,7 @@ export class GameShell {
   private async returnToMenu(): Promise<void> {
     this.clearConnectionTimer();
     this.expeditionDraft = emptyExpeditionDraft();
+    this.pendingNewGameRequest = null;
     await this.execute(
       { type: "return_to_menu" },
       (): void => { this.navigation.reset({ screen: "menu" }); },
@@ -1832,7 +2270,11 @@ export class GameShell {
   /** Escape 在游戏中打开功能菜单，在菜单链内部则只关闭最上层。 */
   private toggleFunctionMenu(): void {
     const screen = this.navigation.current().screen;
-    if (screen === "menu" || screen === "connection") {
+    if (
+      screen === "publisher_splash"
+      || screen === "menu"
+      || screen === "connection"
+    ) {
       return;
     }
     const routes = this.navigation.entries();
@@ -1957,13 +2399,6 @@ export class GameShell {
    */
   private findNavigation(id: string): NavigationToken | undefined {
     return this.config.navigation.find((item) => item.id === id);
-  }
-
-  /**
-   * 返回指挥台行动标签。
-   */
-  private findActionLabel(id: string): string {
-    return this.findAction(id)?.label ?? "";
   }
 
   /**

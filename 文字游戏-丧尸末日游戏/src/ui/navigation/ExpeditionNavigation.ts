@@ -7,7 +7,7 @@ import type {
 export type ExpeditionNavigationSnapshot = Pick<
   GameUiSnapshot,
   "explorationPrompt" | "expeditionStatus"
->;
+> & Partial<Pick<GameUiSnapshot, "expeditionFailure">>;
 
 /**
  * 为指挥台的“探索”入口选择安全页面：先恢复待决事件，再恢复远征，否则进入城市列表。
@@ -35,6 +35,9 @@ export function resolveExpeditionProgressScreen(
   }
   if (snapshot.expeditionStatus !== null) {
     return "expedition_status";
+  }
+  if (snapshot.expeditionFailure !== null && snapshot.expeditionFailure !== undefined) {
+    return "expedition_failure";
   }
   return "dashboard";
 }

@@ -30,6 +30,9 @@ export interface SaveStateValidationPort {
   /** 校验当前 v5 状态的精确结构。 */
   validateRawV5?(rawState: unknown): unknown;
 
+  /** 校验当前 v6 状态的精确结构。 */
+  validateRawV6?(rawState: unknown): unknown;
+
   /** 校验已经构造完成的领域聚合。 */
   validate(state: GameState): void;
 
@@ -402,6 +405,11 @@ export class LocalStorageSaveRepository implements SaveRepository {
           throw new SaveDataError("缺少存档版本 4 的结构校验器。");
         }
         this.validator.validateRawV4(prepared.game_state);
+      } else if (version === 5) {
+        if (this.validator.validateRawV5 === undefined) {
+          throw new SaveDataError("缺少存档版本 5 的结构校验器。");
+        }
+        this.validator.validateRawV5(prepared.game_state);
       } else {
         throw new SaveDataError(`缺少存档版本 ${String(version)} 的结构校验器。`);
       }
@@ -440,6 +448,13 @@ export class LocalStorageSaveRepository implements SaveRepository {
         throw new SaveDataError("缺少当前存档版本 5 的结构校验器。");
       }
       this.validator.validateRawV5(rawState);
+      return;
+    }
+    if (this.schemaVersion === 6) {
+      if (this.validator.validateRawV6 === undefined) {
+        throw new SaveDataError("缺少当前存档版本 6 的结构校验器。");
+      }
+      this.validator.validateRawV6(rawState);
       return;
     }
     throw new SaveDataError(

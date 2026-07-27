@@ -43,7 +43,11 @@ export function resolvePageScaffoldGeometry(
   const pageLeft =
     layout.contentLeft + (layout.contentWidth - pageWidth) / 2;
   const pageTop = layout.usesCompactUi
-    ? layout.safeArea.top + config.layout.mobile.sheet_top_margin
+    ? layout.safeArea.top + (
+        layout.isLandscape
+          ? layout.outerPadding
+          : config.layout.mobile.sheet_top_margin
+      )
     : layout.safeArea.top + layout.outerPadding;
   const pageBottom =
     layout.stageHeight - layout.safeArea.bottom - layout.outerPadding;

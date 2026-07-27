@@ -107,11 +107,11 @@ describe("H5 剧情、战斗与探索命令流", () => {
     expect(state.battle).toMatchObject({ finished: true, retreated: true });
     expect(snapshot.battle).toBeNull();
     expect(requireAction(snapshot, "shelter_management").disabled).toBe(false);
-    expect(snapshot.managementCategories).toHaveLength(5);
+    expect(snapshot.managementCategories).toHaveLength(6);
   });
 
   it("探索事件只抽取一次，并在显式存档恢复后继续同一事件", () => {
-    const random = new ScriptedRandomSource([50], [0, 4]);
+    const random = new ScriptedRandomSource([90, 50], [0, 4]);
     const writer = buildH5Harness({ random });
     writer.adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
 
@@ -175,7 +175,7 @@ describe("H5 经营、物品与失败命令流", () => {
     const wall = facilityCategory?.options.find(
       (option) => option.id === "facility::outer_wall",
     );
-    expect(wall).toMatchObject({ disabled: true });
+    expect(wall).toMatchObject({ disabled: false, lockedAppearance: true });
     const before = JSON.stringify(state);
 
     const locked = harness.adapter.execute({

@@ -44,7 +44,12 @@ describe("GameUiAdapter 快照与订阅契约", () => {
 
     expect(snapshot.revision).toBe(0);
     expect(snapshot.brand).toEqual({ title: "避难所", subtitle: "余烬纪元" });
-    expect(snapshot.playerCounts).toEqual({ single: 1, multiplayer: 2, story: 1 });
+    expect(snapshot.playerCounts).toEqual({
+      single: 1,
+      multiplayer: 2,
+      story: 1,
+      endless: 1,
+    });
     expect(snapshot.mode).toBeNull();
     expect(snapshot.activePlayer).toBeNull();
     expect(snapshot.players).toEqual([]);
@@ -99,9 +104,9 @@ describe("GameUiAdapter 快照与订阅契约", () => {
       timeLabel: "6:00",
       turnLabel: "第 0 回合",
     });
-    expect(snapshot.meters).toHaveLength(4);
-    expect(snapshot.resources).toHaveLength(12);
-    expect(snapshot.shelterStats).toHaveLength(8);
+    expect(snapshot.meters).toHaveLength(5);
+    expect(snapshot.resources).toHaveLength(14);
+    expect(snapshot.shelterStats).toHaveLength(9);
     expect(snapshot.actionGroups.map((group) => group.id)).toEqual([
       "core",
       "supplies",
@@ -113,6 +118,7 @@ describe("GameUiAdapter 快照与订阅契约", () => {
       "support",
       "facility",
       "job",
+      "activity",
       "trade",
       "recruit",
     ]);

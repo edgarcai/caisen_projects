@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "from_version": 5,
+  "to_version": 6,
+  "state_defaults": {
+    "player_age": 25,
+    "player_lifespan": 95,
+    "shelter_hope": 60,
+    "companion_equipped_weapon_id": null,
+    "companion_equipped_armor_id": null,
+    "companion_interaction_cooldown_turns": 0,
+    "companion_interaction_count": 0,
+    "last_expedition_failure": null
+  }
+}

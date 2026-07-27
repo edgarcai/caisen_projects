@@ -20,6 +20,14 @@ interface MutableWebConfigDocument {
       input_mode: string;
     };
     preset_names: string[];
+    mode_options: Array<{ id: string; label: string; description: string }>;
+  };
+  guided_tutorial: {
+    header_step_width_ratio: number;
+    steps: Array<{ id: string; target_test_id: string }>;
+  };
+  publisher_splash: {
+    background_opacity: number;
   };
   navigation: MutableNavigationEntry[];
   action_groups: Array<{ id: string; action_ids: string[] }>;
@@ -168,6 +176,64 @@ describe("新游戏姓名配置完整性", () => {
         multiplayer: { maximum: 2 },
       });
     }).not.toThrow();
+  });
+});
+
+describe("开局模式与教程目标完整性", () => {
+  it("解析四种真实模式，并拒绝未知或缺失模式", () => {
+    const parsed = parseWebGameConfig(webConfigDocument);
+    expect(parsed.new_game_setup.mode_options.map((option) => option.id)).toEqual([
+      "single",
+      "multiplayer",
+      "story",
+      "endless",
+    ]);
+
+    const unknown = cloneWebConfig();
+    const missing = cloneWebConfig();
+    const first = unknown.new_game_setup.mode_options[0];
+    if (first === undefined) {
+      throw new Error("测试配置缺少游戏模式。");
+    }
+    first.id = "sandbox";
+    missing.new_game_setup.mode_options = missing.new_game_setup.mode_options.filter(
+      (option) => option.id !== "endless",
+    );
+
+    expect(() => parseWebGameConfig(unknown)).toThrow("single / multiplayer / story / endless");
+    expect(() => parseWebGameConfig(missing)).toThrow("必须覆盖");
+  });
+
+  it("教程每个聚焦 ID 都对应指挥台实际稳定节点", () => {
+    const parsed = parseWebGameConfig(webConfigDocument);
+    const dashboardTargetIds = new Set([
+      "dashboard-active-player",
+      "dashboard-resource-player-food",
+      "dashboard-action-explore",
+      "dashboard-action-shelter_management",
+      "dashboard-action-companions",
+      "dashboard-log",
+      "dashboard-settings",
+    ]);
+
+    expect(parsed.guided_tutorial.steps).toHaveLength(dashboardTargetIds.size);
+    parsed.guided_tutorial.steps.forEach((step) => {
+      expect(dashboardTargetIds.has(step.target_test_id), step.id).toBe(true);
+    });
+  });
+
+  it("教程分栏和制作方背景透明度拒绝越界视觉比例", () => {
+    const invalidTutorial = cloneWebConfig();
+    const invalidSplash = cloneWebConfig();
+    invalidTutorial.guided_tutorial.header_step_width_ratio = 0;
+    invalidSplash.publisher_splash.background_opacity = 1.01;
+
+    expect(() => parseWebGameConfig(invalidTutorial)).toThrow(
+      "必须严格位于 0 到 1 之间",
+    );
+    expect(() => parseWebGameConfig(invalidSplash)).toThrow(
+      "必须位于 0 到 1 之间",
+    );
   });
 });
 

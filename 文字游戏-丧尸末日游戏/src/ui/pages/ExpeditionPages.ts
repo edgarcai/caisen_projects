@@ -8,7 +8,9 @@ import type {
   UiCityView,
   UiExpeditionCarryItemView,
   UiExpeditionCompanionView,
+  UiExpeditionFailureView,
   UiExpeditionStatusView,
+  UiPromptView,
 } from "../ports/GameUiPort";
 import { createChoicePage } from "./ChoicePage";
 import { createConfigDrivenDetailPage } from "./ConfigDrivenDetailPage";
@@ -35,6 +37,11 @@ export interface ExpeditionStatusActions {
   readonly back: () => void;
   readonly continueExpedition: () => void;
   readonly safeReturn: () => void;
+}
+
+/** 强制返程结算页的稳定返回意图。 */
+export interface ExpeditionFailureActions {
+  readonly returnToDashboard: () => void;
 }
 
 /** 城市列表页发出的纯导航意图。 */
@@ -73,32 +80,39 @@ export function createExpeditionCityListPage(
   return createChoicePage(runtime, factory, config, layout, {
     testId: "page-expedition-city-list",
     title: config.texts.expedition_city_list_title,
-    prompt: {
-      id: "expedition-city-list",
-      title: config.texts.expedition_city_title,
-      body: config.texts.expedition_city_list_body,
-      options: cities.map((city) => ({
-        id: city.id,
-        label: formatUiTemplate(config.texts.expedition_city_format, {
-          name: city.label,
-          district: city.districtLabel,
-          relation: city.relationLabel,
-          terrain: city.terrainLabel,
-          steps: city.travelStepCost,
-          status: city.disabled
-            ? config.texts.expedition_requirement_unmet
-            : config.texts.expedition_requirement_met,
-        }),
-        description: city.disabledReason ?? city.description,
-        disabled: false,
-        lockedAppearance: city.disabled,
-        tone: city.disabled ? "default" : "primary",
-      })),
-    },
+    prompt: buildExpeditionCityListPrompt(config, cities),
     onBack: actions.back,
     includeOptionIntelligence: false,
     onSelect: (option): void => { actions.openCity(option.id); },
   });
+}
+
+/** 构建仅展示 A市～H市名、不泄漏默认区划后缀的城市列表。 */
+export function buildExpeditionCityListPrompt(
+  config: GameUiConfig,
+  cities: readonly UiCityView[],
+): UiPromptView {
+  return {
+    id: "expedition-city-list",
+    title: config.texts.expedition_city_title,
+    body: config.texts.expedition_city_list_body,
+    options: cities.map((city) => ({
+      id: city.id,
+      label: formatUiTemplate(config.texts.expedition_city_format, {
+        name: city.label,
+        relation: city.relationLabel,
+        terrain: city.terrainLabel,
+        steps: city.travelStepCost,
+        status: city.disabled
+          ? config.texts.expedition_requirement_unmet
+          : config.texts.expedition_requirement_met,
+      }),
+      description: city.disabledReason ?? city.description,
+      disabled: false,
+      lockedAppearance: city.disabled,
+      tone: city.disabled ? "default" : "primary",
+    })),
+  };
 }
 
 /** 创建城市情报与通行需求详情页，锁定状态只禁用继续按钮。 */
@@ -532,6 +546,84 @@ export function buildExpeditionStatusBody(
   return [
     statusText,
     formatUiTemplate(config.texts.expedition_loot_format, { loot }),
+    status.remainingSteps <= status.eventStepCost
+      ? config.texts.expedition_step_warning
+      : "",
+  ].filter((text) => text.length > 0).join(separator + separator);
+}
+
+/** 创建步数不足后不可略过的远征失败结算页。 */
+export function createExpeditionFailurePage(
+  runtime: LayaRuntimeLike,
+  factory: UiFactory,
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  failure: UiExpeditionFailureView,
+  actions: ExpeditionFailureActions,
+): PageView {
+  const page = new PageScaffold(
+    runtime,
+    factory,
+    config,
+    layout,
+    "page-expedition-failure",
+    config.texts.expedition_failure_title,
+    actions.returnToDashboard,
+    [
+      {
+        id: "return-dashboard",
+        testId: "page-expedition-failure-return",
+        label: config.texts.expedition_failure_continue,
+        tone: "primary",
+        onClick: actions.returnToDashboard,
+      },
+    ],
+  );
+  const body = factory.autoText(page.content, {
+    testId: "page-expedition-failure-body",
+    text: buildExpeditionFailureBody(config, failure),
+    x: 0,
+    y: 0,
+    width: page.contentWidth,
+    fontSize: config.typography.body_size,
+  });
+  page.scroll.setContentHeight(body.height + layout.sectionGap);
+  return page;
+}
+
+/** 按来源分组并格式化强制返程的全部损失与生命结果。 */
+export function buildExpeditionFailureBody(
+  config: GameUiConfig,
+  failure: UiExpeditionFailureView,
+): string {
+  const separator = config.texts.option_intelligence_separator;
+  const itemBody = (source: "carried" | "loot"): string => {
+    const lines = failure.items
+      .filter((item) => item.source === source)
+      .map((item) => formatUiTemplate(config.texts.expedition_failure_item_format, {
+        name: item.name,
+        before: item.before,
+        kept: item.kept,
+        lost: item.lost,
+      }));
+    return lines.length > 0 ? lines.join(separator) : config.texts.expedition_unselected;
+  };
+  return [
+    formatUiTemplate(config.texts.expedition_failure_reason_format, {
+      reason: failure.reason,
+    }),
+    formatUiTemplate(config.texts.expedition_failure_health_format, {
+      before: failure.healthBefore,
+      after: failure.healthAfter,
+    }),
+    formatUiTemplate(config.texts.expedition_failure_summary_format, {
+      percent: failure.keptPercent,
+      before: failure.totalBefore,
+      kept: failure.totalKept,
+      lost: failure.totalLost,
+    }),
+    `${config.texts.expedition_failure_carried_title}${separator}${itemBody("carried")}`,
+    `${config.texts.expedition_failure_loot_title}${separator}${itemBody("loot")}`,
   ].join(separator + separator);
 }
 

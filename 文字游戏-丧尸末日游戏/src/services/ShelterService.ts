@@ -4,6 +4,7 @@ import type {
   JobConfig,
   NumericEffectConfig,
   RecruitConfig,
+  ShelterActivityConfig,
   TradeConfig,
 } from "../domain/content";
 import { ShelterManagementError, StateOperationError } from "../domain/errors";
@@ -26,6 +27,7 @@ export class ShelterService implements RuleModifierProvider {
   private readonly random: RandomSource;
   private readonly facilityById: ReadonlyMap<string, FacilityConfig>;
   private readonly jobById: ReadonlyMap<string, JobConfig>;
+  private readonly activityById: ReadonlyMap<string, ShelterActivityConfig>;
   private readonly tradeById: ReadonlyMap<string, TradeConfig>;
   private readonly recruitById: ReadonlyMap<string, RecruitConfig>;
 
@@ -44,17 +46,21 @@ export class ShelterService implements RuleModifierProvider {
       content.story.facilities.map((facility) => [facility.facility_id, facility]),
     );
     this.jobById = new Map(content.story.jobs.map((job) => [job.job_id, job]));
+    this.activityById = new Map(
+      content.story.activities.map((activity) => [activity.activity_id, activity]),
+    );
     this.tradeById = new Map(content.story.trades.map((trade) => [trade.trade_id, trade]));
     this.recruitById = new Map(
       content.story.recruits.map((recruit) => [recruit.recruit_id, recruit]),
     );
   }
 
-  /** 返回所有设施、工作、买卖和招募项目的实时可用状态。 */
+  /** 返回所有设施、工作、活动、买卖和招募项目的实时可用状态。 */
   public options(state: GameState): ManagementOption[] {
     return [
       ...this.facilityOptions(state),
       ...this.jobOptions(state),
+      ...this.activityOptions(state),
       ...this.tradeOptions(state),
       ...this.recruitOptions(state),
     ];
@@ -69,6 +75,7 @@ export class ShelterService implements RuleModifierProvider {
     switch (category) {
       case "facility": return this.upgradeFacility(state, optionId);
       case "job": return this.performJob(state, optionId);
+      case "activity": return this.performActivity(state, optionId);
       case "trade_buy": return this.buyTrade(state, optionId);
       case "trade_sell": return this.sellTrade(state, optionId);
       case "recruit": return this.recruit(state, optionId);
@@ -189,6 +196,23 @@ export class ShelterService implements RuleModifierProvider {
       description: this.content.text("shelter_job_description", {
         description: job.description,
         duration_hours: job.duration_hours,
+      }),
+    }));
+  }
+
+  /** 构造所有配置化避难所活动选项。 */
+  private activityOptions(state: GameState): ManagementOption[] {
+    return this.content.story.activities.map((activity) => ({
+      optionId: activity.activity_id,
+      label: this.content.text("shelter_activity_label", {
+        activity_name: activity.name,
+      }),
+      category: "activity",
+      available: this.story.requirementsMet(activity.requirements ?? [], state)
+        && this.canPayEffects(state, activity.costs ?? []),
+      description: this.content.text("shelter_activity_description", {
+        description: activity.description,
+        duration_hours: activity.duration_hours,
       }),
     }));
   }
@@ -341,6 +365,35 @@ export class ShelterService implements RuleModifierProvider {
       applied: true,
       consumesTurn: true,
       turnsConsumed: this.durationTurns(job.duration_hours),
+    };
+  }
+
+  /** 支付活动成本并结算希望、活跃度等配置化收益。 */
+  private performActivity(
+    state: GameState,
+    activityId: string,
+  ): ManagementResolution {
+    const activity = this.activityById.get(activityId);
+    if (activity === undefined) {
+      throw new ShelterManagementError(
+        this.content.text("shelter_unknown_activity", { activity_id: activityId }),
+      );
+    }
+    if (!this.story.requirementsMet(activity.requirements ?? [], state)) {
+      return this.unavailable(this.content.text("shelter_activity_locked"));
+    }
+    if (!this.canPayEffects(state, activity.costs ?? [])) {
+      return this.unavailable(
+        this.content.text("shelter_activity_resources_insufficient"),
+      );
+    }
+    this.applyEffects(activity.costs ?? [], state);
+    this.applyEffects(activity.rewards ?? [], state);
+    return {
+      messages: [activity.result_text],
+      applied: true,
+      consumesTurn: true,
+      turnsConsumed: this.durationTurns(activity.duration_hours),
     };
   }
 

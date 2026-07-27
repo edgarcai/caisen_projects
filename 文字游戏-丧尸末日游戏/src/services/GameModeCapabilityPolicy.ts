@@ -3,7 +3,7 @@ import type { GameMode } from "../domain/game-state";
 import type { GameContent } from "./GameContent";
 
 /** 当前版本需要在应用层强制执行的模式能力。 */
-export type GameModeCapability = "narrative" | "boss_combat";
+export type GameModeCapability = "narrative" | "boss_combat" | "endless_survival";
 
 /** 从配置读取模式权限并为应用用例提供统一守卫。 */
 export class GameModeCapabilityPolicy {

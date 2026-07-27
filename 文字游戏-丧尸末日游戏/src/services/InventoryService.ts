@@ -223,15 +223,20 @@ export class InventoryService {
     };
   }
 
-  /** 查询制作物总量并扣除当前已装备的一件同 ID 物品。 */
+  /** 查询制作物总量并扣除所长与全部伙伴占用的同 ID 装备。 */
   private availableCraftedQuantity(
     state: GameState,
     item: CraftedWarehouseItemConfig,
   ): number {
     const total = state.inventory.crafted_items[item.item_id] ?? 0;
-    const equipped = state.inventory.equipped_weapon_id === item.item_id
-      || state.inventory.equipped_armor_id === item.item_id;
-    return Math.max(0, total - (equipped ? 1 : 0));
+    const playerEquipped = [
+      state.inventory.equipped_weapon_id,
+      state.inventory.equipped_armor_id,
+    ].filter((itemId) => itemId === item.item_id).length;
+    const companionEquipped = state.companions.reduce((count, companion) =>
+      count + [companion.equipped_weapon_id, companion.equipped_armor_id]
+        .filter((itemId) => itemId === item.item_id).length, 0);
+    return Math.max(0, total - playerEquipped - companionEquipped);
   }
 
   /** 按稳定 ID 返回制作物配置。 */

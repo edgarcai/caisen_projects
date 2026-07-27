@@ -27,10 +27,10 @@
       "boss_outcomes": {}
     },
     "companions": [
-      {"companion_id": "haocai", "trust": 0, "status": "active"},
-      {"companion_id": "yangguan", "trust": 0, "status": "active"},
-      {"companion_id": "linlan", "trust": 0, "status": "locked"},
-      {"companion_id": "xiaoman", "trust": 0, "status": "locked"}
+      {"companion_id": "haocai", "trust": 0, "status": "active", "equipped_weapon_id": null, "equipped_armor_id": null, "interaction_cooldown_turns": 0, "interaction_count": 0},
+      {"companion_id": "yangguan", "trust": 0, "status": "active", "equipped_weapon_id": null, "equipped_armor_id": null, "interaction_cooldown_turns": 0, "interaction_count": 0},
+      {"companion_id": "linlan", "trust": 0, "status": "locked", "equipped_weapon_id": null, "equipped_armor_id": null, "interaction_cooldown_turns": 0, "interaction_count": 0},
+      {"companion_id": "xiaoman", "trust": 0, "status": "locked", "equipped_weapon_id": null, "equipped_armor_id": null, "interaction_cooldown_turns": 0, "interaction_count": 0}
     ],
     "facility_levels": {
       "field_kitchen": 0,
@@ -305,6 +305,48 @@
       ]
     }
   ],
+  "companion_management": {
+    "slot_labels": {"weapon": "武器", "armor": "防具"},
+    "interactions": [
+      {
+        "interaction_id": "quiet_conversation",
+        "label": "值夜闲谈",
+        "description": "在换岗后留出一段时间，听伙伴说起末日之前的生活。",
+        "result_text": "你和{companion_name}聊了很久。信任+{trust_gain}，避难所希望+{hope_gain}。",
+        "cooldown_turns": 2,
+        "turns_consumed": 1,
+        "trust_gain": 1,
+        "hope_gain": 3,
+        "requirements": [],
+        "costs": []
+      },
+      {
+        "interaction_id": "share_keepsake",
+        "label": "分享纪念物",
+        "description": "拿出一本旧杂志，与伙伴在短暂的平静中回忆世界原来的样子。",
+        "result_text": "{companion_name}把那本杂志小心收好。信任+{trust_gain}，避难所希望+{hope_gain}。",
+        "cooldown_turns": 3,
+        "turns_consumed": 1,
+        "trust_gain": 2,
+        "hope_gain": 6,
+        "requirements": [],
+        "costs": [
+          {"target": "shelter.magazines", "operation": "subtract", "amount": 1}
+        ]
+      }
+    ],
+    "texts": {
+      "unavailable_status": "只有已加入且正常行动的伙伴可以进行管理。",
+      "cooldown": "伙伴需要独处，还有{turns}回合才能再次互动。",
+      "requirement_locked": "当前条件无法进行这项互动。",
+      "insufficient_resources": "进行这项互动所需的物资不足。",
+      "equipped": "已为{companion_name}装备{item_name}。",
+      "unequipped": "已卸下{companion_name}的{slot_name}。",
+      "already_equipped": "{companion_name}已在使用这件装备。",
+      "equipment_unavailable": "仓库中没有可分配的{item_name}。",
+      "invalid_slot": "伙伴装备槽位无效。"
+    }
+  },
   "scenes": [
     {
       "scene_id": "last_pot_of_porridge",
@@ -1978,6 +2020,52 @@
         ],
         "message": "巡逻队遭遇一只躲在广告牌后的感染者。它显然生前从事伏击工作。"
       }
+    }
+  ],
+  "activities": [
+    {
+      "activity_id": "shared_supper",
+      "name": "共享晚餐",
+      "description": "让所有人围在同一口锅旁，即使食物不多，也要让大家记得自己不是独自求生。",
+      "duration_hours": 2,
+      "requirements": [],
+      "costs": [
+        {"target": "player.food", "operation": "subtract", "amount": 6}
+      ],
+      "rewards": [
+        {"target": "shelter.hope", "operation": "add", "amount": 9},
+        {"target": "shelter.activity", "operation": "add", "amount": 4}
+      ],
+      "result_text": "这顿饭不算丰盛，但避难所久违地有人唱起了歌。"
+    },
+    {
+      "activity_id": "story_night",
+      "name": "旧世界故事夜",
+      "description": "朗读从城市带回的书，让孩子和大人都能想起墙外还有值得重建的东西。",
+      "duration_hours": 2,
+      "requirements": [
+        {"type": "attribute", "target": "shelter.books", "operator": "gte", "value": 1}
+      ],
+      "costs": [],
+      "rewards": [
+        {"target": "shelter.hope", "operation": "add", "amount": 7}
+      ],
+      "result_text": "通讯灯暗下去后，仍有人在低声讨论故事的结局。"
+    },
+    {
+      "activity_id": "memorial_wall",
+      "name": "点亮纪念墙",
+      "description": "用废弃电路和碎玻璃为失去的人做一盏小灯，告诉生者他们从未被遗忘。",
+      "duration_hours": 3,
+      "requirements": [],
+      "costs": [
+        {"target": "player.parts", "operation": "subtract", "amount": 3}
+      ],
+      "rewards": [
+        {"target": "shelter.hope", "operation": "add", "amount": 12},
+        {"target": "shelter.activity", "operation": "add", "amount": 2}
+      ],
+      "result_text": "碎玻璃后的微光一盏盏亮起，没有人说话，但也没有人提前离开。"
     }
   ],
   "trade": {

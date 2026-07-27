@@ -44,7 +44,24 @@ function requireState(application: GameApplication): GameState {
   return state;
 }
 
-describe("浏览器 v5 存档", () => {
+/** 从当前玩家状态删除 v6 才引入的年龄与寿命字段。 */
+function legacyPlayers(state: GameState): Record<string, unknown>[] {
+  return state.players.map((player) => {
+    const legacy = structuredClone(player) as unknown as Record<string, unknown>;
+    delete legacy.age;
+    delete legacy.lifespan;
+    return legacy;
+  });
+}
+
+/** 从当前避难所状态删除 v6 才引入的希望字段。 */
+function legacyShelter(state: GameState): Record<string, unknown> {
+  const legacy = structuredClone(state.shelter) as unknown as Record<string, unknown>;
+  delete legacy.hope;
+  return legacy;
+}
+
+describe("浏览器 v6 存档", () => {
   it("以 snake_case 信封往返完整待探索状态", () => {
     const storage = new MemoryStorage();
     const writer = buildApplication(storage);
@@ -59,7 +76,7 @@ describe("浏览器 v5 存档", () => {
       saved_at: string;
       game_state: Record<string, unknown>;
     };
-    expect(envelope.schema_version).toBe(5);
+    expect(envelope.schema_version).toBe(6);
     expect(envelope.saved_at).toBe("2166-02-03T04:05:06.000Z");
     expect(envelope.game_state).toHaveProperty("active_player_index");
     expect(envelope.game_state).toHaveProperty("pending_exploration");
@@ -90,16 +107,16 @@ describe("浏览器 v5 存档", () => {
     expect(requireState(reader).players[0]?.hunger).toBe(0);
   });
 
-  it("读取 v1 后连续迁移并可再次保存为 v5", () => {
+  it("读取 v1 后连续迁移并可再次保存为 v6", () => {
     const storage = new MemoryStorage();
     const source = buildApplication(new MemoryStorage());
     source.startNewGame(["旧所长甲", "旧所长乙"], "multiplayer");
     const sourceState = requireState(source);
     const legacyState = {
       mode: sourceState.mode,
-      players: structuredClone(sourceState.players),
+      players: legacyPlayers(sourceState),
       active_player_index: sourceState.active_player_index,
-      shelter: structuredClone(sourceState.shelter),
+      shelter: legacyShelter(sourceState),
       clock: structuredClone(sourceState.clock),
       turn_number: 9,
       ended: false,
@@ -129,7 +146,7 @@ describe("浏览器 v5 存档", () => {
       schema_version: number;
       game_state: Record<string, unknown>;
     };
-    expect(envelope.schema_version).toBe(5);
+    expect(envelope.schema_version).toBe(6);
     expect(envelope.game_state).toHaveProperty("campaign");
     expect(envelope.game_state).not.toHaveProperty("ended");
     expect(envelope.game_state).not.toHaveProperty("ending_message");

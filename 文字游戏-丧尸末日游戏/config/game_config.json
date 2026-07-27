@@ -1,8 +1,9 @@
 {
   "schema_version": 1,
-  "save_schema_version": 2,
+  "save_schema_version": 6,
   "runtime": {
-    "minimum_tk_version": 8.6
+    "minimum_tk_version": 8.6,
+    "desktop_save_schema_version": 2
   },
   "game": {
     "title": "避难所：余烬纪元",
@@ -17,6 +18,7 @@
     "save_migration_v2_to_v3": "config/save_migrations/v2_to_v3.json",
     "save_migration_v3_to_v4": "config/save_migrations/v3_to_v4.json",
     "save_migration_v4_to_v5": "config/save_migrations/v4_to_v5.json",
+    "save_migration_v5_to_v6": "config/save_migrations/v5_to_v6.json",
     "save": "saves/savegame.json",
     "concept_art": "assets/menu_concept_2k.png",
     "cover_art": "assets/cover_art_2k.png"
@@ -202,6 +204,7 @@
         {"id": "support", "label": "生存保障", "action_ids": ["feed_shelter", "repair_shelter"]},
         {"id": "facility", "label": "设施升级"},
         {"id": "job", "label": "安排工作"},
+        {"id": "activity", "label": "避难所活动"},
         {"id": "trade", "label": "幸存者交易"},
         {"id": "recruit", "label": "人员招募"}
       ]
@@ -278,6 +281,14 @@
           "maximum_path": "rules.limits.group_hunger_game_over",
           "direction": "higher_is_worse",
           "thresholds": {"warning": 0.6, "danger": 0.85}
+        },
+        {
+          "scope": "shelter",
+          "field": "hope",
+          "label": "希望值",
+          "maximum_path": "rules.limits.shelter_max_hope",
+          "direction": "lower_is_worse",
+          "thresholds": {"warning": 0.4, "danger": 0.2}
         }
       ]
     },
@@ -340,9 +351,10 @@
     "load_title": "读取存档"
   },
   "mode_labels": {
-    "single": "单人求生",
-    "multiplayer": "本地双人合作",
-    "story": "剧情沉浸"
+    "single": "普通求生",
+    "multiplayer": "双人协作",
+    "story": "剧情模式",
+    "endless": "无尽求生"
   },
   "campaign_profiles": {
     "difficulties": [
@@ -401,6 +413,24 @@
           {"target": "player.parts", "operation": "add", "amount": 15},
           {"target": "shelter.defense_damage", "operation": "add", "amount": 5}
         ]
+      },
+      {
+        "id": "wilderness_guide",
+        "label": "荒野向导",
+        "description": "曾带队穿越无人区，保留了应急口粮和对危险路况的敏锐。",
+        "starting_effects": [
+          {"target": "player.food", "operation": "add", "amount": 10},
+          {"target": "player.agility", "operation": "add", "amount": 3}
+        ]
+      },
+      {
+        "id": "community_organizer",
+        "label": "社区组织者",
+        "description": "灾变初期组织过数次撤离，懂得如何使人们在恐惧中继续相信彼此。",
+        "starting_effects": [
+          {"target": "shelter.hope", "operation": "add", "amount": 12},
+          {"target": "shelter.activity", "operation": "add", "amount": 8}
+        ]
       }
     ],
     "traits": [
@@ -417,8 +447,8 @@
       {
         "id": "meticulous",
         "label": "谨慎周密",
-        "description": "会提前标记退路和物资点：敏捷与智力提高，远征步数+2。",
-        "expedition_step_bonus": 2,
+        "description": "为了反复确认路线与风险会放慢行动：敏捷与智力提高，远征步数-1。",
+        "expedition_step_bonus": -1,
         "starting_effects": [
           {"target": "player.agility", "operation": "add", "amount": 4},
           {"target": "player.intelligence", "operation": "add", "amount": 6}
@@ -444,10 +474,13 @@
   "mode_capabilities": {
     "single": [],
     "multiplayer": [],
-    "story": ["narrative", "boss_combat"]
+    "story": ["narrative", "boss_combat"],
+    "endless": ["endless_survival"]
   },
   "rules": {
     "companion_secret_unlock_trust": 2,
+    "companion_interaction_action_type": "companion_interaction",
+    "lifespan": {"minimum": 70, "maximum": 120},
     "world_map": {
       "minimum_districts_per_city": 6,
       "required_neighbor_degree": 2
@@ -455,12 +488,14 @@
     "player_counts": {
       "single": {"minimum": 1, "maximum": 1},
       "multiplayer": {"minimum": 2, "maximum": 2},
-      "story": {"minimum": 1, "maximum": 1}
+      "story": {"minimum": 1, "maximum": 1},
+      "endless": {"minimum": 1, "maximum": 1}
     },
     "mode_survival_cost_percent": {
       "single": 100,
       "multiplayer": 100,
-      "story": 35
+      "story": 35,
+      "endless": 115
     },
     "city_travel": {
       "home_step_cost": 1,
@@ -475,6 +510,8 @@
       "combat": {"player_hunger_gain": 3, "group_hunger_gain_per_person": 2},
       "facility": {"player_hunger_gain": 3, "group_hunger_gain_per_person": 1},
       "job": {"player_hunger_gain": 4, "group_hunger_gain_per_person": 2},
+      "activity": {"player_hunger_gain": 1, "group_hunger_gain_per_person": 1},
+      "companion_interaction": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
       "recruit": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
       "use_food": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
       "use_medicine": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
@@ -501,6 +538,8 @@
     "limits": {
       "player_max_health": 100,
       "shelter_max_health": 600,
+      "shelter_max_hope": 100,
+      "hope_min_game_over": 0,
       "player_hunger_game_over": 150,
       "group_hunger_game_over": 260,
       "activity_min_game_over": 0,
@@ -511,10 +550,13 @@
       "shelter_health_loss": 1,
       "player_hunger_gain": 2,
       "group_hunger_gain_per_person": 1,
-      "activity_loss": 0
+      "activity_loss": 0,
+      "hope_loss": 1
     },
     "failure_endings": {
       "shelter": {"ending_id": "shelter_breached", "text_key": "game_over_shelter"},
+      "hope": {"ending_id": "last_hope_extinguished", "text_key": "game_over_hope"},
+      "lifespan": {"ending_id": "natural_lifespan_ended", "text_key": "game_over_lifespan"},
       "player_health": {
         "ending_id": "last_commander_fallen",
         "text_key": "game_over_player",
@@ -568,7 +610,10 @@
       "completed_project_ids": []
     },
     "expedition": null,
+    "last_expedition_failure": null,
     "player": {
+      "age": 25,
+      "lifespan": 95,
       "health": 100,
       "attack": 20,
       "defense": 15,
@@ -584,6 +629,7 @@
     },
     "shelter": {
       "population": 3,
+      "hope": 60,
       "group_hunger": 0,
       "health": 260,
       "defense_damage": 15,
@@ -597,7 +643,7 @@
   },
   "cities": [
     {
-      "id": "city_a", "name": "A市", "district": "旧城中区", "description": "密集旧楼环绕B-17防空洞，街巷熟悉但尸群会沿广播声聚集。", "terrain": "land", "neighbor_ids": ["city_h", "city_b"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"],
+      "id": "city_a", "name": "A市", "district": "A区", "description": "密集旧楼环绕B-17防空洞，街巷熟悉但尸群会沿广播声聚集。", "terrain": "land", "neighbor_ids": ["city_h", "city_b"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"],
       "default_district_id": "city_a_district_a",
       "districts": [
         {"id": "city_a_district_a", "code": "A区", "name": "防空洞外环", "description": "B-17外围的熟悉街巷保留着撤离标记，但旧广播会把尸群引向出口。", "danger_level": 1, "event_step_cost": 0, "event_ids": ["elder", "quiet_street", "commercial_street"]},
@@ -610,7 +656,7 @@
       "event_ids": ["bank", "elder", "medical_pod", "thief", "hospital", "commercial_street", "skyscraper", "quiet_street"]
     },
     {
-      "id": "city_b", "name": "B市", "district": "临江仓储区", "description": "河堤、货栈和废弃冷库连成狭长走廊，桥面经常被尸群截断。", "terrain": "river", "neighbor_ids": ["city_a", "city_c"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
+      "id": "city_b", "name": "B市", "district": "B区", "description": "河堤、货栈和废弃冷库连成狭长走廊，桥面经常被尸群截断。", "terrain": "river", "neighbor_ids": ["city_a", "city_c"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
       "default_district_id": "city_b_district_a",
       "districts": [
         {"id": "city_b_district_a", "code": "A区", "name": "沿江码头", "description": "装卸平台连接多座货栈，水位变化会不时露出新的登岸点。", "danger_level": 2, "event_step_cost": 0, "event_ids": ["commercial_street", "thief", "quiet_street", "bank"]},
@@ -623,7 +669,7 @@
       "event_ids": ["bank", "thief", "hospital", "commercial_street", "quiet_street"]
     },
     {
-      "id": "city_c", "name": "C市", "district": "高新北区", "description": "研究园和住宅塔楼仍有备用电力，自动门后的动静真假难辨。", "terrain": "land", "neighbor_ids": ["city_b", "city_d"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"],
+      "id": "city_c", "name": "C市", "district": "C区", "description": "研究园和住宅塔楼仍有备用电力，自动门后的动静真假难辨。", "terrain": "land", "neighbor_ids": ["city_b", "city_d"], "intelligence_newspapers_required": 3, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"],
       "default_district_id": "city_c_district_a",
       "districts": [
         {"id": "city_c_district_a", "code": "A区", "name": "研究园", "description": "实验楼的备用电源仍在闪烁，隔离门后的记录与样本价值难以估量。", "danger_level": 2, "event_step_cost": 0, "event_ids": ["medical_pod", "quiet_street", "thief"]},
@@ -636,7 +682,7 @@
       "event_ids": ["elder", "medical_pod", "thief", "skyscraper", "quiet_street"]
     },
     {
-      "id": "city_d", "name": "D市", "district": "南湾港区", "description": "集装箱迷宫伸向海湾，潮汐会打开短暂通路，也会带来漂流感染者。", "terrain": "coastal", "neighbor_ids": ["city_c", "city_e"], "intelligence_newspapers_required": 5, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
+      "id": "city_d", "name": "D市", "district": "D区", "description": "集装箱迷宫伸向海湾，潮汐会打开短暂通路，也会带来漂流感染者。", "terrain": "coastal", "neighbor_ids": ["city_c", "city_e"], "intelligence_newspapers_required": 5, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
       "default_district_id": "city_d_district_a",
       "districts": [
         {"id": "city_d_district_a", "code": "A区", "name": "港口堆场", "description": "集装箱通道会随吊机残骸而改变，未开封的货箱仍吸引着搜寻者。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["commercial_street", "thief", "quiet_street"]},
@@ -649,7 +695,7 @@
       "event_ids": ["hospital", "commercial_street", "skyscraper", "quiet_street"]
     },
     {
-      "id": "city_e", "name": "E市", "district": "西部矿城", "description": "采石场与隧道遍布山腹，地面开阔，地下却可能保存完整补给。", "terrain": "land", "neighbor_ids": ["city_d", "city_f"], "intelligence_newspapers_required": 6, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"],
+      "id": "city_e", "name": "E市", "district": "E区", "description": "采石场与隧道遍布山腹，地面开阔，地下却可能保存完整补给。", "terrain": "land", "neighbor_ids": ["city_d", "city_f"], "intelligence_newspapers_required": 6, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "helicopter"],
       "default_district_id": "city_e_district_a",
       "districts": [
         {"id": "city_e_district_a", "code": "A区", "name": "露天矿场", "description": "巨大矿坑中散落着工程车和零件，爆破后的松动岩壁随时可能坍落。", "danger_level": 3, "event_step_cost": 1, "event_ids": ["quiet_street", "thief", "commercial_street"]},
@@ -662,7 +708,7 @@
       "event_ids": ["bank", "elder", "thief", "quiet_street"]
     },
     {
-      "id": "city_f", "name": "F市", "district": "双河老街", "description": "两条河把城区切成数座孤岛，老桥和排水隧道构成危险捷径。", "terrain": "river", "neighbor_ids": ["city_e", "city_g"], "intelligence_newspapers_required": 6, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
+      "id": "city_f", "name": "F市", "district": "F区", "description": "两条河把城区切成数座孤岛，老桥和排水隧道构成危险捷径。", "terrain": "river", "neighbor_ids": ["city_e", "city_g"], "intelligence_newspapers_required": 6, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
       "default_district_id": "city_f_district_a",
       "districts": [
         {"id": "city_f_district_a", "code": "A区", "name": "双河老街", "description": "沿河商铺和住宅挤在狭窄石路两侧，熟悉地形的幸存者偶尔在此交易。", "danger_level": 2, "event_step_cost": 1, "event_ids": ["commercial_street", "elder", "quiet_street"]},
@@ -675,7 +721,7 @@
       "event_ids": ["medical_pod", "hospital", "commercial_street", "quiet_street"]
     },
     {
-      "id": "city_g", "name": "G市", "district": "东海工业带", "description": "炼化塔、船坞和高架管线遮蔽视野，旧厂房里仍有重型设备。", "terrain": "coastal", "neighbor_ids": ["city_f", "city_h"], "intelligence_newspapers_required": 8, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
+      "id": "city_g", "name": "G市", "district": "G区", "description": "炼化塔、船坞和高架管线遮蔽视野，旧厂房里仍有重型设备。", "terrain": "coastal", "neighbor_ids": ["city_f", "city_h"], "intelligence_newspapers_required": 8, "path_item_ids": ["route_map"], "transport_item_ids": ["armored_car", "motorboat", "helicopter"],
       "default_district_id": "city_g_district_a",
       "districts": [
         {"id": "city_g_district_a", "code": "A区", "name": "炼化厂", "description": "管道间残留的化学气体会遮蔽视线，控制室里则可能有工业资料。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["medical_pod", "thief", "quiet_street"]},
@@ -688,7 +734,7 @@
       "event_ids": ["thief", "commercial_street", "skyscraper", "quiet_street"]
     },
     {
-      "id": "city_h", "name": "H市", "district": "白礁岛城", "description": "离岸岛屿曾是检疫中心，码头被毁后，只剩海路和低空航线可达。", "terrain": "island", "neighbor_ids": ["city_g", "city_a"], "intelligence_newspapers_required": 10, "path_item_ids": ["route_map"], "transport_item_ids": ["motorboat", "helicopter"],
+      "id": "city_h", "name": "H市", "district": "H区", "description": "离岸岛屿曾是检疫中心，码头被毁后，只剩海路和低空航线可达。", "terrain": "island", "neighbor_ids": ["city_g", "city_a"], "intelligence_newspapers_required": 10, "path_item_ids": ["route_map"], "transport_item_ids": ["motorboat", "helicopter"],
       "default_district_id": "city_h_district_a",
       "districts": [
         {"id": "city_h_district_a", "code": "A区", "name": "检疫码头", "description": "损毁的浮桥后是岛城唯一常规入口，检疫帐篷中留有药品与登记册。", "danger_level": 4, "event_step_cost": 2, "event_ids": ["hospital", "thief", "quiet_street"]},
@@ -721,6 +767,8 @@
     "log_panel": "行动记录",
     "story_panel": "当前任务",
     "player_stats": [
+      ["age", "年龄"],
+      ["lifespan", "寿命"],
       ["health", "生命"],
       ["attack", "攻击"],
       ["defense", "防御"],
@@ -736,6 +784,7 @@
     ],
     "shelter_stats": [
       ["population", "人数"],
+      ["hope", "希望"],
       ["group_hunger", "群体饥饿值"],
       ["health", "耐久"],
       ["defense_damage", "防御设施伤害"],
@@ -827,6 +876,7 @@
     "daily_food_produced": "水培温室完成本日收获，获得{produced}份食物。",
     "turn_month": "避难所迎来了新的一月。",
     "turn_year": "你和朋友们又共同撑过了一年。",
+    "player_aged": "{player_name}年长一岁，当前{age}/{lifespan}岁。",
     "weekly_summary_format": "第{week_number}周：已归档{entry_count}条通讯，避难所耐久{shelter_health}，群体饥饿{group_hunger}，已完成主线场景{completed_scenes}处。",
     "weekly_summary_survival_format": "第{week_number}周：已归档{entry_count}条通讯，避难所耐久{shelter_health}，群体饥饿{group_hunger}，远征与经营仍在继续。",
     "weekly_archive_notice": "第{week_number}周通讯已归档，新的七日记录开始。",
@@ -838,6 +888,7 @@
     "unknown_survival_action_type": "未配置行动类型的饥饿结算：{action_type}",
     "invalid_action_hunger_config": "行动类型 {action_type} 的饥饿增量必须是非负整数。",
     "invalid_mode_survival_cost": "游戏模式 {mode} 缺少有效的生存损耗比例。",
+    "invalid_lifespan_config": "所长寿命随机区间配置无效。",
     "invalid_survival_turn_count": "生存回合数必须是正整数。",
     "invalid_timeline_rule": "时间线配置必须是正整数：{rule_key}",
     "missing_failure_ending": "缺少失败结局配置：{failure_id}",
@@ -855,6 +906,8 @@
     "repair_failed": "零件不足，需要至少{cost}个。",
     "repair_not_needed": "避难所耐久已满，无需消耗零件修复。",
     "game_over_shelter": "避难所被丧尸攻破，你倒在了通往诗和远方的路上。",
+    "game_over_hope": "希望归零，避难所中再没有人相信明天会到来，最后的秩序在沉默中瓦解。",
+    "game_over_lifespan": "{player_name}已到达{lifespan}岁的寿命终点。火种尚在，但避难所失去了它的所长。",
     "game_over_player": "{player_name}伤势过重，避难所失去了最后的指挥者。",
     "game_over_player_multiplayer": "{player_name}伤势过重倒下，双人指挥链中断，避难所行动宣告失败。",
     "game_over_player_hunger": "{player_name}因极度饥饿倒下了。",
@@ -917,6 +970,11 @@
     "shelter_job_locked": "当前条件不能安排这项工作。",
     "shelter_job_resources_insufficient": "完成工作所需资源不足。",
     "shelter_job_success": "工作【{job_name}】完成：{description}",
+    "shelter_activity_label": "活动：{activity_name}",
+    "shelter_activity_description": "{description}｜耗时 {duration_hours} 小时",
+    "shelter_unknown_activity": "未知避难所活动：{activity_id}",
+    "shelter_activity_locked": "当前条件无法组织这项活动。",
+    "shelter_activity_resources_insufficient": "组织这项活动所需资源不足。",
     "shelter_trade_locked": "该交易商尚未与你建立联系。",
     "shelter_trade_coins_insufficient": "金币不足。",
     "shelter_trade_buy_success": "从{vendor_name}购入{item_name} ×{quantity}，支付{price}金币。",

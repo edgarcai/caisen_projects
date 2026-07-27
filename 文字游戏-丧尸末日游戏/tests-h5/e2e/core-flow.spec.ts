@@ -21,6 +21,11 @@ interface E2eWebConfig {
       readonly spellcheck: boolean;
     };
   };
+  readonly guided_tutorial: {
+    readonly steps: readonly {
+      readonly target_test_id: string;
+    }[];
+  };
   readonly storage: {
     readonly save_slot_count: number;
     readonly settings_key: string;
@@ -70,7 +75,7 @@ interface BrowserGameDebugHandle {
   getCurrentScreen(): string;
   getNodeBounds(nodeName: string): DebugNodeBounds | null;
   getSnapshot(): {
-    readonly mode: "single" | "multiplayer" | "story" | null;
+    readonly mode: "single" | "multiplayer" | "story" | "endless" | null;
     readonly activePlayer: { readonly name: string } | null;
     readonly clock: { readonly turnLabel: string } | null;
     readonly campaignProfileOptions: {
@@ -416,6 +421,14 @@ async function fillCommanderName(page: Page, playerName: string): Promise<void> 
   await input.blur();
 }
 
+/** 验证开局教程提示后选择直接进入游戏。 */
+async function continuePreGameNotice(page: Page): Promise<void> {
+  await waitForScreen(page, "pre_game_notice");
+  expect(await readLayaNodeBounds(page, "pre-game-notice-body")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "page-new-game-setup")).not.toBeNull();
+  await clickLayaNode(page, "pre-game-notice-continue");
+}
+
 /** 按指定入口提交默认档案，并验证通讯过场后停留在指挥台。 */
 async function startGame(
   page: Page,
@@ -425,6 +438,7 @@ async function startGame(
   await openNewGameSetup(page, mode);
   await fillCommanderName(page, playerName);
   await clickLayaNode(page, "player-name-submit");
+  await continuePreGameNotice(page);
   await waitForScreen(page, "connection");
   expect(await readLayaNodeBounds(page, "page-connection-title")).not.toBeNull();
   await waitForScreen(page, "dashboard");
@@ -448,6 +462,13 @@ function storyEntryNode(layout: GameLayoutKind): string {
 /** 根据三态布局返回当前探索入口的稳定节点名。 */
 function explorationEntryNode(layout: GameLayoutKind): string {
   return layout === "desktop" ? "dashboard-action-explore" : "bottom-nav-explore";
+}
+
+/** 根据三态布局返回避难所管理入口的稳定节点名。 */
+function managementEntryNode(layout: GameLayoutKind): string {
+  return layout === "desktop"
+    ? "dashboard-action-shelter_management"
+    : "bottom-nav-management";
 }
 
 /** 读取当前默认项之后的循环选项，供 UI 点击结果断言复用。 */
@@ -486,6 +507,9 @@ test.beforeEach(async ({ page }) => {
   });
   await page.reload();
   await expect(page.locator("#boot-status")).toBeHidden();
+  await waitForScreen(page, "publisher_splash");
+  expect(await readLayaNodeBounds(page, "publisher-splash-title")).not.toBeNull();
+  await clickLayaNode(page, "page-publisher-splash");
   await waitForScreen(page, "update_log");
 });
 
@@ -546,6 +570,7 @@ test("完整新游戏档案页循环配置后进入普通模式", async ({ page 
     );
   }
   await clickLayaNode(page, "player-name-submit");
+  await continuePreGameNotice(page);
   await waitForScreen(page, "connection");
   await waitForScreen(page, "dashboard");
 
@@ -563,6 +588,46 @@ test("完整新游戏档案页循环配置后进入普通模式", async ({ page 
   );
   expect(await readLayaNodeBounds(page, "dashboard-campaign-profile")).not.toBeNull();
   expect(await readLayaNodeBounds(page, "dashboard-mission")).toBeNull();
+});
+
+test("开局提示可进入逐步战术引导并聚焦全部真实目标", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
+  await openNewGameSetup(page, "single");
+  await fillCommanderName(page, "引导所长");
+  await clickLayaNode(page, "player-name-submit");
+  await waitForScreen(page, "pre_game_notice");
+  await clickLayaNode(page, "pre-game-notice-tutorial");
+  await waitForScreen(page, "connection");
+  await waitForScreen(page, "tutorial");
+  expect(await readLayaNodeBounds(page, "page-dashboard")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "page-guided-tutorial")).not.toBeNull();
+
+  for (
+    let index = 0;
+    index < webConfigDocument.guided_tutorial.steps.length;
+    index += 1
+  ) {
+    const step = webConfigDocument.guided_tutorial.steps[index];
+    if (step === undefined) {
+      throw new Error(`缺少教程步骤 ${String(index + 1)}。`);
+    }
+    await expect.poll(async () =>
+      readLayaNodeBounds(page, step.target_test_id),
+    ).not.toBeNull();
+    expect(
+      await readLayaNodeBounds(page, "guided-tutorial-target-state"),
+    ).toBeNull();
+    const focus = await readLayaNodeBounds(page, "guided-tutorial-focus-border");
+    expect(focus).not.toBeNull();
+    if (focus !== null) {
+      expect(focus.x).toBeGreaterThanOrEqual(0);
+      expect(focus.y).toBeGreaterThanOrEqual(0);
+      expect(focus.x + focus.width).toBeLessThanOrEqual(focus.stageWidth);
+      expect(focus.y + focus.height).toBeLessThanOrEqual(focus.stageHeight);
+    }
+    await clickLayaNode(page, "guided-tutorial-next");
+  }
+  await waitForScreen(page, "dashboard");
 });
 
 test("剧情模式从封面到首个剧情结果使用真实 Canvas 完成闭环", async ({ page }) => {
@@ -915,6 +980,32 @@ test("远征从整备、事件到安全返程完成闭环", async ({ page }) => 
   await clickLayaNode(page, "page-expedition-status-safe-return");
   await waitForScreen(page, "dashboard");
   expect((await readDebugSnapshot(page)).expeditionStatus).toBeNull();
+});
+
+test("避难所活动先显示需求且确认一次只结算一次", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
+  await startSingleGame(page, "活动所长");
+  await clickLayaNode(page, managementEntryNode(await readGameLayout(page)));
+  await waitForScreen(page, "management_categories");
+  await clickScrollableLayaNode(
+    page,
+    "page-management-categories-option-activity",
+    "page-management-categories-scroll",
+  );
+  await waitForScreen(page, "management_options");
+  await clickScrollableLayaNode(
+    page,
+    "page-management-options-option-activity::shared_supper",
+    "page-management-options-scroll",
+  );
+  await waitForScreen(page, "management_option_detail");
+  expect(
+    await readLayaNodeBounds(page, "page-management-option-detail-requirement-availability"),
+  ).not.toBeNull();
+  await clickLayaNode(page, "page-management-option-detail-confirm");
+  await waitForScreen(page, "message");
+
+  expect((await readDebugSnapshot(page)).clock?.turnLabel).toBe("第 2 回合");
 });
 
 test("锁定城市可进入详情查看需求但不能继续", async ({ page }) => {

@@ -14,6 +14,25 @@ function requireSnapshot(snapshot: GameUiSnapshot | undefined): GameUiSnapshot {
   return snapshot;
 }
 
+/** 从当前玩家状态移除 v6 新字段，构造真实的 v1 迁移输入。 */
+function createV1Players(
+  players: readonly unknown[],
+): readonly Record<string, unknown>[] {
+  return players.map((player) => {
+    const legacy = structuredClone(player) as Record<string, unknown>;
+    Reflect.deleteProperty(legacy, "age");
+    Reflect.deleteProperty(legacy, "lifespan");
+    return legacy;
+  });
+}
+
+/** 从当前避难所状态移除 v6 希望值，避免用未来字段污染 v1 夹具。 */
+function createV1Shelter(shelter: unknown): Record<string, unknown> {
+  const legacy = structuredClone(shelter) as Record<string, unknown>;
+  Reflect.deleteProperty(legacy, "hope");
+  return legacy;
+}
+
 /** 将测试状态放到满足秘密结局入口和群巢记忆支线的最终场景。 */
 function prepareLinkedHiveSecretEnding(): ReturnType<typeof buildH5Harness> {
   const harness = buildH5Harness();
@@ -48,15 +67,15 @@ function prepareLinkedHiveSecretEnding(): ReturnType<typeof buildH5Harness> {
 }
 
 describe("H5 v1 存档迁移", () => {
-  it("通过适配器读取 v1 双人存档并经显式保存安全写回 v5", () => {
+  it("通过适配器读取 v1 双人存档并经显式保存安全写回 v6", () => {
     const source = buildH5Harness();
     source.application.startNewGame(["旧所长甲", "旧所长乙"], "multiplayer");
     const sourceState = requireState(source.application);
     const legacyState = {
       mode: sourceState.mode,
-      players: structuredClone(sourceState.players),
+      players: createV1Players(sourceState.players),
       active_player_index: 1,
-      shelter: structuredClone(sourceState.shelter),
+      shelter: createV1Shelter(sourceState.shelter),
       clock: structuredClone(sourceState.clock),
       turn_number: 9,
       ended: false,
@@ -93,7 +112,7 @@ describe("H5 v1 存档迁移", () => {
       schema_version: number;
       game_state: Record<string, unknown>;
     };
-    expect(envelope.schema_version).toBe(5);
+    expect(envelope.schema_version).toBe(6);
     expect(envelope.game_state).toHaveProperty("story");
     expect(envelope.game_state).toHaveProperty("campaign");
     expect(envelope.game_state).not.toHaveProperty("ended");

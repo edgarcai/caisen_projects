@@ -2,6 +2,7 @@ import type {
   GameMode,
   GameScreenId,
   SaveSlotsPageMode,
+  UiCompanionEquipmentSlot,
   UiDocumentView,
 } from "../ports/GameUiPort";
 
@@ -12,6 +13,9 @@ export interface GameRouteContext {
   readonly mode?: GameMode;
   readonly saveSlotsMode?: SaveSlotsPageMode;
   readonly categoryId?: string;
+  readonly optionId?: string;
+  readonly companionId?: string;
+  readonly equipmentSlot?: UiCompanionEquipmentSlot;
   readonly cityId?: string;
   readonly districtId?: string;
   readonly document?: UiDocumentView;

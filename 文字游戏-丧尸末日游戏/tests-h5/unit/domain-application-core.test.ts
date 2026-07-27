@@ -157,7 +157,7 @@ describe("剧情、探索与首领战", () => {
   });
 
   it("锁定首领路线、进入战斗并在胜利后发放路线成果", () => {
-    const application = buildApplication(new QueueRandomSource([100, 100, 4]));
+    const application = buildApplication(new QueueRandomSource([90, 100, 100, 4]));
     application.startNewGame(["白菜"], "story");
     const state = requireState(application);
     state.story.current_scene_id = "rail_butcher";
@@ -214,7 +214,7 @@ describe("剧情、探索与首领战", () => {
   });
 
   it("取消探索仍应用开场代价且只消耗一个行动", () => {
-    const application = buildApplication(new QueueRandomSource([6]));
+    const application = buildApplication(new QueueRandomSource([90, 6]));
     application.startNewGame(["白菜"], "single");
     const state = requireState(application);
     const city = application.content.city("city_a");
@@ -256,7 +256,7 @@ describe("避难所经营与基础物品", () => {
   });
 
   it("工作结算随机产出与风险，交易不推进世界时间", () => {
-    const application = buildApplication(new QueueRandomSource([7, 100]));
+    const application = buildApplication(new QueueRandomSource([90, 7, 100]));
     application.startNewGame(["白菜"], "single");
     const state = requireState(application);
 

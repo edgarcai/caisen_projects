@@ -5,6 +5,7 @@ import {
   isEnded,
   type GameMode,
   type GameState,
+  type ExpeditionFailureState,
   type NewGameSetup,
   type PendingExplorationState,
   type PlayerState,
@@ -18,6 +19,10 @@ import type {
 } from "../domain/ports";
 import type {
   CraftingRecipeView,
+  CompanionEquipmentOptionView,
+  CompanionEquipmentSlot,
+  CompanionInteractionOptionView,
+  CompanionManagementView,
   EffectivePlayerAttributes,
   ExpeditionCarryItemView,
   ExpeditionCompanionView,
@@ -42,6 +47,7 @@ import type {
   CampaignProfileService,
   CityAccessDecision,
   CombatService,
+  CompanionManagementService,
   ExpeditionService,
   ExplorationService,
   GameContent,
@@ -72,6 +78,7 @@ export class GameApplication {
   private readonly story: StoryService;
   private readonly combat: CombatService;
   private readonly shelter: ShelterService;
+  private readonly companionManagement: CompanionManagementService;
   private readonly chronicle: ChronicleService;
   private readonly inventory: InventoryService;
   private readonly equipment: PlayerAttributeProvider;
@@ -91,6 +98,7 @@ export class GameApplication {
     story: StoryService,
     combat: CombatService,
     shelter: ShelterService,
+    companionManagement: CompanionManagementService,
     chronicle: ChronicleService,
     inventory: InventoryService,
     equipment: PlayerAttributeProvider,
@@ -108,6 +116,7 @@ export class GameApplication {
     this.story = story;
     this.combat = combat;
     this.shelter = shelter;
+    this.companionManagement = companionManagement;
     this.chronicle = chronicle;
     this.inventory = inventory;
     this.equipment = equipment;
@@ -155,6 +164,7 @@ export class GameApplication {
     const players: PlayerState[] = cleanNames.map((name) => ({
       name,
       ...structuredClone(defaults.player),
+      lifespan: this.rollLifespan(),
     }));
     const time = this.content.game.rules.time;
     const initialState: GameState = {
@@ -183,6 +193,7 @@ export class GameApplication {
       inventory: structuredClone(defaults.inventory),
       research: structuredClone(defaults.research),
       expedition: structuredClone(defaults.expedition),
+      last_expedition_failure: structuredClone(defaults.last_expedition_failure),
     };
     this.campaignProfiles.applyStartingEffects(initialState, resolvedProfile);
     this.rules.normalize(initialState);
@@ -420,6 +431,11 @@ export class GameApplication {
     return this.expedition.status(this.requireState());
   }
 
+  /** 返回最近一次步数耗尽强制返程的结构化损失。 */
+  public lastExpeditionFailure(): ExpeditionFailureState | null {
+    return structuredClone(this.requireState().last_expedition_failure);
+  }
+
   /** 返回每座城市当前的可达性、路费、简介和锁定原因。 */
   public expeditionCities(): readonly CityAccessDecision[] {
     return this.expedition.cityOptions(this.requireState());
@@ -615,6 +631,72 @@ export class GameApplication {
   /** 返回所有伙伴的身份、状态、信任与秘密提示。 */
   public companionSummary(): string {
     return this.story.companionSummary(this.requireState());
+  }
+
+  /** 返回可点入的伙伴立绘、档案和管理状态。 */
+  public companionManagementViews(): readonly CompanionManagementView[] {
+    return this.companionManagement.views(this.requireState());
+  }
+
+  /** 返回指定伙伴槽位可分配的仓库装备。 */
+  public companionEquipmentOptions(
+    companionId: string,
+    slot: CompanionEquipmentSlot,
+  ): readonly CompanionEquipmentOptionView[] {
+    return this.companionManagement.equipmentOptions(
+      this.requireState(),
+      companionId,
+      slot,
+    );
+  }
+
+  /** 为伙伴配装或卸下武器、防具，不消耗世界回合。 */
+  public equipCompanion(
+    companionId: string,
+    slot: CompanionEquipmentSlot,
+    itemId: string | null,
+  ): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    const resolution = this.companionManagement.equip(
+      working,
+      companionId,
+      slot,
+      itemId,
+    );
+    if (!resolution.applied) return actionReport(resolution.messages, false);
+    return this.commitAction(working, [...resolution.messages], {
+      consumesTurn: false,
+      actionType: "equipment",
+    });
+  }
+
+  /** 返回伙伴当前可用互动及冷却或资源阻断原因。 */
+  public companionInteractionOptions(
+    companionId: string,
+  ): readonly CompanionInteractionOptionView[] {
+    return this.companionManagement.interactionOptions(
+      this.requireState(),
+      companionId,
+    );
+  }
+
+  /** 原子执行一次伙伴互动并结算信任、希望和冷却。 */
+  public interactWithCompanion(
+    companionId: string,
+    interactionId: string,
+  ): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    const resolution = this.companionManagement.interact(
+      working,
+      companionId,
+      interactionId,
+    );
+    if (!resolution.applied) return actionReport(resolution.messages, false);
+    return this.commitAction(working, [...resolution.messages], {
+      consumesTurn: resolution.consumesTurn,
+      turnsConsumed: resolution.turnsConsumed,
+      actionType: this.content.game.rules.companion_interaction_action_type,
+    });
   }
 
   /** 原子执行设施、工作、交易或招募命令。 */
@@ -868,6 +950,7 @@ export class GameApplication {
     this.state.inventory = source.inventory;
     this.state.research = source.research;
     this.state.expedition = source.expedition;
+    this.state.last_expedition_failure = source.last_expedition_failure;
   }
 
   /** 把旧签名升级为完整开局设置，并确保槽位仍来自仓库配置范围。 */
@@ -887,6 +970,20 @@ export class GameApplication {
       saveSlotId: this.repository.activeSlot(),
       profile: structuredClone(this.content.game.campaign_profiles.migration_default),
     };
+  }
+
+  /** 按配置区间为新所长抽取自然寿命。 */
+  private rollLifespan(): number {
+    const { minimum, maximum } = this.content.game.rules.lifespan;
+    if (
+      !Number.isInteger(minimum)
+      || !Number.isInteger(maximum)
+      || minimum < 1
+      || maximum < minimum
+    ) {
+      throw new GameApplicationError(this.content.text("invalid_lifespan_config"));
+    }
+    return this.random.randint(minimum, maximum);
   }
 
   /** 使用配置标签生成人名之外独立的开局档案通讯。 */

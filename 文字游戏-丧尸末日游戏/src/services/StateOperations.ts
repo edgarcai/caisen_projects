@@ -8,6 +8,8 @@ import {
 import type { RandomSource } from "../domain/ports";
 
 const PLAYER_FIELDS = new Set([
+  "age",
+  "lifespan",
   "health",
   "attack",
   "defense",
@@ -24,6 +26,7 @@ const PLAYER_FIELDS = new Set([
 
 const SHELTER_FIELDS = new Set([
   "population",
+  "hope",
   "group_hunger",
   "health",
   "defense_damage",

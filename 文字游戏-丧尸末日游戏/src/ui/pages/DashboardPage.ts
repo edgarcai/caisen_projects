@@ -14,6 +14,7 @@ import type {
 import type {
   GameUiSnapshot,
   UiActionGroupView,
+  UiDocumentView,
   UiStatView,
 } from "../ports/GameUiPort";
 import type { PageView } from "./PageView";
@@ -97,6 +98,11 @@ export class DashboardPage implements PageView {
     this.scrolls.forEach((scroll) => { scroll.destroy(); });
     this.root.offAll();
     this.root.destroy(true);
+  }
+
+  /** 在任一可滚动分栏中找到并显示教程目标。 */
+  public revealTutorialTarget(nodeName: string, padding: number): boolean {
+    return this.scrolls.some((scroll) => scroll.revealNode(nodeName, padding));
   }
 
   /**
@@ -265,6 +271,15 @@ export class DashboardPage implements PageView {
       layout.contentWidth,
       config.layout.mobile.quick_action_columns,
     );
+    cursorY += layout.sectionGap;
+    cursorY = this.renderMobileResources(
+      factory,
+      config,
+      layout,
+      scroll.content,
+      snapshot.resources,
+      cursorY,
+    );
     if (shouldRenderDashboardMission(snapshot)) {
       cursorY += layout.sectionGap;
       cursorY = this.renderMission(
@@ -280,6 +295,16 @@ export class DashboardPage implements PageView {
       );
       cursorY += layout.sectionGap;
     }
+    cursorY = this.renderMobileLogPreview(
+      factory,
+      config,
+      layout,
+      scroll.content,
+      snapshot.logs,
+      cursorY,
+      actions,
+    );
+    cursorY += layout.sectionGap;
     cursorY = this.renderActionGroups(
       factory,
       config,
@@ -294,6 +319,106 @@ export class DashboardPage implements PageView {
     );
     scroll.setContentHeight(cursorY + layout.sectionGap);
     return scroll;
+  }
+
+  /** 用紧凑双列资源板让手机首屏也能读取并聚焦真实库存。 */
+  private renderMobileResources(
+    factory: UiFactory,
+    config: GameUiConfig,
+    layout: ResponsiveLayout,
+    parent: LayaSpriteLike,
+    resources: readonly UiStatView[],
+    y: number,
+  ): number {
+    if (resources.length === 0) {
+      return y;
+    }
+    const columns = Math.max(1, config.layout.mobile.quick_action_columns);
+    const rows = Math.ceil(resources.length / columns);
+    const padding = layout.panelPadding;
+    const rowHeight = Math.max(
+      config.layout.mobile.resource_bar_height,
+      config.typography.body_line_height,
+    );
+    const height = padding * 2 + rows * rowHeight;
+    const panel = factory.panel(parent, {
+      testId: "dashboard-mobile-resources",
+      x: 0,
+      y,
+      width: layout.contentWidth,
+      height,
+      elevated: true,
+    });
+    const gap = config.controls.button_gap;
+    const itemWidth = (
+      layout.contentWidth - padding * 2 - gap * (columns - 1)
+    ) / columns;
+    resources.forEach((resource, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      factory.text(panel, {
+        testId: `dashboard-resource-${resource.id}`,
+        text: `${resource.label}  ${resource.value}`,
+        x: padding + column * (itemWidth + gap),
+        y: padding + row * rowHeight,
+        width: itemWidth,
+        height: rowHeight,
+        fontSize: config.typography.caption_size,
+        color: resource.emphasized === true
+          ? config.theme.accent
+          : config.theme.text,
+        valign: "middle",
+      });
+    });
+    return y + height;
+  }
+
+  /** 在手机指挥台提供固定高度摘要和独立日志入口。 */
+  private renderMobileLogPreview(
+    factory: UiFactory,
+    config: GameUiConfig,
+    layout: ResponsiveLayout,
+    parent: LayaSpriteLike,
+    logs: readonly string[],
+    y: number,
+    actions: DashboardActions,
+  ): number {
+    const height = config.layout.mobile.log_preview_height;
+    const panel = factory.panel(parent, {
+      testId: "dashboard-mobile-log-panel",
+      x: 0,
+      y,
+      width: layout.contentWidth,
+      height,
+      elevated: true,
+    });
+    const padding = layout.panelPadding;
+    const buttonHeight = config.controls.compact_button_height;
+    const textHeight = Math.max(
+      config.typography.body_line_height,
+      height - padding * 3 - buttonHeight,
+    );
+    factory.text(panel, {
+      testId: "dashboard-log",
+      text: recentCommunicationLogs(config, logs),
+      x: padding,
+      y: padding,
+      width: layout.contentWidth - padding * 2,
+      height: textHeight,
+      fontSize: config.typography.caption_size,
+      color: config.theme.muted_text,
+    });
+    factory.button(panel, {
+      testId: "dashboard-mobile-log-open",
+      label: config.texts.communication_log_open,
+      x: padding,
+      y: height - padding - buttonHeight,
+      width: layout.contentWidth - padding * 2,
+      height: buttonHeight,
+      tone: "primary",
+      onClick: (): void => { actions.selectEntry("communication_log"); },
+    });
+    return y + height;
   }
 
   /**
@@ -659,4 +784,32 @@ export class DashboardPage implements PageView {
     });
   }
 
+}
+
+/** 把本周通讯记录组成可滚动的独立文档页。 */
+export function buildCommunicationLogDocument(
+  config: GameUiConfig,
+  logs: readonly string[],
+): UiDocumentView {
+  return {
+    title: config.texts.communication_log_title,
+    body: logs.length > 0
+      ? logs.join(
+          config.texts.option_intelligence_separator
+          + config.texts.option_intelligence_separator,
+        )
+      : config.texts.communication_log_empty,
+    tone: "default",
+  };
+}
+
+/** 仅截取配置数量的最新日志，避免手机首屏挤压触控区。 */
+export function recentCommunicationLogs(
+  config: GameUiConfig,
+  logs: readonly string[],
+): string {
+  const visible = logs.slice(-config.layout.mobile.log_preview_entries);
+  return visible.length > 0
+    ? visible.join(config.texts.option_intelligence_separator)
+    : config.texts.communication_log_empty;
 }

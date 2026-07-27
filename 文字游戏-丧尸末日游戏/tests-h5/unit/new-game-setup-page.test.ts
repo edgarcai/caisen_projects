@@ -11,6 +11,12 @@ import {
   createNewGameSetupPage,
   type NewGameSetupPageView,
 } from "../../src/ui/pages/NewGameSetupPage";
+import { createGuidedTutorialPage } from "../../src/ui/pages/GuidedTutorialPage";
+import { createPreGameNoticePage } from "../../src/ui/pages/PreGameNoticePage";
+import {
+  createPublisherSplashPage,
+  resolvePublisherLogoAlpha,
+} from "../../src/ui/pages/PublisherSplashPage";
 import type {
   GameMode,
   UiCampaignProfileOptionsView,
@@ -289,6 +295,25 @@ function createLayout(isMobileDevice: boolean): ResponsiveLayout {
   );
 }
 
+/** 从配置化 QA 视口构造保守的直接舞台布局。 */
+function createQualityViewportLayout(viewportId: string): ResponsiveLayout {
+  const viewport = webConfig.responsive.quality_viewports.find(
+    (candidate) => candidate.id === viewportId,
+  );
+  if (viewport === undefined) {
+    throw new Error(`测试视口不存在：${viewportId}`);
+  }
+  return resolveResponsiveLayoutFromMetrics(
+    {
+      stageWidth: viewport.width,
+      stageHeight: viewport.height,
+      isMobileDevice: viewport.mobile,
+      safeArea: zeroSafeArea,
+    },
+    webConfig,
+  );
+}
+
 /** 创建覆盖默认项和循环项的开局档案夹具。 */
 function createProfileOptions(): UiCampaignProfileOptionsView {
   return {
@@ -380,6 +405,17 @@ function requireInput(root: FakeNode, name: string): FakeInput {
   return node;
 }
 
+/** 累加父级平移并返回节点在页面根中的纵坐标。 */
+function resolveGlobalY(node: FakeNode): number {
+  let current: FakeNode | null = node;
+  let globalY = 0;
+  while (current !== null) {
+    globalY += current.y;
+    current = current.parent;
+  }
+  return globalY;
+}
+
 /** 使用指定模式和布局创建一页可交互的测试视图。 */
 function createTestView(
   layout: ResponsiveLayout,
@@ -424,20 +460,22 @@ describe("新游戏配置页", () => {
     );
     const root = view.page.root as unknown as FakeNode;
     const nameInput = requireInput(root, "player-name-1");
-    const modeButton = requireNode(root, "profile-mode");
     const difficultyButton = requireNode(root, "profile-difficulty");
     const slotButton = requireNode(root, "profile-slot");
 
     expect(view.readProfile()).toEqual(createProfileOptions().defaultSelection);
+    expect(view.readMode()).toBe("single");
     expect(view.readSlotId()).toBe(2);
     expect(nameInput.type).toBe("text");
     expect(nameInput.text).toBe(webConfig.new_game_setup.preset_names[0]);
     expect(requireText(root, "profile-mode-label").text).toBe(
-      webConfig.texts.start_single,
+      webConfig.new_game_setup.mode_options[0]?.label,
     );
     expect(requireText(root, "profile-slot-label").text).toContain("栏位 2");
-    expect(modeButton.x).toBeGreaterThan(nameInput.x);
-    expect(modeButton.y).toBe(nameInput.y);
+    expect(requireNode(root, "profile-setup-navigation")).toBeTruthy();
+    expect(requireNode(root, "profile-setup-options")).toBeTruthy();
+    expect(requireNode(root, "profile-setup-preview")).toBeTruthy();
+    expect(requireNode(root, "profile-setup-summary")).toBeTruthy();
 
     nameInput.text = "  林岚  ";
     nameInput.emit("blur");
@@ -469,6 +507,7 @@ describe("新游戏配置页", () => {
         homeCityId: "city_a",
       },
       3,
+      "single",
     );
     expect(onBack).toHaveBeenCalledOnce();
     view.page.destroy();
@@ -488,12 +527,13 @@ describe("新游戏配置页", () => {
     const mobileName = requireInput(mobileRoot, "player-name-1");
     const mobileMode = requireNode(mobileRoot, "profile-mode");
     const mobileDifficulty = requireNode(mobileRoot, "profile-difficulty");
-    expect(mobileMode.x).toBe(mobileName.x);
-    expect(mobileDifficulty.x).toBe(mobileName.x);
+    expect(requireNode(mobileRoot, "profile-setup-step-header")).toBeTruthy();
+    expect(requireNode(mobileRoot, "profile-setup-previous-step")).toBeTruthy();
+    expect(requireNode(mobileRoot, "profile-setup-next-step")).toBeTruthy();
     expect(mobileMode.y).toBeGreaterThan(mobileName.y);
-    expect(mobileDifficulty.y).toBeGreaterThan(mobileMode.y);
+    expect(mobileDifficulty.y).toBeGreaterThanOrEqual(mobileMode.y);
     expect(requireText(mobileRoot, "profile-mode-label").text).toBe(
-      webConfig.texts.start_story,
+      webConfig.new_game_setup.mode_options.find((option) => option.id === "story")?.label,
     );
 
     const desktopView = createTestView(
@@ -510,13 +550,44 @@ describe("新游戏配置页", () => {
     const secondName = requireInput(desktopRoot, "player-name-2");
     const desktopMode = requireNode(desktopRoot, "profile-mode");
     const desktopDifficulty = requireNode(desktopRoot, "profile-difficulty");
-    expect(secondName.x).toBeGreaterThan(firstName.x);
-    expect(secondName.y).toBe(firstName.y);
+    expect(secondName.x).toBe(firstName.x);
+    expect(secondName.parent?.y).toBeGreaterThan(firstName.parent?.y ?? 0);
     expect(desktopDifficulty.x).toBeGreaterThan(desktopMode.x);
     expect(desktopDifficulty.y).toBe(desktopMode.y);
 
     mobileView.page.destroy();
     desktopView.page.destroy();
+  });
+
+  it("手机横屏建档初始将姓名框完整滚入正文并避开底栏", () => {
+    const layout = createQualityViewportLayout("mobile_landscape");
+    const view = createTestView(
+      layout,
+      createSaveSlots(),
+      "single",
+      1,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+    );
+    const root = view.page.root as unknown as FakeNode;
+    const nameInput = requireInput(root, "player-name-1");
+    const scrollViewport = requireNode(root, "page-new-game-setup-scroll");
+    const footerBack = requireNode(root, "page-new-game-setup-back");
+    const inputTop = resolveGlobalY(nameInput);
+    const inputBottom = inputTop + nameInput.height;
+    const viewportTop = resolveGlobalY(scrollViewport);
+    const viewportBottom = viewportTop + scrollViewport.height;
+    const expectedTopPadding = Math.min(
+      layout.sectionGap,
+      Math.max(0, (scrollViewport.height - nameInput.height) / 2),
+    );
+
+    expect(scrollViewport.height).toBeGreaterThanOrEqual(nameInput.height);
+    expect(inputTop).toBe(viewportTop + expectedTopPadding);
+    expect(inputBottom).toBeLessThanOrEqual(viewportBottom);
+    expect(inputBottom).toBeLessThan(resolveGlobalY(footerBack));
+    view.page.destroy();
   });
 
   it("多人预设姓名错位起步，并保留中英数自由输入与循环切换", () => {
@@ -557,6 +628,7 @@ describe("新游戏配置页", () => {
       ["林Alpha7", "周Beta8"],
       createProfileOptions().defaultSelection,
       2,
+      "multiplayer",
     );
     view.page.destroy();
   });
@@ -584,6 +656,33 @@ describe("新游戏配置页", () => {
     expect(submit.mouseEnabled).toBe(false);
     submit.emit("click");
     expect(onSubmit).not.toHaveBeenCalled();
+    view.page.destroy();
+  });
+
+  it("中央模式列表可以真正选择无尽模式并随提交返回", () => {
+    const onSubmit = vi.fn();
+    const view = createTestView(
+      createLayout(false),
+      createSaveSlots(),
+      "single",
+      1,
+      vi.fn(),
+      onSubmit,
+      vi.fn(),
+    );
+    const root = view.page.root as unknown as FakeNode;
+    view.selectCategory("mode");
+    requireNode(root, "profile-mode-option-endless").emit("click");
+
+    expect(view.readMode()).toBe("endless");
+    expect(requireText(root, "profile-mode-label").text).toBe("无尽求生");
+    requireNode(root, "player-name-submit").emit("click");
+    expect(onSubmit).toHaveBeenCalledWith(
+      [webConfig.new_game_setup.preset_names[0]],
+      createProfileOptions().defaultSelection,
+      2,
+      "endless",
+    );
     view.page.destroy();
   });
 
@@ -630,5 +729,111 @@ describe("新游戏配置页", () => {
         vi.fn(),
       );
     }).toThrow("默认选项不存在");
+  });
+});
+
+describe("开局引导与制作方页", () => {
+  it("分步教程显示通讯框、聚焦目标并支持前后导航", () => {
+    const runtime = createFakeRuntime();
+    const onComplete = vi.fn();
+    const onSkip = vi.fn();
+    const view = createGuidedTutorialPage(
+      runtime,
+      createFactory(runtime),
+      webConfig,
+      createLayout(false),
+      (): { x: number; y: number; width: number; height: number } => ({
+        x: 80,
+        y: 100,
+        width: 240,
+        height: 120,
+      }),
+      { onComplete, onSkip },
+    );
+    const root = view.root as unknown as FakeNode;
+
+    expect(view.currentStepIndex()).toBe(0);
+    expect(requireText(root, "guided-tutorial-speaker").text).toContain("豪菜");
+    expect(requireText(root, "guided-tutorial-step").text).toContain("1");
+    const dialog = requireNode(root, "guided-tutorial-dialog");
+    const dialogInnerWidth = dialog.width
+      - webConfig.guided_tutorial.dialog_panel_padding * 2;
+    expect(requireText(root, "guided-tutorial-step").width).toBeCloseTo(
+      dialogInnerWidth * webConfig.guided_tutorial.header_step_width_ratio,
+    );
+    expect(requireNode(root, "guided-tutorial-focus-border").x).toBe(
+      80 - webConfig.guided_tutorial.spotlight_padding,
+    );
+
+    requireNode(root, "guided-tutorial-next").emit("click");
+    expect(view.currentStepIndex()).toBe(1);
+    expect(requireText(root, "guided-tutorial-title").text).toBe(
+      webConfig.guided_tutorial.steps[1]?.title,
+    );
+    requireNode(root, "guided-tutorial-previous").emit("click");
+    expect(view.currentStepIndex()).toBe(0);
+    requireNode(root, "guided-tutorial-skip").emit("click");
+    expect(onSkip).toHaveBeenCalledOnce();
+    expect(onComplete).not.toHaveBeenCalled();
+    view.destroy();
+  });
+
+  it("开局提示的返回、查看教程和继续行为彼此独立", () => {
+    const runtime = createFakeRuntime();
+    const back = vi.fn();
+    const openTutorial = vi.fn();
+    const continueGame = vi.fn();
+    const page = createPreGameNoticePage(
+      runtime,
+      createFactory(runtime),
+      webConfig,
+      createLayout(true),
+      { back, openTutorial, continueGame },
+    );
+    const root = page.root as unknown as FakeNode;
+
+    expect(requireText(root, "pre-game-notice-body").text).toContain("设置");
+    requireNode(root, "pre-game-notice-back").emit("click");
+    requireNode(root, "pre-game-notice-tutorial").emit("click");
+    requireNode(root, "pre-game-notice-continue").emit("click");
+    expect(back).toHaveBeenCalledOnce();
+    expect(openTutorial).toHaveBeenCalledOnce();
+    expect(continueGame).toHaveBeenCalledOnce();
+    page.destroy();
+  });
+
+  it("制作方 LOGO 文字保持代码原生，三段透明度与动画 token 一致", () => {
+    const runtime = createFakeRuntime();
+    const onComplete = vi.fn();
+    const splashConfig = {
+      ...webConfig,
+      publisher_splash: {
+        ...webConfig.publisher_splash,
+        background_asset: "assets/test-publisher-background.webp",
+      },
+    };
+    const view = createPublisherSplashPage(
+      runtime,
+      createFactory(runtime),
+      splashConfig,
+      createLayout(false),
+      onComplete,
+    );
+    const root = view.root as unknown as FakeNode;
+    const fadeIn = webConfig.motion.publisher_logo_fade_in_ms;
+    const hold = webConfig.motion.publisher_logo_hold_ms;
+    const fadeOut = webConfig.motion.publisher_logo_fade_out_ms;
+
+    expect(requireText(root, "publisher-splash-title").text).toBe("白菜出品");
+    expect(requireNode(root, "publisher-splash-background").alpha).toBe(
+      splashConfig.publisher_splash.background_opacity,
+    );
+    expect(resolvePublisherLogoAlpha(webConfig, fadeIn / 2)).toBeCloseTo(0.5);
+    expect(resolvePublisherLogoAlpha(webConfig, fadeIn + hold / 2)).toBe(1);
+    expect(resolvePublisherLogoAlpha(webConfig, fadeIn + hold + fadeOut / 2)).toBeCloseTo(0.5);
+    view.finish();
+    view.finish();
+    expect(onComplete).toHaveBeenCalledOnce();
+    view.destroy();
   });
 });

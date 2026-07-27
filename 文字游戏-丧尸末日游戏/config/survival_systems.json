@@ -246,7 +246,7 @@
     "unknown_text": "未知制作配方：{recipe_id}。"
   },
   "expedition": {
-    "base_steps": 4,
+    "base_steps": 10,
     "maximum_companions": 2,
     "maximum_carried_item_types": 3,
     "maximum_carried_units": 6,

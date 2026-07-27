@@ -93,10 +93,126 @@ export interface NativeNameInputTokens {
   readonly spellcheck: boolean;
 }
 
+/** UI 层开局页允许的稳定分类。 */
+export type NewGameSetupCategoryTokenId =
+  | "name"
+  | "mode"
+  | "difficulty"
+  | "origin"
+  | "trait"
+  | "city"
+  | "slot";
+
+/** UI 层的配置化模式选项。 */
+export interface NewGameModeOptionTokens {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+}
+
+/** UI 层的开局分类导航项。 */
+export interface NewGameSetupCategoryTokens {
+  readonly id: NewGameSetupCategoryTokenId;
+  readonly label: string;
+  readonly description: string;
+}
+
+/** 类银河策略式桌面开局三栏布局标尺。 */
+export interface NewGameSetupDesktopTokens {
+  readonly navigation_width: number;
+  readonly option_list_width: number;
+  readonly content_height: number;
+  readonly summary_height: number;
+  readonly panel_gap: number;
+  readonly row_height: number;
+  readonly panel_padding: number;
+}
+
+/** 手机开局分步流布局标尺。 */
+export interface NewGameSetupMobileTokens {
+  readonly step_header_height: number;
+  readonly option_area_height: number;
+  readonly preview_height: number;
+  readonly summary_height: number;
+  readonly row_height: number;
+  readonly panel_padding: number;
+}
+
+/** 开局页不依赖领域数据的配置化文案。 */
+export interface NewGameSetupCopyTokens {
+  readonly navigation_title: string;
+  readonly option_list_title: string;
+  readonly preview_title: string;
+  readonly summary_title: string;
+  readonly summary_format: string;
+  readonly step_format: string;
+  readonly previous_step: string;
+  readonly next_step: string;
+  readonly selected_mark: string;
+  readonly name_description: string;
+  readonly unavailable_mode: string;
+}
+
 /** UI 层的新游戏建档配置。 */
 export interface GameNewGameSetupTokens {
   readonly name_input: NativeNameInputTokens;
   readonly preset_names: readonly string[];
+  readonly mode_options: readonly NewGameModeOptionTokens[];
+  readonly categories: readonly NewGameSetupCategoryTokens[];
+  readonly desktop: NewGameSetupDesktopTokens;
+  readonly mobile: NewGameSetupMobileTokens;
+  readonly copy: NewGameSetupCopyTokens;
+}
+
+/** UI 层的单个战术引导步骤。 */
+export interface GuidedTutorialStepTokens {
+  readonly id: string;
+  readonly speaker: string;
+  readonly title: string;
+  readonly instruction: string;
+  readonly target_test_id: string;
+}
+
+/** UI 层的分步战术引导配置。 */
+export interface GuidedTutorialTokens {
+  readonly title: string;
+  readonly step_format: string;
+  readonly previous_label: string;
+  readonly next_label: string;
+  readonly complete_label: string;
+  readonly skip_label: string;
+  readonly missing_target_label: string;
+  readonly header_step_width_ratio: number;
+  readonly spotlight_padding: number;
+  readonly spotlight_border_width: number;
+  readonly dialog_panel_padding: number;
+  readonly desktop_dialog_width: number;
+  readonly desktop_dialog_height: number;
+  readonly mobile_dialog_height: number;
+  readonly fallback_target_width: number;
+  readonly fallback_target_height: number;
+  readonly steps: readonly GuidedTutorialStepTokens[];
+}
+
+/** UI 层的开局前教程位置提示。 */
+export interface PreGameNoticeTokens {
+  readonly title: string;
+  readonly body: string;
+  readonly continue_label: string;
+  readonly tutorial_label: string;
+}
+
+/** UI 层的制作方开场 LOGO 配置。 */
+export interface PublisherSplashTokens {
+  readonly title: string;
+  readonly subtitle: string;
+  readonly background_asset: string;
+  readonly background_opacity: number;
+  readonly content_width: number;
+  readonly title_height: number;
+  readonly subtitle_height: number;
+  readonly decoration_width: number;
+  readonly decoration_gap: number;
 }
 
 /** 单个响应式封面菜单布局配置。 */
@@ -170,6 +286,8 @@ export interface MobileLayoutTokens {
   readonly resource_bar_height: number;
   readonly quick_action_columns: number;
   readonly sheet_top_margin: number;
+  readonly log_preview_height: number;
+  readonly log_preview_entries: number;
 }
 
 /**
@@ -206,6 +324,9 @@ export interface GameMotionTokens {
   readonly cover_drift_ms: number;
   readonly cover_menu_description_delay_ms: number;
   readonly toast_duration_ms: number;
+  readonly publisher_logo_fade_in_ms: number;
+  readonly publisher_logo_hold_ms: number;
+  readonly publisher_logo_fade_out_ms: number;
   readonly reduced_motion: boolean;
 }
 
@@ -240,6 +361,14 @@ export interface GameAssetTokens {
   readonly cover_height?: number;
   readonly cover_themes: CoverThemesTokens;
   readonly skins: GameSkinTokens;
+  readonly companion_portraits: CompanionPortraitCatalogTokens;
+}
+
+/** 伙伴立绘的推荐尺寸与可缺省资源映射。 */
+export interface CompanionPortraitCatalogTokens {
+  readonly recommended_width: number;
+  readonly recommended_height: number;
+  readonly items: Readonly<Record<string, string>>;
 }
 
 /** 封面主题决定作品标题是否由界面层绘制。 */
@@ -305,7 +434,7 @@ export type NavigationPlacementToken =
   | "desktop_header";
 
 /** 局内导航允许出现的游戏模式。 */
-export type NavigationModeToken = "single" | "multiplayer" | "story";
+export type NavigationModeToken = "single" | "multiplayer" | "story" | "endless";
 
 /** 带位置和模式白名单的局内导航项。 */
 export interface NavigationToken {
@@ -473,6 +602,42 @@ export interface GameTextTokens {
   readonly save_slot_status_recoverable: string;
   readonly save_slot_status_corrupted: string;
   readonly save_slot_name_separator: string;
+  readonly companion_archive_title: string;
+  readonly companion_archive_body: string;
+  readonly companion_detail_title: string;
+  readonly companion_management: string;
+  readonly companion_management_title: string;
+  readonly companion_management_body: string;
+  readonly companion_equipment: string;
+  readonly companion_equipment_title: string;
+  readonly companion_weapon: string;
+  readonly companion_armor: string;
+  readonly companion_unequip: string;
+  readonly companion_interaction: string;
+  readonly companion_interaction_title: string;
+  readonly companion_locked_management: string;
+  readonly companion_secret_locked: string;
+  readonly companion_portrait_unavailable: string;
+  readonly companion_portrait_signal_format: string;
+  readonly companion_status_format: string;
+  readonly companion_equipment_format: string;
+  readonly companion_interaction_cooldown_format: string;
+  readonly management_detail_title: string;
+  readonly management_detail_requirements_title: string;
+  readonly management_detail_confirm: string;
+  readonly communication_log_title: string;
+  readonly communication_log_open: string;
+  readonly communication_log_empty: string;
+  readonly expedition_failure_title: string;
+  readonly expedition_failure_reason_format: string;
+  readonly expedition_failure_health_format: string;
+  readonly expedition_failure_summary_format: string;
+  readonly expedition_failure_carried_title: string;
+  readonly expedition_failure_loot_title: string;
+  readonly expedition_failure_item_format: string;
+  readonly expedition_failure_continue: string;
+  readonly expedition_step_warning: string;
+  readonly expedition_failure_steps_reason: string;
 }
 
 /**
@@ -486,6 +651,9 @@ export interface GameUiConfig {
   readonly motion: GameMotionTokens;
   readonly controls: GameControlTokens;
   readonly new_game_setup: GameNewGameSetupTokens;
+  readonly guided_tutorial: GuidedTutorialTokens;
+  readonly pre_game_notice: PreGameNoticeTokens;
+  readonly publisher_splash: PublisherSplashTokens;
   readonly layout: GameLayoutTokens;
   readonly web_exit: GameWebExitTokens;
   readonly update_log: GameUpdateLogTokens;

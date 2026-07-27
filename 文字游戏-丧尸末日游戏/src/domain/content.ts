@@ -3,6 +3,7 @@ import type {
   CheckpointState,
   CommunicationLogEntry,
   CompanionState,
+  ExpeditionFailureState,
   ExpeditionState,
   GameDateState,
   GameMode,
@@ -47,6 +48,11 @@ export interface RequirementConfig {
 
 export interface GameRuleConfig {
   companion_secret_unlock_trust: number;
+  companion_interaction_action_type: string;
+  lifespan: {
+    minimum: number;
+    maximum: number;
+  };
   world_map: {
     minimum_districts_per_city: number;
     required_neighbor_degree: number;
@@ -80,6 +86,8 @@ export interface GameRuleConfig {
   limits: {
     player_max_health: number;
     shelter_max_health: number;
+    shelter_max_hope: number;
+    hope_min_game_over: number;
     player_hunger_game_over: number;
     group_hunger_game_over: number;
     activity_min_game_over: number;
@@ -91,6 +99,7 @@ export interface GameRuleConfig {
     player_hunger_gain: number;
     group_hunger_gain_per_person: number;
     activity_loss: number;
+    hope_loss: number;
   };
   failure_endings: Record<
     string,
@@ -191,6 +200,7 @@ export interface GameConfigDocument {
     inventory: InventoryState;
     research: ResearchState;
     expedition: ExpeditionState | null;
+    last_expedition_failure: ExpeditionFailureState | null;
   };
   campaign_profiles: CampaignProfilesConfig;
   mode_capabilities: Record<GameMode, readonly string[]>;
@@ -238,6 +248,9 @@ export interface CompanionProfileConfig {
   companion_id: string;
   name: string;
   role: string;
+  initial_status: string;
+  recruit_scene_id: string | null;
+  portrait_key: string;
   introduction: string;
   secret: string;
   trust_perks?: readonly {
@@ -247,6 +260,37 @@ export interface CompanionProfileConfig {
     description: string;
     effects?: readonly NumericEffectConfig[];
   }[];
+}
+
+/** 玩家可向已入队伙伴发起的配置化互动。 */
+export interface CompanionInteractionConfig {
+  interaction_id: string;
+  label: string;
+  description: string;
+  result_text: string;
+  cooldown_turns: number;
+  turns_consumed: number;
+  trust_gain: number;
+  hope_gain: number;
+  requirements?: readonly RequirementConfig[];
+  costs?: readonly NumericEffectConfig[];
+}
+
+/** 伙伴配装与互动的共享规则及文案。 */
+export interface CompanionManagementConfig {
+  interactions: readonly CompanionInteractionConfig[];
+  slot_labels: Readonly<Record<"weapon" | "armor", string>>;
+  texts: {
+    unavailable_status: string;
+    cooldown: string;
+    requirement_locked: string;
+    insufficient_resources: string;
+    equipped: string;
+    unequipped: string;
+    already_equipped: string;
+    equipment_unavailable: string;
+    invalid_slot: string;
+  };
 }
 
 export interface BossPhaseConfig {
@@ -335,6 +379,18 @@ export interface JobConfig {
   };
 }
 
+/** 避难所中可由所长组织的群体活动。 */
+export interface ShelterActivityConfig {
+  activity_id: string;
+  name: string;
+  description: string;
+  duration_hours: number;
+  requirements?: readonly RequirementConfig[];
+  costs?: readonly NumericEffectConfig[];
+  rewards?: readonly NumericEffectConfig[];
+  result_text: string;
+}
+
 export interface TradeConfig {
   trade_id: string;
   vendor_id: string;
@@ -390,12 +446,14 @@ export interface StoryConfigDocument {
   };
   chapters: readonly StoryChapterConfig[];
   companions: readonly CompanionProfileConfig[];
+  companion_management: CompanionManagementConfig;
   scenes: readonly StorySceneConfig[];
   bosses: readonly BossConfig[];
   combat: CombatConfig;
   discoveries: readonly DiscoveryConfig[];
   facilities: readonly FacilityConfig[];
   jobs: readonly JobConfig[];
+  activities: readonly ShelterActivityConfig[];
   trades: readonly TradeConfig[];
   recruits: readonly RecruitConfig[];
   endings: readonly EndingConfig[];
@@ -482,6 +540,23 @@ export interface V4ToV5SaveMigrationConfig {
   schema_version: number;
   from_version: number;
   to_version: number;
+}
+
+/** v5 存档补齐希望、寿命、伙伴管理与远征失败字段的配置。 */
+export interface V5ToV6SaveMigrationConfig {
+  schema_version: number;
+  from_version: number;
+  to_version: number;
+  state_defaults: {
+    player_age: number;
+    player_lifespan: number;
+    shelter_hope: number;
+    companion_equipped_weapon_id: null;
+    companion_equipped_armor_id: null;
+    companion_interaction_cooldown_turns: number;
+    companion_interaction_count: number;
+    last_expedition_failure: null;
+  };
 }
 
 /** 格式化 JSON 中与 Python ``str.format`` 兼容的简单占位符。 */

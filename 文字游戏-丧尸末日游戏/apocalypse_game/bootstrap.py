@@ -42,7 +42,7 @@ def build_application(config_path: Optional[Path] = None) -> GameApplication:
     rules_config = config.section("rules")
     repository = JsonSaveRepository(
         config.resolve_path("save"),
-        schema_version=config.data["save_schema_version"],
+        schema_version=config.desktop_save_schema_version,
         validation_rules={
             "player_counts": rules_config["player_counts"],
             "time": rules_config["time"],

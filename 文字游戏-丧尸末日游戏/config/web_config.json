@@ -98,6 +98,16 @@
       "cover_button_disabled": "assets/ui/menu_button_disabled_2k.png",
       "page_surface": "",
       "action_bar": ""
+    },
+    "companion_portraits": {
+      "recommended_width": 1024,
+      "recommended_height": 1536,
+      "items": {
+        "companion_haocai": "",
+        "companion_yangguan": "",
+        "companion_linlan": "",
+        "companion_xiaoman": ""
+      }
     }
   },
   "theme": {
@@ -144,6 +154,9 @@
     "cover_drift_ms": 18000,
     "cover_menu_description_delay_ms": 300,
     "toast_duration_ms": 2600,
+    "publisher_logo_fade_in_ms": 650,
+    "publisher_logo_hold_ms": 1250,
+    "publisher_logo_fade_out_ms": 600,
     "reduced_motion": false
   },
   "controls": {
@@ -172,7 +185,154 @@
       "autocapitalize": "none",
       "spellcheck": false
     },
-    "preset_names": ["林岚", "周砚", "沈星", "许川", "白榆", "陆遥"]
+    "preset_names": ["林岚", "周砚", "沈星", "许川", "白榆", "陆遥"],
+    "mode_options": [
+      {
+        "id": "single",
+        "label": "普通求生",
+        "description": "围绕资源、伙伴和避难所建设的标准生存体验。"
+      },
+      {
+        "id": "multiplayer",
+        "label": "双人协作",
+        "description": "两位所长在同一设备轮流下达指令，共享希望与生存代价。"
+      },
+      {
+        "id": "story",
+        "label": "剧情模式",
+        "description": "推进人物命运与病毒真相，关键抉择会永久改变结局。"
+      },
+      {
+        "id": "endless",
+        "label": "无尽求生",
+        "description": "以生存天数为目标的长线挑战：生存损耗提高至 115%，不含剧情终局。"
+      }
+    ],
+    "categories": [
+      {"id": "name", "label": "所长", "description": "建立指挥者身份与多人名单。"},
+      {"id": "mode", "label": "模式", "description": "决定本局的核心循环和结束条件。"},
+      {"id": "difficulty", "label": "难度", "description": "决定资源压力、尸群强度与容错空间。"},
+      {"id": "origin", "label": "起源", "description": "决定所长在末日前的经历和开局资源。"},
+      {"id": "trait", "label": "特性", "description": "决定所长的长期行为倾向与数值修正。"},
+      {"id": "city", "label": "城市", "description": "决定出生地、相邻路线与初期情报范围。"},
+      {"id": "slot", "label": "存档", "description": "选择建立或覆盖本局的本地栏位。"}
+    ],
+    "desktop": {
+      "navigation_width": 210,
+      "option_list_width": 360,
+      "content_height": 760,
+      "summary_height": 186,
+      "panel_gap": 18,
+      "row_height": 92,
+      "panel_padding": 20
+    },
+    "mobile": {
+      "step_header_height": 112,
+      "option_area_height": 720,
+      "preview_height": 250,
+      "summary_height": 720,
+      "row_height": 92,
+      "panel_padding": 18
+    },
+    "copy": {
+      "navigation_title": "建档阶段",
+      "option_list_title": "可用方案",
+      "preview_title": "档案分析",
+      "summary_title": "指挥协议摘要",
+      "summary_format": "所长：{names}\n模式：{mode}\n难度：{difficulty}\n起源：{origin}\n特性：{trait}\n城市：{city}\n存档：{slot}",
+      "step_format": "第 {current} / {total} 步",
+      "previous_step": "上一阶段",
+      "next_step": "下一阶段",
+      "selected_mark": "已选",
+      "name_description": "所长姓名支持中文、英文和数字；预设名仍可继续编辑。",
+      "unavailable_mode": "当前入口尚未提供该模式的玩家数配置。"
+    }
+  },
+  "guided_tutorial": {
+    "title": "战术引导",
+    "step_format": "引导 {current} / {total}",
+    "previous_label": "上一步",
+    "next_label": "下一步",
+    "complete_label": "完成引导",
+    "skip_label": "跳过",
+    "missing_target_label": "目标界面尚未显示，可先阅读本步指令。",
+    "header_step_width_ratio": 0.35,
+    "spotlight_padding": 16,
+    "spotlight_border_width": 4,
+    "dialog_panel_padding": 24,
+    "desktop_dialog_width": 620,
+    "desktop_dialog_height": 330,
+    "mobile_dialog_height": 470,
+    "fallback_target_width": 260,
+    "fallback_target_height": 120,
+    "steps": [
+      {
+        "id": "commander-status",
+        "speaker": "基地指挥官·豪菜",
+        "title": "先认识你自己",
+        "instruction": "这里显示当前行动者和生存状态。生命、饥饿与希望中任何一项失控，都可能终结这次生存。",
+        "target_test_id": "dashboard-active-player"
+      },
+      {
+        "id": "resources",
+        "speaker": "基地指挥官·豪菜",
+        "title": "读懂库存",
+        "instruction": "食物维持人群，零件用于修复与研发，医疗用品保住远征队的命。每次出发前都要检查余量。",
+        "target_test_id": "dashboard-resource-player-food"
+      },
+      {
+        "id": "exploration",
+        "speaker": "侦察员·阳关",
+        "title": "规划第一次远征",
+        "instruction": "点击探索，先查看城市通行需求，再选区划、同行伙伴与携带物。城市路程与区划事件都会消耗步数。",
+        "target_test_id": "dashboard-action-explore"
+      },
+      {
+        "id": "shelter-management",
+        "speaker": "基地指挥官·豪菜",
+        "title": "稳住避难所",
+        "instruction": "供餐、修复、工作、招募与活动统一收在避难所管理中。先保住耐久和群体希望，再谈扩张。",
+        "target_test_id": "dashboard-action-shelter_management"
+      },
+      {
+        "id": "companions",
+        "speaker": "通讯员·小满",
+        "title": "伙伴不是数值",
+        "instruction": "从伙伴档案查看状态、立绘和完整档案，也可以为他们配装或互动。信任与特性会改变远征能力。",
+        "target_test_id": "dashboard-action-companions"
+      },
+      {
+        "id": "communication-log",
+        "speaker": "基地指挥官·豪菜",
+        "title": "记住发生过什么",
+        "instruction": "中央通讯栏记录当周行动，七日后会封存到历史记录。当你忘记上一步做了什么，先来这里。",
+        "target_test_id": "dashboard-log"
+      },
+      {
+        "id": "save-and-settings",
+        "speaker": "基地指挥官·豪菜",
+        "title": "暂停与存档",
+        "instruction": "按 ESC 打开功能菜单，可以存档、设置、回档或返回主菜单。完整教程也可随时从设置里重新打开。",
+        "target_test_id": "dashboard-settings"
+      }
+    ]
+  },
+  "pre_game_notice": {
+    "title": "指挥链接通知",
+    "body": "分步新手教程已收入‘设置 → 游戏玩法’。开局后可随时重新查看，教程不会推进游戏时间。",
+    "continue_label": "知道了，继续开局",
+    "tutorial_label": "现在查看教程"
+  },
+  "publisher_splash": {
+    "title": "白菜出品",
+    "subtitle": "避难所通讯系统",
+    "background_asset": "",
+    "background_opacity": 0.22,
+    "content_width": 680,
+    "title_height": 128,
+    "subtitle_height": 56,
+    "decoration_width": 520,
+    "decoration_gap": 26
   },
   "layout": {
     "cover": {
@@ -283,7 +443,9 @@
       "mission_height": 300,
       "resource_bar_height": 22,
       "quick_action_columns": 2,
-      "sheet_top_margin": 96
+      "sheet_top_margin": 96,
+      "log_preview_height": 220,
+      "log_preview_entries": 3
     },
     "page": {
       "max_content_width": 1180,
@@ -302,7 +464,7 @@
     "settings_schema_version": 2,
     "achievement_key": "shelter-embers-achievements-v1",
     "achievement_schema_version": 1,
-    "schema_version": 5,
+    "schema_version": 6,
     "auto_save": true,
     "backup_slots": 2,
     "save_slot_count": 6
@@ -334,12 +496,12 @@
     "scroll_settle_ms": 80
   },
   "navigation": [
-    {"id": "dashboard", "label": "指挥台", "icon": "▰", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story"]},
+    {"id": "dashboard", "label": "指挥台", "icon": "▰", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story", "endless"]},
     {"id": "story", "label": "剧情模式", "icon": "◈", "placements": ["mobile_bottom", "desktop_header"], "modes": ["story"]},
-    {"id": "explore", "label": "探索", "icon": "⌖", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story"]},
-    {"id": "management", "label": "经营", "icon": "⚒", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story"]},
-    {"id": "supplies", "label": "物资", "icon": "▣", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story"]},
-    {"id": "settings", "label": "设置", "icon": "⚙", "placements": ["mobile_header", "desktop_header"], "modes": ["single", "multiplayer", "story"]}
+    {"id": "explore", "label": "探索", "icon": "⌖", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story", "endless"]},
+    {"id": "management", "label": "经营", "icon": "⚒", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story", "endless"]},
+    {"id": "supplies", "label": "物资", "icon": "▣", "placements": ["mobile_bottom"], "modes": ["single", "multiplayer", "story", "endless"]},
+    {"id": "settings", "label": "设置", "icon": "⚙", "placements": ["mobile_header", "desktop_header"], "modes": ["single", "multiplayer", "story", "endless"]}
   ],
   "actions": [
     {"id": "warehouse", "label": "避难所仓库", "style": "secondary", "icon": "▣"},
@@ -382,7 +544,7 @@
     "exit_description": "结束本次指挥；浏览器限制关闭时会给出安全提示。",
     "update_log": "▤ 更新日志",
     "update_log_title": "更新日志",
-    "update_log_body": "版本 4.0 · 城市封锁线\n\n• 主视觉与平行四边形按钮升级为 2K 资源。\n• 新增难度、起源、特性、出生市区与独立所长档案。\n• 八座城市加入拓扑、地貌、情报、路径和载具通行规则。\n• 普通求生与剧情模式完全分离，首领战只在剧情模式出现。\n• 存档扩展为六个独立栏位，并显示模式、所长、难度、生存天数与城市。\n• 剧情结局《长夜守望》会永久解锁专属主界面封面，可在设置中切换。\n• 桌面悬停简介缩短至 0.3 秒并跟随鼠标；长页面与手机滚动体验同步优化。",
+    "update_log_body": "版本 5.0 · 火种协议\n\n• 新增普通求生、双人协作、剧情模式与无尽求生四种模式，以及五种开局起源。\n• 建档界面升级为桌面三栏策略式布局，手机端改为纵向分步流程。\n• 伙伴档案可查看立绘与完整经历，并新增武器、防具配装和互动系统。\n• 避难所加入活动分类、希望值，以及所长年龄与 70～120 岁随机寿命。\n• 远征基础步数提高至 10；步数耗尽时展示独立失败结算、生命变化和逐项损失。\n• 新增七步战术引导、开局教程提示、手机通讯栏与屏外目标自动聚焦。\n• 启动时播放‘白菜出品’制作方标识，再依次进入更新日志与封面。\n• 存档升级为 v6，旧 v1～v5 存档会逐级迁移并保留伙伴、希望与远征状态。",
     "profile_setup_title": "建立所长档案",
     "profile_setup_body": "姓名只代表所长本人；模式、难度、起源、特性与出生市区会分别影响本局规则。",
     "profile_name_label": "所长姓名",
@@ -416,6 +578,42 @@
     "save_slot_status_recoverable": "备份可恢复",
     "save_slot_status_corrupted": "已损坏",
     "save_slot_name_separator": "、",
+    "companion_archive_title": "伙伴档案",
+    "companion_archive_body": "选择伙伴查看立绘、经历、信任、特性与当前状态。",
+    "companion_detail_title": "{name} · 伙伴档案",
+    "companion_management": "伙伴管理",
+    "companion_management_title": "伙伴管理",
+    "companion_management_body": "为已加入的伙伴配置武器与防具，或通过互动建立信任。",
+    "companion_equipment": "配装",
+    "companion_equipment_title": "伙伴配装",
+    "companion_weapon": "武器",
+    "companion_armor": "防具",
+    "companion_unequip": "卸下装备",
+    "companion_interaction": "互动",
+    "companion_interaction_title": "伙伴互动",
+    "companion_locked_management": "该伙伴尚未加入避难所，无法进行管理。",
+    "companion_secret_locked": "信任不足，隐藏档案尚未解锁。",
+    "companion_portrait_unavailable": "立绘信号暂未接入",
+    "companion_portrait_signal_format": "档案信号：{status}\n资源键：{key}",
+    "companion_status_format": "{name} · {role}\n状态：{status}｜信任：{trust}",
+    "companion_equipment_format": "{slot}：{item}",
+    "companion_interaction_cooldown_format": "还需 {turns} 回合才能再次互动",
+    "management_detail_title": "避难所活动详情",
+    "management_detail_requirements_title": "活动需求",
+    "management_detail_confirm": "开始活动",
+    "communication_log_title": "行动通讯",
+    "communication_log_open": "查看完整通讯",
+    "communication_log_empty": "本周尚无行动通讯。",
+    "expedition_failure_title": "远征失败",
+    "expedition_failure_reason_format": "失败原因：{reason}",
+    "expedition_failure_health_format": "生命：{before} → {after}",
+    "expedition_failure_summary_format": "物资合计：原有 {before}｜保留 {kept}｜损失 {lost}（保留 {percent}%）",
+    "expedition_failure_carried_title": "携带物结算",
+    "expedition_failure_loot_title": "战利品结算",
+    "expedition_failure_item_format": "{name}：原有 {before}｜保留 {kept}｜损失 {lost}",
+    "expedition_failure_continue": "返回避难所",
+    "expedition_step_warning": "剩余步数不足以继续探索；继续行动将触发强制返程并损失物资。",
+    "expedition_failure_steps_reason": "行动步数耗尽，远征队被迫撤离。",
     "no_save": "当前浏览器还没有存档。",
     "auto_saved": "进度已自动保存",
     "storage_unavailable": "浏览器禁止本地存储，本次进度只能保留到页面关闭。",
@@ -498,7 +696,7 @@
     "expedition_city_title": "目标城市",
     "expedition_companion_title": "同行伙伴",
     "expedition_item_title": "携带物资",
-    "expedition_city_format": "{name} · {district}｜{status}\n{relation} · {terrain} · {steps}步",
+    "expedition_city_format": "{name}｜{status}\n{relation} · {terrain} · {steps}步",
     "expedition_companion_format": "{name}｜{trait}｜信任{trust}｜步数+{bonus}｜{status}",
     "expedition_item_format": "{name} ×{quantity}/{available}｜每件步数+{bonus}",
     "expedition_selected": "已选择",

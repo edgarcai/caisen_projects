@@ -115,13 +115,23 @@ class SaveMigrationTests(unittest.TestCase):
         self,
         legacy_state: Dict[str, Any],
     ) -> None:
-        """断言迁移没有改变旧玩家、避难所、时间、轮换和回合数据。"""
+        """断言迁移保留旧值，并为兼容扩展字段采用配置默认值。"""
 
         migrated = self.application.state
         self.assertEqual(legacy_state["mode"], migrated.mode)
-        self.assertEqual(
-            legacy_state["players"], [player.to_dict() for player in migrated.players]
-        )
+        configured_defaults = self.application.config.section("defaults")
+        migrated_players = [player.to_dict() for player in migrated.players]
+        self.assertEqual(len(legacy_state["players"]), len(migrated_players))
+        for legacy_player, migrated_player in zip(
+            legacy_state["players"], migrated_players
+        ):
+            for field_name, value in legacy_player.items():
+                self.assertEqual(value, migrated_player[field_name])
+            for field_name in set(migrated_player) - set(legacy_player):
+                self.assertEqual(
+                    configured_defaults["player"][field_name],
+                    migrated_player[field_name],
+                )
         self.assertEqual(
             legacy_state["active_player_index"], migrated.active_player_index
         )
@@ -129,7 +139,14 @@ class SaveMigrationTests(unittest.TestCase):
             legacy_state["players"][legacy_state["active_player_index"]]["name"],
             migrated.active_player.name,
         )
-        self.assertEqual(legacy_state["shelter"], migrated.shelter.to_dict())
+        migrated_shelter = migrated.shelter.to_dict()
+        for field_name, value in legacy_state["shelter"].items():
+            self.assertEqual(value, migrated_shelter[field_name])
+        for field_name in set(migrated_shelter) - set(legacy_state["shelter"]):
+            self.assertEqual(
+                configured_defaults["shelter"][field_name],
+                migrated_shelter[field_name],
+            )
         self.assertEqual(legacy_state["clock"], migrated.clock.to_dict())
         self.assertEqual(legacy_state["turn_number"], migrated.turn_number)
 

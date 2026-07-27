@@ -117,11 +117,31 @@ function createV4StateWithCheckpoint(): Record<string, unknown> {
 /** 从当前状态和检查点快照删除仅属于 v5 的区划字段。 */
 function downgradeToV4(rawState: Record<string, unknown>): Record<string, unknown> {
   const state = structuredClone(rawState);
+  deleteV6Fields(state);
   deleteDistrictFields(state);
   const checkpoint = asOptionalObject(state.checkpoint);
   const snapshot = checkpoint === null ? null : asObject(checkpoint.snapshot);
-  if (snapshot !== null) deleteDistrictFields(snapshot);
+  if (snapshot !== null) {
+    deleteV6Fields(snapshot);
+    deleteDistrictFields(snapshot);
+  }
   return state;
+}
+
+/** 删除 v6 希望、寿命、伙伴管理和失败摘要字段。 */
+function deleteV6Fields(state: Record<string, unknown>): void {
+  delete state.last_expedition_failure;
+  for (const player of state.players as Record<string, unknown>[]) {
+    delete player.age;
+    delete player.lifespan;
+  }
+  delete asObject(state.shelter).hope;
+  for (const companion of state.companions as Record<string, unknown>[]) {
+    delete companion.equipped_weapon_id;
+    delete companion.equipped_armor_id;
+    delete companion.interaction_cooldown_turns;
+    delete companion.interaction_count;
+  }
 }
 
 /** 删除一份可回档状态中的远征与待决事件区划字段。 */
@@ -166,7 +186,7 @@ describe("v4 到 v5 区划存档迁移", () => {
     expect(asObject(snapshot.expedition).district_id).toBe("city_d_district_b");
     expect(asObject(snapshot.pending_exploration).district_id).toBe("city_d_district_b");
     expect(source).toEqual(original);
-    expect(() => validator.parse(state)).not.toThrow();
+    expect(() => validator.validateRawV5(state)).not.toThrow();
   });
 
   it("没有待决事件时使用城市默认区划", () => {

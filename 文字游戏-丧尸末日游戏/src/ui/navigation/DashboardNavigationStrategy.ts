@@ -29,6 +29,7 @@ export const DASHBOARD_ACTION_IDS = [
   "crafting",
   "expedition",
   "history",
+  "communication_log",
 ] as const;
 
 /** 指挥台可用的稳定行动 ID 类型。 */
@@ -53,6 +54,7 @@ export type DashboardPushScreen =
   | "research"
   | "crafting"
   | "history"
+  | "communication_log"
   | "tutorial"
   | "return_menu_confirm";
 
@@ -98,6 +100,7 @@ const DEFAULT_POLICY_ENTRIES = Object.freeze({
   crafting: { type: "push_screen", screen: "crafting" },
   expedition: EXPEDITION_INTENT,
   history: { type: "push_screen", screen: "history" },
+  communication_log: { type: "push_screen", screen: "communication_log" },
 } satisfies Readonly<Record<DashboardEntryId, DashboardNavigationIntent>>);
 
 /** 保留当前行为的默认局内导航策略。 */

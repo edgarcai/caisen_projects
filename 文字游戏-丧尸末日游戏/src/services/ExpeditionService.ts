@@ -3,6 +3,7 @@ import { GameApplicationError } from "../domain/errors";
 import {
   cloneGameState,
   findCompanion,
+  type ExpeditionLossItemState,
   type GameState,
 } from "../domain/game-state";
 import type { RandomSource } from "../domain/ports";
@@ -159,6 +160,7 @@ export class ExpeditionService {
       maximum_steps: maximumSteps,
       events_resolved: 0,
     };
+    working.last_expedition_failure = null;
     this.commit(working, state);
     return {
       applied: true,
@@ -261,7 +263,7 @@ export class ExpeditionService {
     };
   }
 
-  /** 仅保留配置比例的全部远征物资，并把所长生命设置到配置区间。 */
+  /** 仅保留配置比例的远征物资，并持久化供失败页展示的损失明细。 */
   public forceReturn(state: GameState): SurvivalSystemResolution {
     const current = this.requireExpedition(state);
     const [minimumHealth, maximumHealth] =
@@ -274,18 +276,41 @@ export class ExpeditionService {
       current.leader_player_index,
     );
     const keepPercent = this.config.expedition.forced_return_keep_percent;
-    const expeditionSupplies = this.mergeQuantities(
-      expedition.carried_items,
-      expedition.loot,
-    );
-    const keptSupplies = this.keepPercent(expeditionSupplies, keepPercent);
+    const keptCarriedItems = this.keepPercent(expedition.carried_items, keepPercent);
+    const keptLootItems = this.keepPercent(expedition.loot, keepPercent);
+    const keptSupplies = this.mergeQuantities(keptCarriedItems, keptLootItems);
     this.inventory.deposit(working, keptSupplies, leaderPlayerIndex);
     const leader = working.players[leaderPlayerIndex];
     if (leader === undefined) {
       throw new GameApplicationError(this.config.expedition.selection_invalid_text);
     }
-    const health = rolledHealth;
+    const healthBefore = leader.health;
+    const health = Math.min(healthBefore, rolledHealth);
     leader.health = health;
+    const itemIds = [
+      ...Object.keys(expedition.carried_items),
+      ...Object.keys(expedition.loot),
+    ];
+    const itemNames = this.inventory.itemNames(itemIds);
+    const lossItems = [
+      ...this.lossItems("carried", expedition.carried_items, keptCarriedItems, itemNames),
+      ...this.lossItems("loot", expedition.loot, keptLootItems, itemNames),
+    ];
+    const totalOriginal = lossItems.reduce(
+      (sum, item) => sum + item.original_quantity,
+      0,
+    );
+    const totalKept = lossItems.reduce((sum, item) => sum + item.kept_quantity, 0);
+    working.last_expedition_failure = {
+      reason: "steps_exhausted",
+      kept_percent: keepPercent,
+      health_before: healthBefore,
+      health_after: health,
+      total_original: totalOriginal,
+      total_kept: totalKept,
+      total_lost: totalOriginal - totalKept,
+      items: lossItems,
+    };
     working.pending_exploration = null;
     working.expedition = null;
     this.commit(working, state);
@@ -345,6 +370,26 @@ export class ExpeditionService {
     return Object.fromEntries(Object.entries(quantities).map(
       ([itemId, quantity]) => [itemId, Math.floor((quantity * percent) / 100)],
     ));
+  }
+
+  /** 将携带物或战利品映射为不合并来源的损失行。 */
+  private lossItems(
+    source: ExpeditionLossItemState["source"],
+    original: Readonly<Record<string, number>>,
+    kept: Readonly<Record<string, number>>,
+    itemNames: Readonly<Record<string, string>>,
+  ): ExpeditionLossItemState[] {
+    return Object.entries(original).map(([itemId, originalQuantity]) => {
+      const keptQuantity = kept[itemId] ?? 0;
+      return {
+        source,
+        item_id: itemId,
+        item_name: itemNames[itemId] ?? itemId,
+        original_quantity: originalQuantity,
+        kept_quantity: keptQuantity,
+        lost_quantity: originalQuantity - keptQuantity,
+      };
+    });
   }
 
   /** 计算基础、研发、伙伴词条和携带物共同提供的最大步数。 */
@@ -439,12 +484,13 @@ export class ExpeditionService {
     return playerIndex;
   }
 
-  /** 一次提交远征托管涉及的玩家、共享资源、库存与探索状态。 */
+  /** 一次提交远征托管涉及的资源、探索状态与最近失败摘要。 */
   private commit(source: GameState, target: GameState): void {
     target.players = source.players;
     target.shelter = source.shelter;
     target.inventory = source.inventory;
     target.pending_exploration = source.pending_exploration;
     target.expedition = source.expedition;
+    target.last_expedition_failure = source.last_expedition_failure;
   }
 }

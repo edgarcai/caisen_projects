@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import copy
-from typing import List, Optional, Sequence, Tuple
+from dataclasses import fields
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Type
 
 from apocalypse_game.combat import CombatAction, CombatService
 from apocalypse_game.config import GameConfig
@@ -27,6 +28,21 @@ from apocalypse_game.story import StoryService
 
 class GameApplicationError(RuntimeError):
     """表示当前游戏状态无法执行请求的应用用例。"""
+
+
+def _configured_state_defaults(
+    state_type: Type[Any],
+    configured_defaults: Mapping[str, Any],
+    excluded_fields: Sequence[str] = (),
+) -> Dict[str, Any]:
+    """按领域模型字段筛选共享配置，隔离 H5 扩展字段与桌面旧模型。"""
+
+    excluded = set(excluded_fields)
+    return {
+        field_info.name: copy.deepcopy(configured_defaults[field_info.name])
+        for field_info in fields(state_type)
+        if field_info.name in configured_defaults and field_info.name not in excluded
+    }
 
 
 class GameApplication:
@@ -72,14 +88,24 @@ class GameApplication:
 
         defaults = self.config.section("defaults")
         time_config = self.config.section("rules")["time"]
+        player_defaults = _configured_state_defaults(
+            PlayerState,
+            defaults["player"],
+            excluded_fields=("name",),
+        )
+        shelter_defaults = _configured_state_defaults(
+            ShelterState,
+            defaults["shelter"],
+        )
         players = [
-            PlayerState(name=name, **dict(defaults["player"])) for name in clean_names
+            PlayerState(name=name, **copy.deepcopy(player_defaults))
+            for name in clean_names
         ]
         self.state = GameState(
             mode=mode,
             players=players,
             active_player_index=0,
-            shelter=ShelterState(**dict(defaults["shelter"])),
+            shelter=ShelterState(**shelter_defaults),
             clock=GameClock(
                 year=time_config["start_year"],
                 month=time_config["start_month"],

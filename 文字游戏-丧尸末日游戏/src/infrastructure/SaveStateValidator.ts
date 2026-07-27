@@ -56,6 +56,11 @@ const RESTORABLE_V3_STATE_FIELDS = [
 const V3_STATE_FIELDS = [...RESTORABLE_V3_STATE_FIELDS, "checkpoint"] as const;
 const RESTORABLE_V4_STATE_FIELDS = [...RESTORABLE_V3_STATE_FIELDS, "campaign"] as const;
 const V4_STATE_FIELDS = [...RESTORABLE_V4_STATE_FIELDS, "checkpoint"] as const;
+const RESTORABLE_V6_STATE_FIELDS = [
+  ...RESTORABLE_V4_STATE_FIELDS,
+  "last_expedition_failure",
+] as const;
+const V6_STATE_FIELDS = [...RESTORABLE_V6_STATE_FIELDS, "checkpoint"] as const;
 const PLAYER_FIELDS = [
   "name",
   "health",
@@ -71,6 +76,7 @@ const PLAYER_FIELDS = [
   "negative_status",
   "antidotes",
 ] as const;
+const V6_PLAYER_FIELDS = [...PLAYER_FIELDS, "age", "lifespan"] as const;
 const SHELTER_FIELDS = [
   "population",
   "group_hunger",
@@ -83,6 +89,7 @@ const SHELTER_FIELDS = [
   "toys",
   "game_consoles",
 ] as const;
+const V6_SHELTER_FIELDS = [...SHELTER_FIELDS, "hope"] as const;
 const CLOCK_FIELDS = ["year", "month", "day", "hour"] as const;
 const STORY_FIELDS = [
   "current_scene_id",
@@ -96,6 +103,13 @@ const STORY_FIELDS = [
   "boss_outcomes",
 ] as const;
 const COMPANION_FIELDS = ["companion_id", "trust", "status"] as const;
+const V6_COMPANION_FIELDS = [
+  ...COMPANION_FIELDS,
+  "equipped_weapon_id",
+  "equipped_armor_id",
+  "interaction_cooldown_turns",
+  "interaction_count",
+] as const;
 const BATTLE_FIELDS = [
   "boss_id",
   "boss_name",
@@ -150,6 +164,24 @@ const V4_EXPEDITION_FIELDS = [
 const V5_EXPEDITION_FIELDS = [
   ...V4_EXPEDITION_FIELDS,
   "district_id",
+] as const;
+const EXPEDITION_FAILURE_FIELDS = [
+  "reason",
+  "kept_percent",
+  "health_before",
+  "health_after",
+  "total_original",
+  "total_kept",
+  "total_lost",
+  "items",
+] as const;
+const EXPEDITION_LOSS_ITEM_FIELDS = [
+  "source",
+  "item_id",
+  "item_name",
+  "original_quantity",
+  "kept_quantity",
+  "lost_quantity",
 ] as const;
 const COMPANION_STATUSES = new Set(["active", "locked", "exiled", "lost", "dead"]);
 
@@ -260,9 +292,25 @@ export class SaveStateValidator {
     return state;
   }
 
-  /** 从已通过 v5 结构检查的数据创建副本并验证完整状态。 */
+  /** 在构造领域对象前验证 v6 希望、寿命、伙伴和失败摘要字段。 */
+  public validateRawV6(rawState: unknown): JsonObject {
+    const state = exactObject(rawState, V6_STATE_FIELDS, "v6 game_state");
+    this.validateRawV6Base(state, "v6 game_state");
+    if (state.checkpoint !== null) {
+      const checkpoint = exactObject(state.checkpoint, CHECKPOINT_FIELDS, "v6 checkpoint");
+      const snapshot = exactObject(
+        checkpoint.snapshot,
+        RESTORABLE_V6_STATE_FIELDS,
+        "v6 checkpoint.snapshot",
+      );
+      this.validateRawV6Base(snapshot, "v6 checkpoint.snapshot");
+    }
+    return state;
+  }
+
+  /** 从已通过 v6 结构检查的数据创建副本并验证完整状态。 */
   public parse(rawState: unknown): GameState {
-    const state = structuredClone(this.validateRawV5(rawState)) as unknown as GameState;
+    const state = structuredClone(this.validateRawV6(rawState)) as unknown as GameState;
     this.validate(state);
     return state;
   }
@@ -322,16 +370,21 @@ export class SaveStateValidator {
     this.validateInventory(state);
     this.validateResearch(state);
     this.validateExpedition(state);
+    this.validateExpeditionFailure(state);
     this.validateCheckpoint(state);
   }
 
   /** 校验玩家和共享容器的 v1/v2 公共字段集合。 */
-  private validateCommonContainers(state: JsonObject): void {
+  private validateCommonContainers(
+    state: JsonObject,
+    playerFields: readonly string[] = PLAYER_FIELDS,
+    shelterFields: readonly string[] = SHELTER_FIELDS,
+  ): void {
     const players = requireArray(state.players, "players");
     for (const [index, player] of players.entries()) {
-      exactObject(player, PLAYER_FIELDS, `players[${String(index)}]`);
+      exactObject(player, playerFields, `players[${String(index)}]`);
     }
-    exactObject(state.shelter, SHELTER_FIELDS, "shelter");
+    exactObject(state.shelter, shelterFields, "shelter");
     exactObject(state.clock, CLOCK_FIELDS, "clock");
   }
 
@@ -340,12 +393,15 @@ export class SaveStateValidator {
     state: JsonObject,
     version: string,
     pendingFields: readonly string[] = V4_PENDING_FIELDS,
+    playerFields: readonly string[] = PLAYER_FIELDS,
+    shelterFields: readonly string[] = SHELTER_FIELDS,
+    companionFields: readonly string[] = COMPANION_FIELDS,
   ): void {
-    this.validateCommonContainers(state);
+    this.validateCommonContainers(state, playerFields, shelterFields);
     exactObject(state.story, STORY_FIELDS, `${version} story`);
     const companions = requireArray(state.companions, `${version} companions`);
     for (const [index, companion] of companions.entries()) {
-      exactObject(companion, COMPANION_FIELDS, `${version} companions[${String(index)}]`);
+      exactObject(companion, companionFields, `${version} companions[${String(index)}]`);
     }
     requireObject(state.facility_levels, `${version} facility_levels`);
     this.validateOptionalObject(state.battle, BATTLE_FIELDS, `${version} battle`);
@@ -363,8 +419,18 @@ export class SaveStateValidator {
     path: string,
     expeditionFields: readonly string[],
     pendingFields: readonly string[] = V4_PENDING_FIELDS,
+    playerFields: readonly string[] = PLAYER_FIELDS,
+    shelterFields: readonly string[] = SHELTER_FIELDS,
+    companionFields: readonly string[] = COMPANION_FIELDS,
   ): void {
-    this.validateGameplayContainers(state, path, pendingFields);
+    this.validateGameplayContainers(
+      state,
+      path,
+      pendingFields,
+      playerFields,
+      shelterFields,
+      companionFields,
+    );
     const communicationLog = requireArray(state.communication_log, `${path}.communication_log`);
     for (const [index, entry] of communicationLog.entries()) {
       const item = exactObject(
@@ -420,6 +486,38 @@ export class SaveStateValidator {
     exactObject(state.campaign, CAMPAIGN_FIELDS, `${path}.campaign`);
   }
 
+  /** 校验 v6 可恢复状态的全部新增容器。 */
+  private validateRawV6Base(state: JsonObject, path: string): void {
+    this.validateRawSurvivalBase(
+      state,
+      path,
+      V5_EXPEDITION_FIELDS,
+      V5_PENDING_FIELDS,
+      V6_PLAYER_FIELDS,
+      V6_SHELTER_FIELDS,
+      V6_COMPANION_FIELDS,
+    );
+    exactObject(state.campaign, CAMPAIGN_FIELDS, `${path}.campaign`);
+    if (state.last_expedition_failure !== null) {
+      const failure = exactObject(
+        state.last_expedition_failure,
+        EXPEDITION_FAILURE_FIELDS,
+        `${path}.last_expedition_failure`,
+      );
+      const items = requireArray(
+        failure.items,
+        `${path}.last_expedition_failure.items`,
+      );
+      for (const [index, item] of items.entries()) {
+        exactObject(
+          item,
+          EXPEDITION_LOSS_ITEM_FIELDS,
+          `${path}.last_expedition_failure.items[${String(index)}]`,
+        );
+      }
+    }
+  }
+
   /** 校验一个可空对象的精确字段集合。 */
   private validateOptionalObject(
     value: unknown,
@@ -450,7 +548,7 @@ export class SaveStateValidator {
 
   /** 校验玩家姓名、资源整数、唯一性和生命上限。 */
   private validatePlayers(state: GameState): void {
-    const numericFields = PLAYER_FIELDS.filter((field) => field !== "name");
+    const numericFields = V6_PLAYER_FIELDS.filter((field) => field !== "name");
     const names: string[] = [];
     for (const [index, player] of state.players.entries()) {
       requireNonEmptyString(player.name, `players[${String(index)}].name`);
@@ -461,19 +559,28 @@ export class SaveStateValidator {
       if (player.health > this.rules.limits.player_max_health) {
         throw new SaveDataError("玩家生命超过配置上限。");
       }
+      if (
+        player.lifespan < this.rules.lifespan.minimum
+        || player.lifespan > this.rules.lifespan.maximum
+      ) {
+        throw new SaveDataError("所长寿命不在配置区间内。");
+      }
     }
     requireUnique(names, "玩家姓名");
   }
 
   /** 校验共享避难所的整数资源和耐久上限。 */
   private validateShelter(state: GameState): void {
-    const nonNegativeFields = SHELTER_FIELDS.filter((field) => field !== "activity");
+    const nonNegativeFields = V6_SHELTER_FIELDS.filter((field) => field !== "activity");
     for (const field of nonNegativeFields) {
       requireInteger(state.shelter[field], `shelter.${field}`, 0);
     }
     requireInteger(state.shelter.activity, "shelter.activity");
     if (state.shelter.health > this.rules.limits.shelter_max_health) {
       throw new SaveDataError("避难所耐久超过配置上限。");
+    }
+    if (state.shelter.hope > this.rules.limits.shelter_max_hope) {
+      throw new SaveDataError("避难所希望超过配置上限。");
     }
   }
 
@@ -509,6 +616,24 @@ export class SaveStateValidator {
       if (!COMPANION_STATUSES.has(companion.status)) {
         throw new SaveDataError(`companions[${String(index)}].status 无效。`);
       }
+      requireNullableNonEmptyString(
+        companion.equipped_weapon_id,
+        `companions[${String(index)}].equipped_weapon_id`,
+      );
+      requireNullableNonEmptyString(
+        companion.equipped_armor_id,
+        `companions[${String(index)}].equipped_armor_id`,
+      );
+      requireInteger(
+        companion.interaction_cooldown_turns,
+        `companions[${String(index)}].interaction_cooldown_turns`,
+        0,
+      );
+      requireInteger(
+        companion.interaction_count,
+        `companions[${String(index)}].interaction_count`,
+        0,
+      );
       ids.push(companion.companion_id);
     }
     requireUnique(ids, "伙伴 ID");
@@ -666,6 +791,35 @@ export class SaveStateValidator {
       craftedItems,
       quantities,
     );
+    for (const [index, companion] of state.companions.entries()) {
+      this.validateEquippedItem(
+        companion.equipped_weapon_id,
+        `companions[${String(index)}].equipped_weapon_id`,
+        "weapon",
+        craftedItems,
+        quantities,
+      );
+      this.validateEquippedItem(
+        companion.equipped_armor_id,
+        `companions[${String(index)}].equipped_armor_id`,
+        "armor",
+        craftedItems,
+        quantities,
+      );
+    }
+    for (const itemId of Object.keys(quantities)) {
+      const equippedCount = [
+        state.inventory.equipped_weapon_id,
+        state.inventory.equipped_armor_id,
+        ...state.companions.flatMap((companion) => [
+          companion.equipped_weapon_id,
+          companion.equipped_armor_id,
+        ]),
+      ].filter((equippedId) => equippedId === itemId).length;
+      if (equippedCount > (quantities[itemId] ?? 0)) {
+        throw new SaveDataError(`装备 ${itemId} 的占用数超过制作物库存。`);
+      }
+    }
     this.validateEquippedItem(
       state.inventory.equipped_armor_id,
       "inventory.equipped_armor_id",
@@ -767,7 +921,7 @@ export class SaveStateValidator {
     requireInteger(
       expedition.maximum_steps,
       "expedition.maximum_steps",
-      this.survivalSystems.expedition.base_steps,
+      0,
     );
     requireInteger(expedition.events_resolved, "expedition.events_resolved", 0);
     if (expedition.remaining_steps > expedition.maximum_steps) {
@@ -781,6 +935,83 @@ export class SaveStateValidator {
       )
     ) {
       throw new SaveDataError("远征城市或区划与待结算探索不一致。");
+    }
+  }
+
+  /** 校验强制返程损失的来源、数量恒等式与配置比例。 */
+  private validateExpeditionFailure(state: GameState): void {
+    const failure = state.last_expedition_failure;
+    if (failure === null) return;
+    if (state.expedition !== null || state.pending_exploration !== null) {
+      throw new SaveDataError("强制返程摘要不能与进行中远征并存。");
+    }
+    const reason: unknown = failure.reason;
+    if (reason !== "steps_exhausted") {
+      throw new SaveDataError("强制返程原因无效。");
+    }
+    requireInteger(failure.kept_percent, "last_expedition_failure.kept_percent", 0);
+    if (failure.kept_percent !== this.survivalSystems.expedition.forced_return_keep_percent) {
+      throw new SaveDataError("强制返程保留比例与配置不一致。");
+    }
+    requireInteger(failure.health_before, "last_expedition_failure.health_before", 0);
+    requireInteger(failure.health_after, "last_expedition_failure.health_after", 0);
+    if (failure.health_after > failure.health_before) {
+      throw new SaveDataError("强制返程不能使所长恢复生命。");
+    }
+    const [minimumHealth, maximumHealth] =
+      this.survivalSystems.expedition.forced_return_health_range;
+    const possibleMinimum = Math.min(failure.health_before, minimumHealth);
+    const possibleMaximum = Math.min(failure.health_before, maximumHealth);
+    if (
+      failure.health_after < possibleMinimum
+      || failure.health_after > possibleMaximum
+    ) {
+      throw new SaveDataError("强制返程生命不在配置随机区间内。");
+    }
+    const knownItemIds = new Set([
+      ...this.survivalSystems.warehouse.resource_items,
+      ...this.survivalSystems.warehouse.crafted_items,
+    ].map((item) => item.item_id));
+    const uniqueRows: string[] = [];
+    let totalOriginal = 0;
+    let totalKept = 0;
+    for (const [index, item] of failure.items.entries()) {
+      const path = `last_expedition_failure.items[${String(index)}]`;
+      const source: unknown = item.source;
+      if (source !== "carried" && source !== "loot") {
+        throw new SaveDataError(`${path}.source 无效。`);
+      }
+      requireNonEmptyString(item.item_id, `${path}.item_id`);
+      requireNonEmptyString(item.item_name, `${path}.item_name`);
+      if (!knownItemIds.has(item.item_id)) {
+        throw new SaveDataError(`${path}.item_id 引用未知物品。`);
+      }
+      requireInteger(item.original_quantity, `${path}.original_quantity`, 1);
+      requireInteger(item.kept_quantity, `${path}.kept_quantity`, 0);
+      requireInteger(item.lost_quantity, `${path}.lost_quantity`, 0);
+      const expectedKept = Math.floor(
+        (item.original_quantity * failure.kept_percent) / 100,
+      );
+      if (
+        item.kept_quantity !== expectedKept
+        || item.lost_quantity !== item.original_quantity - item.kept_quantity
+      ) {
+        throw new SaveDataError(`${path} 的保留与损失数量不守恒。`);
+      }
+      uniqueRows.push(`${item.source}:${item.item_id}`);
+      totalOriginal += item.original_quantity;
+      totalKept += item.kept_quantity;
+    }
+    requireUnique(uniqueRows, "强制返程损失来源与物品组合");
+    requireInteger(failure.total_original, "last_expedition_failure.total_original", 0);
+    requireInteger(failure.total_kept, "last_expedition_failure.total_kept", 0);
+    requireInteger(failure.total_lost, "last_expedition_failure.total_lost", 0);
+    if (
+      failure.total_original !== totalOriginal
+      || failure.total_kept !== totalKept
+      || failure.total_lost !== totalOriginal - totalKept
+    ) {
+      throw new SaveDataError("强制返程损失汇总与明细不一致。");
     }
   }
 
@@ -917,8 +1148,11 @@ export class SaveStateValidator {
     }
     const limits = this.rules.limits;
     const failed = state.shelter.health <= 0
+      || state.shelter.hope <= limits.hope_min_game_over
       || state.players.some(
-        (player) => player.health <= 0 || player.hunger >= limits.player_hunger_game_over,
+        (player) => player.health <= 0
+          || player.hunger >= limits.player_hunger_game_over
+          || player.age >= player.lifespan,
       )
       || state.shelter.group_hunger >= limits.group_hunger_game_over
       || state.shelter.activity <= limits.activity_min_game_over

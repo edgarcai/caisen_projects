@@ -78,6 +78,7 @@ function activeExpedition(): UiExpeditionStatusView {
     carriedItems: { field_ration: 1 },
     loot: { food: 8 },
     itemNames: { field_ration: "行军口粮", food: "密封食物" },
+    eventStepCost: 2,
   };
 }
 

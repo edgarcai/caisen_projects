@@ -100,6 +100,7 @@ class GameRules:
         )
         state.shelter.group_hunger += group_hunger_gain
         state.shelter.activity -= self._turn_costs["activity_loss"]
+        state.shelter.hope -= self._turn_costs["hope_loss"]
         state.turn_number += 1
 
         advance = state.clock.advance(
@@ -124,6 +125,16 @@ class GameRules:
             messages.append(self._config.text("turn_month"))
         if advance.year_changed:
             messages.append(self._config.text("turn_year"))
+            for player in state.players:
+                player.age += 1
+                messages.append(
+                    self._config.text(
+                        "player_aged",
+                        player_name=player.name,
+                        age=player.age,
+                        lifespan=player.lifespan,
+                    )
+                )
 
         ending = self.check_failure(state)
         if ending is not None:
@@ -153,6 +164,10 @@ class GameRules:
             min(state.shelter.health, self._limits["shelter_max_health"]),
         )
         state.shelter.group_hunger = max(state.shelter.group_hunger, 0)
+        state.shelter.hope = max(
+            0,
+            min(state.shelter.hope, self._limits["shelter_max_hope"]),
+        )
         for field_name in (
             "population",
             "defense_damage",
@@ -177,6 +192,8 @@ class GameRules:
 
         if state.shelter.health <= 0:
             return self._failure_ending("shelter", state.mode)
+        if state.shelter.hope <= self._limits["hope_min_game_over"]:
+            return self._failure_ending("hope", state.mode)
         for player in state.players:
             if player.health <= 0:
                 return self._failure_ending(
@@ -189,6 +206,13 @@ class GameRules:
                     "player_hunger",
                     state.mode,
                     player_name=player.name,
+                )
+            if player.age >= player.lifespan:
+                return self._failure_ending(
+                    "lifespan",
+                    state.mode,
+                    player_name=player.name,
+                    lifespan=player.lifespan,
                 )
         if state.shelter.group_hunger >= self._limits["group_hunger_game_over"]:
             return self._failure_ending("group_hunger", state.mode)

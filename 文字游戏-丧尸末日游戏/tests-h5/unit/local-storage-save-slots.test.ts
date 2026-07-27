@@ -75,6 +75,8 @@ function createState(options: StateOptions = {}): GameState {
     },
     players: playerNames.map((name) => ({
       name,
+      age: 25,
+      lifespan: 95,
       health: 100,
       attack: 5,
       defense: 15,
@@ -91,6 +93,7 @@ function createState(options: StateOptions = {}): GameState {
     active_player_index: 0,
     shelter: {
       population: 3,
+      hope: 60,
       group_hunger: 0,
       health: 200,
       defense_damage: 15,
@@ -148,6 +151,7 @@ function createState(options: StateOptions = {}): GameState {
       maximum_steps: 6,
       events_resolved: 1,
     },
+    last_expedition_failure: null,
   };
 }
 
