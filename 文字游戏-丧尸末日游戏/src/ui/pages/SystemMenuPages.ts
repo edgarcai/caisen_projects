@@ -11,9 +11,8 @@ import type {
 } from "../ports/GameUiPort";
 import { createChoicePage } from "./ChoicePage";
 import { createConfirmPage } from "./ConfirmPage";
-import { createDocumentPage } from "./DocumentPage";
 import { createEscMenuPage } from "./EscMenuPage";
-import type { PageView } from "./PageView";
+import { PageScaffold, type PageView } from "./PageView";
 
 /** 功能菜单可触发的页面级动作。 */
 export interface FunctionMenuActions {
@@ -323,7 +322,7 @@ export function createExitConfirmPage(
   );
 }
 
-/** 创建正文严格为空的鸣谢覆盖页，后续内容由主线素材承载。 */
+/** 创建按逗号语义逐行排版、整体居中的完整鸣谢页。 */
 export function createCreditsPage(
   runtime: LayaRuntimeLike,
   factory: UiFactory,
@@ -331,7 +330,7 @@ export function createCreditsPage(
   layout: ResponsiveLayout,
   onClose: () => void,
 ): PageView {
-  return createDocumentPage(
+  return createCenteredDocumentPage(
     runtime,
     factory,
     config,
@@ -340,10 +339,128 @@ export function createCreditsPage(
     createCreditsDocument(config),
     config.texts.close,
     onClose,
+    config.typography.caption_size,
+    config.theme.text,
   );
 }
 
-/** 返回正文严格为空的鸣谢文档契约。 */
+/** 从可替换文案配置返回鸣谢与音乐版权提示。 */
 export function createCreditsDocument(config: GameUiConfig): UiDocumentView {
-  return { title: config.texts.credits, body: "" };
+  return { title: config.texts.credits, body: config.texts.credits_body };
+}
+
+/** 创建未接入账户服务时的红色未登录提示页。 */
+export function createAccountLoginPage(
+  runtime: LayaRuntimeLike,
+  factory: UiFactory,
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  onClose: () => void,
+): PageView {
+  return createCenteredDocumentPage(
+    runtime,
+    factory,
+    config,
+    layout,
+    "page-account-login",
+    {
+      title: config.texts.account_unavailable_title,
+      body: config.texts.account_unavailable_body,
+      tone: "danger",
+    },
+    config.texts.close,
+    onClose,
+    config.typography.body_size,
+    config.theme.error,
+  );
+}
+
+/** 创建尚无 DLC 售卖时的商店空状态页。 */
+export function createStorePage(
+  runtime: LayaRuntimeLike,
+  factory: UiFactory,
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  onClose: () => void,
+): PageView {
+  return createCenteredDocumentPage(
+    runtime,
+    factory,
+    config,
+    layout,
+    "page-store",
+    { title: config.texts.store_title, body: config.texts.store_empty_body },
+    config.texts.close,
+    onClose,
+    config.typography.body_size,
+    config.theme.muted_text,
+  );
+}
+
+/** 创建主菜单可进入的文本记录基础空状态页。 */
+export function createTextRecordsPage(
+  runtime: LayaRuntimeLike,
+  factory: UiFactory,
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  onClose: () => void,
+): PageView {
+  return createCenteredDocumentPage(
+    runtime,
+    factory,
+    config,
+    layout,
+    "page-text-records",
+    {
+      title: config.texts.text_records_title,
+      body: config.texts.text_records_empty_body,
+    },
+    config.texts.close,
+    onClose,
+    config.typography.body_size,
+    config.theme.muted_text,
+  );
+}
+
+/** 创建可配置字号与语义色的居中文档覆盖页。 */
+function createCenteredDocumentPage(
+  runtime: LayaRuntimeLike,
+  factory: UiFactory,
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  testId: string,
+  document: UiDocumentView,
+  closeLabel: string,
+  onClose: () => void,
+  fontSize: number,
+  color: string,
+): PageScaffold {
+  const page = new PageScaffold(
+    runtime,
+    factory,
+    config,
+    layout,
+    testId,
+    document.title,
+    onClose,
+    [{
+      id: "close",
+      testId: `${testId}-close`,
+      label: closeLabel,
+      tone: document.tone ?? "primary",
+      onClick: onClose,
+    }],
+  );
+  const body = factory.autoText(page.content, {
+    testId: `${testId}-content`,
+    text: document.body,
+    x: 0,
+    y: 0,
+    width: page.contentWidth,
+    fontSize,
+    color,
+    align: "center",
+  });
+  page.scroll.setContentHeight(body.height + layout.sectionGap);
+  return page;
 }

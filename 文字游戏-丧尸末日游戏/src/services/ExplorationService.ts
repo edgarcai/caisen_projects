@@ -10,6 +10,7 @@ import { ExplorationError, StateOperationError } from "../domain/errors";
 import { cloneGameState, type GameState } from "../domain/game-state";
 import type { RandomSource } from "../domain/ports";
 import type { EventPrompt, EventResolution } from "../domain/reports";
+import type { CampaignDifficultyRules } from "./CampaignDifficultyRules";
 import type { GameContent } from "./GameContent";
 import type { StateOperations } from "./StateOperations";
 
@@ -20,16 +21,19 @@ export class ExplorationService {
   private readonly content: GameContent;
   private readonly operations: StateOperations;
   private readonly random: RandomSource;
+  private readonly difficultyRules: CampaignDifficultyRules;
 
-  /** 注入内容、状态操作器和可复现的随机源。 */
+  /** 注入内容、状态操作器、可复现随机源与难度掉落投影器。 */
   public constructor(
     content: GameContent,
     operations: StateOperations,
     random: RandomSource,
+    difficultyRules: CampaignDifficultyRules,
   ) {
     this.content = content;
     this.operations = operations;
     this.random = random;
+    this.difficultyRules = difficultyRules;
   }
 
   /** 按伙伴和设施的分类权重修正抽取所选区划事件。 */
@@ -178,7 +182,10 @@ export class ExplorationService {
     state: GameState,
   ): Record<string, number> {
     try {
-      return this.operations.applyEffects(effects, state);
+      return this.operations.applyEffects(
+        this.difficultyRules.explorationEffects(effects, state),
+        state,
+      );
     } catch (error: unknown) {
       if (error instanceof StateOperationError) {
         throw new ExplorationError(`探索效果无法应用：${error.message}`);

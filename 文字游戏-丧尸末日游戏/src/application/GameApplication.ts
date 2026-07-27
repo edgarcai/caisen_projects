@@ -3,6 +3,7 @@ import type {
   ArchiveCollectionOverview,
   ArchiveDocumentConfig,
   ArchiveDocumentListItem,
+  ArchiveLibrarySnapshot,
   EncounterAvailableAction,
   EncounterBattleCommand,
   EncounterBattleState,
@@ -41,6 +42,7 @@ import type {
   ExpeditionCompanionView,
   ExpeditionStatusView,
   ResearchProjectView,
+  ResearchWorkbenchView,
   TransportLoadoutOptionView,
   WarehouseItemCatalogEntry,
   WarehouseItemView,
@@ -50,7 +52,19 @@ import {
   type ShelterLayoutConfig,
   type ShelterLayoutView,
 } from "../domain/shelter-layout";
+import {
+  repairInnerWall,
+  shelterWallSnapshot,
+  type ShelterWallSnapshot,
+} from "../domain/shelter-fortification";
 import type { DistrictExplorationLayerProjection } from "../domain/district-exploration-tree";
+import type {
+  CityReconMissionView,
+  OutpostView,
+  SettlementNetworkRulesConfig,
+  SettlementNetworkResolution,
+  ShelterArchetypeConfig,
+} from "../domain/settlement-network";
 import {
   actionReport,
   type ActionReport,
@@ -77,8 +91,11 @@ import type {
   GameModeCapabilityPolicy,
   GameRules,
   InventoryService,
+  ManufacturingDiscoveryService,
+  ProfileTriggeredBonusService,
   ResearchCraftingService,
   ResolvedCampaignProfile,
+  SettlementNetworkService,
   ShelterService,
   ShelterLayoutService,
   ShelterLayoutStateProjector,
@@ -100,6 +117,8 @@ export class GameApplication {
 
   private readonly achievements: AchievementService;
   private readonly exploration: ExplorationService;
+  private readonly manufacturingDiscovery: ManufacturingDiscoveryService;
+  private readonly profileTriggeredBonuses: ProfileTriggeredBonusService;
   private readonly story: StoryService;
   private readonly combat: CombatService;
   private readonly shelter: ShelterService;
@@ -113,6 +132,7 @@ export class GameApplication {
   private readonly researchCrafting: ResearchCraftingService;
   private readonly transportLoadout: TransportLoadoutService;
   private readonly expedition: ExpeditionService;
+  private readonly settlementNetwork: SettlementNetworkService;
   private readonly districtExplorationTree: DistrictExplorationTreeService;
   private readonly campaignProfiles: CampaignProfileService;
   private readonly modeCapabilities: GameModeCapabilityPolicy;
@@ -125,6 +145,8 @@ export class GameApplication {
     content: GameContent,
     achievements: AchievementService,
     exploration: ExplorationService,
+    manufacturingDiscovery: ManufacturingDiscoveryService,
+    profileTriggeredBonuses: ProfileTriggeredBonusService,
     story: StoryService,
     combat: CombatService,
     shelter: ShelterService,
@@ -138,6 +160,7 @@ export class GameApplication {
     researchCrafting: ResearchCraftingService,
     transportLoadout: TransportLoadoutService,
     expedition: ExpeditionService,
+    settlementNetwork: SettlementNetworkService,
     districtExplorationTree: DistrictExplorationTreeService,
     campaignProfiles: CampaignProfileService,
     modeCapabilities: GameModeCapabilityPolicy,
@@ -148,6 +171,8 @@ export class GameApplication {
     this.content = content;
     this.achievements = achievements;
     this.exploration = exploration;
+    this.manufacturingDiscovery = manufacturingDiscovery;
+    this.profileTriggeredBonuses = profileTriggeredBonuses;
     this.story = story;
     this.combat = combat;
     this.shelter = shelter;
@@ -161,6 +186,7 @@ export class GameApplication {
     this.researchCrafting = researchCrafting;
     this.transportLoadout = transportLoadout;
     this.expedition = expedition;
+    this.settlementNetwork = settlementNetwork;
     this.districtExplorationTree = districtExplorationTree;
     this.campaignProfiles = campaignProfiles;
     this.modeCapabilities = modeCapabilities;
@@ -455,9 +481,45 @@ export class GameApplication {
     return this.researchCrafting.researchProjects(this.requireState());
   }
 
+  /** 返回单槽研究台的已选物、数量和出处。 */
+  public researchWorkbench(): ResearchWorkbenchView {
+    return this.researchCrafting.workbench(this.requireState());
+  }
+
+  /** 将一件已拥有的可研究物放入唯一方格。 */
+  public slotResearchItem(itemId: string): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    const resolution = this.researchCrafting.slotResearchItem(working, itemId);
+    if (!resolution.applied) return actionReport(resolution.messages, false);
+    return this.commitAction(working, [...resolution.messages], {
+      consumesTurn: false,
+      actionType: "research_setup",
+    });
+  }
+
+  /** 清空研究台方格，不消耗世界时间。 */
+  public clearResearchSlot(): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    const resolution = this.researchCrafting.clearResearchSlot(working);
+    if (!resolution.applied) return actionReport(resolution.messages, false);
+    return this.commitAction(working, [...resolution.messages], {
+      consumesTurn: false,
+      actionType: "research_setup",
+    });
+  }
+
   /** 返回全部制作配方及其实时解锁、材料状态。 */
   public craftingRecipes(): readonly CraftingRecipeView[] {
     return this.researchCrafting.craftingRecipes(this.requireState());
+  }
+
+  /** 返回内墙、外墙与兼容总耐久的实时快照。 */
+  public shelterWallStatus(): ShelterWallSnapshot {
+    const limits = this.rules.limits;
+    return shelterWallSnapshot(this.requireState().shelter, {
+      innerWallMaximum: limits.inner_wall_max_health,
+      outerWallMaximum: limits.outer_wall_max_health,
+    });
   }
 
   /** 返回全部载具的持有数量与当前驾驶配置。 */
@@ -507,6 +569,97 @@ export class GameApplication {
   /** 返回每座城市当前的可达性、路费、简介和锁定原因。 */
   public expeditionCities(): readonly CityAccessDecision[] {
     return this.expedition.cityOptions(this.requireState());
+  }
+
+  /** 返回侦察、建设与周物流的配置化规则。 */
+  public settlementNetworkRules(): SettlementNetworkRulesConfig {
+    return this.settlementNetwork.rules();
+  }
+
+  /** 判断指定城市是否已可建立分避难所。 */
+  public settlementCityUnlocked(cityId: string): boolean {
+    return this.settlementNetwork.cityUnlocked(this.requireState(), cityId);
+  }
+
+  /** 返回当前进行中或可结算的跨城侦察任务。 */
+  public cityReconMissions(): readonly CityReconMissionView[] {
+    return this.settlementNetwork.reconMissions(this.requireState());
+  }
+
+  /** 返回可在新区划建造的全部避难所类型。 */
+  public outpostShelterTypes(): readonly ShelterArchetypeConfig[] {
+    return this.settlementNetwork.shelterTypes();
+  }
+
+  /** 返回分避难所、派驻人员和周物流状态。 */
+  public outposts(): readonly OutpostView[] {
+    return this.settlementNetwork.outposts(this.requireState());
+  }
+
+  /** 校验情报、载具和角色后开始一周远城侦察。 */
+  public startCityRecon(cityId: string, companionId: string): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    return this.commitSettlementResolution(
+      working,
+      this.settlementNetwork.startRecon(working, cityId, companionId),
+    );
+  }
+
+  /** 结算已满一周的侦察并解锁对应城市。 */
+  public completeCityRecon(cityId: string): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    return this.commitSettlementResolution(
+      working,
+      this.settlementNetwork.completeRecon(working, cityId),
+    );
+  }
+
+  /** 支付配置化资源后在已解锁区划建立分避难所。 */
+  public establishOutpost(
+    cityId: string,
+    districtId: string,
+    shelterTypeId: string,
+  ): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    return this.commitSettlementResolution(
+      working,
+      this.settlementNetwork.establishOutpost(
+        working,
+        cityId,
+        districtId,
+        shelterTypeId,
+      ),
+    );
+  }
+
+  /** 将一名已拥有角色派驻到指定分避难所。 */
+  public assignCompanionToOutpost(
+    outpostId: string,
+    companionId: string,
+  ): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    return this.commitSettlementResolution(
+      working,
+      this.settlementNetwork.assignCompanion(working, outpostId, companionId),
+    );
+  }
+
+  /** 召回一名分避难所驻守角色并记录返程对话。 */
+  public recallOutpostCompanion(companionId: string): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    return this.commitSettlementResolution(
+      working,
+      this.settlementNetwork.recallCompanion(working, companionId),
+    );
+  }
+
+  /** 按周期向分避难所运送食物与零件。 */
+  public supplyOutpost(outpostId: string): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    return this.commitSettlementResolution(
+      working,
+      this.settlementNetwork.supplyOutpost(working, outpostId),
+    );
   }
 
   /** 返回当前模式是否具备一项由配置声明的游戏能力。 */
@@ -671,12 +824,21 @@ export class GameApplication {
     if (!resolution.applied) {
       return actionReport([resolution.message], false);
     }
+    const profileBonusMessages = this.profileTriggeredBonuses
+      .applyExplorationBonuses(beforeEvent, working);
+    const discoveryMessages = this.manufacturingDiscovery.tryDiscover(
+      working,
+      pending.city_id,
+      pending.district_id,
+    );
     working.pending_exploration = null;
     const expeditionResolution = working.expedition === null
       ? { messages: [] as readonly string[] }
       : this.expedition.completeEvent(beforeEvent, working);
     const messages = [
       resolution.message,
+      ...profileBonusMessages,
+      ...discoveryMessages,
       ...expeditionResolution.messages,
     ];
     if (working.expedition === null) this.queueReturnIncident(working, messages);
@@ -833,6 +995,14 @@ export class GameApplication {
     return this.demoSystems.archiveOverview(this.requireState());
   }
 
+  /**
+   * 读取当前局馆藏；菜单态则只读预览最近保存的可恢复存档。
+   */
+  public archiveLibrary(): ArchiveLibrarySnapshot | null {
+    const source = this.state ?? this.latestReadableSavedState();
+    return source === null ? null : this.demoSystems.archiveLibrary(source);
+  }
+
   /** 返回指定文献分类的完整锁定或解锁目录。 */
   public archiveList(
     collectionId: string,
@@ -942,10 +1112,16 @@ export class GameApplication {
   public performManagement(
     category: ManagementCategory,
     optionId: string,
+    repetitions = 1,
   ): ActionReport {
     const current = this.requireFreePlayableState();
     const working = cloneGameState(current);
-    const resolution = this.shelter.perform(working, category, optionId);
+    const resolution = this.shelter.perform(
+      working,
+      category,
+      optionId,
+      repetitions,
+    );
     if (!resolution.applied) {
       return actionReport(resolution.messages, false);
     }
@@ -998,9 +1174,7 @@ export class GameApplication {
     const player = activePlayer(working);
     const cost = this.adjustedFoodCost(item.cost, working);
     if (player.hunger <= 0) {
-      return actionReport([
-        this.content.text("food_not_needed", { player_name: player.name }),
-      ], false);
+      return actionReport([this.content.text("food_not_needed")], false);
     }
     if (player.food < cost) {
       return actionReport([this.content.text("food_failed", { cost })], false);
@@ -1022,9 +1196,7 @@ export class GameApplication {
     const item = this.content.game.rules.items.medical_supplies;
     const player = activePlayer(working);
     if (player.health >= this.rules.limits.player_max_health) {
-      return actionReport([
-        this.content.text("medicine_not_needed", { player_name: player.name }),
-      ], false);
+      return actionReport([this.content.text("medicine_not_needed")], false);
     }
     if (player.medical_supplies < item.cost) {
       return actionReport([
@@ -1071,12 +1243,15 @@ export class GameApplication {
     })], { consumesTurn: true, actionType: "feed_shelter" });
   }
 
-  /** 消耗零件并按被动加成修复共享避难所耐久。 */
+  /** 消耗零件并按被动加成执行内墙维护。 */
   private repairShelter(): ActionReport {
     const working = cloneGameState(this.requireFreePlayableState());
     const item = this.content.game.rules.items.shelter_repair;
     const player = activePlayer(working);
-    if (working.shelter.health >= this.rules.limits.shelter_max_health) {
+    if (
+      working.shelter.inner_wall_health
+      >= this.rules.limits.inner_wall_max_health
+    ) {
       return actionReport([this.content.text("repair_not_needed")], false);
     }
     if (player.parts < item.parts_cost) {
@@ -1085,16 +1260,16 @@ export class GameApplication {
       ], false);
     }
     player.parts -= item.parts_cost;
-    const before = working.shelter.health;
     const restore = item.health_restore
       + this.shelter.passiveModifier(working, "rules.repair_health_restore");
-    working.shelter.health = Math.min(
-      this.rules.limits.shelter_max_health,
-      working.shelter.health + restore,
+    const restored = repairInnerWall(
+      working.shelter,
+      restore,
+      this.rules.limits.inner_wall_max_health,
     );
     return this.commitAction(working, [this.content.text("repair_success", {
       cost: item.parts_cost,
-      restored: working.shelter.health - before,
+      restored,
     })], { consumesTurn: true, actionType: "repair_shelter" });
   }
 
@@ -1181,6 +1356,20 @@ export class GameApplication {
     return actionReport(messages, true, isEnded(working));
   }
 
+  /** 把侦察、建设、派驻或物流结果统一提交到聚合状态。 */
+  private commitSettlementResolution(
+    working: GameState,
+    resolution: SettlementNetworkResolution,
+  ): ActionReport {
+    if (!resolution.applied) {
+      return actionReport(resolution.messages, false);
+    }
+    return this.commitAction(working, [...resolution.messages], {
+      consumesTurn: resolution.turnsConsumed > 0,
+      turnsConsumed: resolution.turnsConsumed,
+    });
+  }
+
   /** 按配置化被动百分比调整食物成本，且至少消耗一份。 */
   private adjustedFoodCost(baseCost: number, state: GameState): number {
     const modifier = this.shelter.passiveModifier(state, "rules.food_cost_percent");
@@ -1265,7 +1454,10 @@ export class GameApplication {
       difficulty: profile.difficulty.label,
       origin: profile.origin.label,
       trait: profile.trait.label,
-      city: `${city.name} · ${city.district}`,
+      secondary_trait: profile.secondaryTrait.label,
+      city: city.name,
+      district: profile.homeDistrict.code,
+      shelter_type: profile.shelterType.label,
     });
   }
 
@@ -1278,6 +1470,42 @@ export class GameApplication {
       && this.content.story.endings.some((ending) => ending.ending_id === endingId)
     ) {
       state.ending = null;
+    }
+  }
+
+  /**
+   * 按保存时间从新到旧读取首个有效存档，并恢复原活动栏位。
+   */
+  private latestReadableSavedState(): GameState | null {
+    const activeSlotId = this.repository.activeSlot();
+    const candidates = [...this.repository.listSlots()]
+      .filter((slot) => slot.status === "valid" || slot.status === "recoverable")
+      .sort((left, right) => {
+        const leftTimestamp = left.savedAt === null
+          ? Number.NEGATIVE_INFINITY
+          : Date.parse(left.savedAt);
+        const rightTimestamp = right.savedAt === null
+          ? Number.NEGATIVE_INFINITY
+          : Date.parse(right.savedAt);
+        const normalizedLeft = Number.isNaN(leftTimestamp)
+          ? Number.NEGATIVE_INFINITY
+          : leftTimestamp;
+        const normalizedRight = Number.isNaN(rightTimestamp)
+          ? Number.NEGATIVE_INFINITY
+          : rightTimestamp;
+        return normalizedRight - normalizedLeft || left.slotId - right.slotId;
+      });
+    try {
+      for (const candidate of candidates) {
+        try {
+          return this.repository.load(candidate.slotId);
+        } catch {
+          // 摘要与实际读取之间数据可能被清理，继续尝试下一栏。
+        }
+      }
+      return null;
+    } finally {
+      this.repository.selectSlot(activeSlotId);
     }
   }
 

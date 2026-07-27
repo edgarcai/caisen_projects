@@ -245,7 +245,10 @@ export type NewGameSetupCategoryId =
   | "difficulty"
   | "origin"
   | "trait"
+  | "secondary_trait"
   | "city"
+  | "district"
+  | "shelter"
   | "slot";
 
 /** 配置化的游戏模式选项。 */
@@ -294,6 +297,7 @@ export interface NewGameSetupCopyConfig {
   readonly previous_step: string;
   readonly next_step: string;
   readonly selected_mark: string;
+  readonly incompatible_mark: string;
   readonly name_description: string;
   readonly unavailable_mode: string;
 }
@@ -323,8 +327,12 @@ export interface GuidedTutorialStepConfig {
 export interface GuidedTutorialConfig {
   readonly title: string;
   readonly step_format: string;
+  readonly page_format: string;
+  readonly page_separator: string;
   readonly previous_label: string;
+  readonly previous_page_label: string;
   readonly next_label: string;
+  readonly next_page_label: string;
   readonly complete_label: string;
   readonly skip_label: string;
   readonly missing_target_label: string;
@@ -336,6 +344,7 @@ export interface GuidedTutorialConfig {
   readonly desktop_dialog_width: number;
   readonly desktop_dialog_height: number;
   readonly mobile_dialog_height: number;
+  readonly minimum_page_fill_ratio: number;
   readonly fallback_target_width: number;
   readonly fallback_target_height: number;
   readonly steps: readonly GuidedTutorialStepConfig[];
@@ -381,6 +390,7 @@ export interface CoverMenuLayoutConfig {
   readonly changelog_button_bottom: number;
   readonly changelog_button_width: number;
   readonly changelog_button_height: number;
+  readonly utility_button_gap: number;
   readonly description_left: number;
   readonly description_top: number;
   readonly description_width: number;
@@ -525,8 +535,75 @@ export interface DashboardNavigationConfig {
   readonly management_category_shortcuts: readonly ManagementCategoryShortcutConfig[];
 }
 
+/** 城市侦察与分避难所页面的完整配置化文案。 */
+export interface SettlementNetworkTextConfig {
+  readonly settlement_network_title: string;
+  readonly settlement_network_body: string;
+  readonly settlement_network_no_missions: string;
+  readonly settlement_network_mission_count: string;
+  readonly settlement_network_no_outposts: string;
+  readonly settlement_network_outpost_count: string;
+  readonly settlement_network_start_recon: string;
+  readonly settlement_network_start_recon_description: string;
+  readonly settlement_network_build_outpost: string;
+  readonly settlement_network_build_outpost_description: string;
+  readonly settlement_network_outpost_limit: string;
+  readonly settlement_network_mission_format: string;
+  readonly settlement_network_mission_ready: string;
+  readonly settlement_network_mission_progress: string;
+  readonly settlement_network_outpost_format: string;
+  readonly settlement_network_outpost_summary: string;
+  readonly settlement_recon_city_title: string;
+  readonly settlement_recon_city_body: string;
+  readonly settlement_recon_city_format: string;
+  readonly settlement_recon_city_detail: string;
+  readonly settlement_recon_companion_title: string;
+  readonly settlement_recon_companion_body: string;
+  readonly settlement_recon_companion_format: string;
+  readonly settlement_recon_no_companion: string;
+  readonly settlement_city_status_unlocked: string;
+  readonly settlement_city_status_active: string;
+  readonly settlement_city_status_available: string;
+  readonly settlement_city_status_locked: string;
+  readonly settlement_recon_transport_ready: string;
+  readonly settlement_recon_transport_locked: string;
+  readonly settlement_recon_already_unlocked: string;
+  readonly settlement_recon_already_active: string;
+  readonly settlement_recon_need_intelligence: string;
+  readonly settlement_recon_need_transport: string;
+  readonly settlement_recon_need_companion: string;
+  readonly outpost_build_city_title: string;
+  readonly outpost_build_city_body: string;
+  readonly outpost_build_city_format: string;
+  readonly outpost_build_city_locked: string;
+  readonly outpost_build_city_full: string;
+  readonly outpost_build_district_title: string;
+  readonly outpost_build_district_body: string;
+  readonly outpost_build_district_occupied: string;
+  readonly outpost_build_type_title: string;
+  readonly outpost_build_location_format: string;
+  readonly outpost_build_type_body: string;
+  readonly outpost_build_type_format: string;
+  readonly outpost_detail_title: string;
+  readonly outpost_detail_title_format: string;
+  readonly outpost_detail_body: string;
+  readonly outpost_detail_no_companion: string;
+  readonly outpost_assign_companion: string;
+  readonly outpost_assign_companion_description: string;
+  readonly outpost_recall_companion_format: string;
+  readonly outpost_recall_companion_description: string;
+  readonly outpost_supply: string;
+  readonly outpost_supply_ready: string;
+  readonly outpost_supply_waiting: string;
+  readonly outpost_assign_title: string;
+  readonly outpost_assign_location_format: string;
+  readonly outpost_assign_body: string;
+  readonly outpost_assign_no_companion: string;
+  readonly outpost_assign_companion_format: string;
+}
+
 /** H5 界面文案。 */
-export interface TextConfig {
+export interface TextConfig extends SettlementNetworkTextConfig {
   readonly loading: string;
   readonly load_failed: string;
   readonly connection_title: string;
@@ -541,6 +618,16 @@ export interface TextConfig {
   readonly start_multiplayer_description: string;
   readonly start_story_description: string;
   readonly credits_description: string;
+  readonly credits_body: string;
+  readonly account_login: string;
+  readonly account_unavailable_title: string;
+  readonly account_unavailable_body: string;
+  readonly store: string;
+  readonly store_title: string;
+  readonly store_empty_body: string;
+  readonly text_records: string;
+  readonly text_records_title: string;
+  readonly text_records_empty_body: string;
   readonly exit_description: string;
   readonly name_submit: string;
   readonly back: string;
@@ -599,6 +686,15 @@ export interface TextConfig {
   readonly transport_unavailable: string;
   readonly research_title: string;
   readonly research_body: string;
+  readonly research_slot_empty: string;
+  readonly research_slot_filled_format: string;
+  readonly research_slot_candidate_format: string;
+  readonly research_slot_candidate_detail_format: string;
+  readonly research_slot_clear: string;
+  readonly research_sample_format: string;
+  readonly research_source_format: string;
+  readonly research_sample_slotted: string;
+  readonly research_sample_not_slotted: string;
   readonly research_item_format: string;
   readonly research_detail_format: string;
   readonly research_complete: string;
@@ -644,6 +740,8 @@ export interface TextConfig {
   readonly expedition_city_format: string;
   readonly expedition_companion_format: string;
   readonly expedition_item_format: string;
+  readonly expedition_item_increase: string;
+  readonly expedition_item_decrease: string;
   readonly expedition_selected: string;
   readonly expedition_unselected: string;
   readonly expedition_unknown_item: string;
@@ -750,7 +848,12 @@ export interface TextConfig {
   readonly profile_difficulty_label: string;
   readonly profile_origin_label: string;
   readonly profile_trait_label: string;
+  readonly profile_secondary_trait_label: string;
   readonly profile_city_label: string;
+  readonly profile_district_label: string;
+  readonly profile_shelter_type_label: string;
+  readonly profile_shelter_detail_format: string;
+  readonly profile_shelter_bonus_separator: string;
   readonly profile_slot_label: string;
   readonly profile_field_format: string;
   readonly profile_field_separator: string;
@@ -770,17 +873,16 @@ export interface TextConfig {
   readonly companion_archive_title: string;
   readonly companion_archive_body: string;
   readonly companion_detail_title: string;
-  readonly companion_management: string;
-  readonly companion_management_title: string;
-  readonly companion_management_body: string;
   readonly companion_equipment: string;
   readonly companion_equipment_title: string;
   readonly companion_weapon: string;
   readonly companion_armor: string;
+  readonly companion_empty_slot: string;
   readonly companion_unequip: string;
+  readonly companion_equipment_quantity_format: string;
+  readonly companion_equipment_unowned: string;
   readonly companion_interaction: string;
   readonly companion_interaction_title: string;
-  readonly companion_locked_management: string;
   readonly companion_secret_locked: string;
   readonly companion_portrait_unavailable: string;
   readonly companion_portrait_signal_format: string;
@@ -790,6 +892,9 @@ export interface TextConfig {
   readonly management_detail_title: string;
   readonly management_detail_requirements_title: string;
   readonly management_detail_confirm: string;
+  readonly management_repetition_cycle_format: string;
+  readonly management_repetition_confirm_format: string;
+  readonly shelter_wall_summary_format: string;
   readonly communication_log_title: string;
   readonly communication_log_open: string;
   readonly communication_log_empty: string;

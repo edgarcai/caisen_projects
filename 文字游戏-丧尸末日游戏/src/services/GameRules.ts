@@ -9,27 +9,49 @@ import {
 import type { RuleModifierProvider } from "../domain/ports";
 import { advanceClock } from "./GameClock";
 import type { ChronicleService } from "./ChronicleService";
-import type { CampaignProfileService } from "./CampaignProfileService";
+import type { CampaignDifficultyRules } from "./CampaignDifficultyRules";
 import type { GameContent } from "./GameContent";
+import {
+  damageShelterWalls,
+  normalizeShelterWalls,
+  setShelterTotalHealth,
+} from "../domain/shelter-fortification";
+
+/** 八类生存失败在规则配置中使用的稳定 ID。 */
+type FailureRuleId =
+  | "infection"
+  | "commander"
+  | "inner_wall"
+  | "activity_high"
+  | "outer_wall"
+  | "famine"
+  | "hope"
+  | "activity_low";
+
+/** 一个已由真实游戏状态命中的失败候选项。 */
+interface FailureCandidate {
+  readonly failureId: FailureRuleId;
+  readonly values?: Readonly<Record<string, string | number>>;
+}
 
 /** 集中处理世界时间、生存消耗、不变量和失败优先级。 */
 export class GameRules {
   private readonly content: GameContent;
   private readonly modifiers: RuleModifierProvider;
   private readonly chronicle: ChronicleService;
-  private readonly campaignProfiles: CampaignProfileService;
+  private readonly difficultyRules: CampaignDifficultyRules;
 
-  /** 注入统一配置、避难所被动修正、开局档案与时间线记录服务。 */
+  /** 注入统一配置、避难所被动修正、时间线与难度生存规则。 */
   public constructor(
     content: GameContent,
     modifiers: RuleModifierProvider,
     chronicle: ChronicleService,
-    campaignProfiles: CampaignProfileService,
+    difficultyRules: CampaignDifficultyRules,
   ) {
     this.content = content;
     this.modifiers = modifiers;
     this.chronicle = chronicle;
-    this.campaignProfiles = campaignProfiles;
+    this.difficultyRules = difficultyRules;
   }
 
   /** 暴露已经配置的生存上限，供应用服务复用。 */
@@ -99,10 +121,17 @@ export class GameRules {
       }
       player.health = Math.min(player.health, this.limits.player_max_health);
     }
-    state.shelter.health = Math.max(
-      0,
-      Math.min(state.shelter.health, this.limits.shelter_max_health),
-    );
+    const wallLimits = {
+      innerWallMaximum: this.limits.inner_wall_max_health,
+      outerWallMaximum: this.limits.outer_wall_max_health,
+    };
+    if (
+      state.shelter.health
+      !== state.shelter.inner_wall_health + state.shelter.outer_wall_health
+    ) {
+      setShelterTotalHealth(state.shelter, state.shelter.health, wallLimits);
+    }
+    normalizeShelterWalls(state.shelter, wallLimits);
     state.shelter.hope = Math.max(
       0,
       Math.min(state.shelter.hope, this.limits.shelter_max_hope),
@@ -122,38 +151,21 @@ export class GameRules {
     }
   }
 
-  /** 按固定优先级检查所有配置化失败条件。 */
+  /** 收集已命中的真实失败状态，并按配置优先级选择唯一结局。 */
   public checkFailure(state: GameState): EndingState | null {
-    if (state.shelter.health <= 0) {
-      return this.failureEnding("shelter", state.mode);
-    }
-    if (state.shelter.hope <= this.limits.hope_min_game_over) {
-      return this.failureEnding("hope", state.mode);
-    }
-    for (const player of state.players) {
-      if (player.health <= 0) {
-        return this.failureEnding("player_health", state.mode, { player_name: player.name });
-      }
-      if (player.hunger >= this.limits.player_hunger_game_over) {
-        return this.failureEnding("player_hunger", state.mode, { player_name: player.name });
-      }
-      if (player.age >= player.lifespan) {
-        return this.failureEnding("lifespan", state.mode, {
-          player_name: player.name,
-          lifespan: player.lifespan,
-        });
+    const candidates = this.failureCandidates(state);
+    const first = candidates[0];
+    if (first === undefined) return null;
+    let selected = first;
+    let selectedPriority = this.failurePriority(first.failureId);
+    for (const candidate of candidates.slice(1)) {
+      const priority = this.failurePriority(candidate.failureId);
+      if (priority > selectedPriority) {
+        selected = candidate;
+        selectedPriority = priority;
       }
     }
-    if (state.shelter.group_hunger >= this.limits.group_hunger_game_over) {
-      return this.failureEnding("group_hunger", state.mode);
-    }
-    if (state.shelter.activity <= this.limits.activity_min_game_over) {
-      return this.failureEnding("activity_low", state.mode);
-    }
-    if (state.shelter.activity >= this.limits.activity_max_game_over) {
-      return this.failureEnding("activity_high", state.mode);
-    }
-    return null;
+    return this.failureEnding(selected.failureId, state.mode, selected.values);
   }
 
   /** 在一次状态事务边界统一落地失败结局，并保证已有结局不被覆盖。 */
@@ -166,7 +178,48 @@ export class GameRules {
 
   /** 为首领战中倒下的所长创建配置化失败结局。 */
   public combatFailure(playerName: string, mode: GameState["mode"]): EndingState {
-    return this.failureEnding("combat", mode, { player_name: playerName });
+    return this.failureEnding("commander", mode, { player_name: playerName });
+  }
+
+  /** 只从可持久的真实状态构建失败候选项。 */
+  private failureCandidates(state: GameState): readonly FailureCandidate[] {
+    const candidates: FailureCandidate[] = [];
+    if (state.story.infection_pressure >= this.limits.infection_pressure_game_over) {
+      candidates.push({ failureId: "infection" });
+    }
+    const fallenCommander = state.players.find((player) => (
+      player.health <= 0
+      || player.hunger >= this.limits.player_hunger_game_over
+      || player.age >= player.lifespan
+    ));
+    if (fallenCommander !== undefined) {
+      candidates.push({
+        failureId: "commander",
+        values: {
+          player_name: fallenCommander.name,
+          lifespan: fallenCommander.lifespan,
+        },
+      });
+    }
+    if (state.shelter.inner_wall_health <= 0) {
+      candidates.push({ failureId: "inner_wall" });
+    }
+    if (state.shelter.activity >= this.limits.activity_max_game_over) {
+      candidates.push({ failureId: "activity_high" });
+    }
+    if (state.shelter.outer_wall_health <= 0) {
+      candidates.push({ failureId: "outer_wall" });
+    }
+    if (state.shelter.group_hunger >= this.limits.group_hunger_game_over) {
+      candidates.push({ failureId: "famine" });
+    }
+    if (state.shelter.hope <= this.limits.hope_min_game_over) {
+      candidates.push({ failureId: "hope" });
+    }
+    if (state.shelter.activity <= this.limits.activity_min_game_over) {
+      candidates.push({ failureId: "activity_low" });
+    }
+    return candidates;
   }
 
   /** 结算一个基础行动时段的消耗、日历、产出和失败。 */
@@ -198,10 +251,13 @@ export class GameRules {
       state,
       "rules.shelter_turn_damage_percent",
     );
-    state.shelter.health -= this.scaledSurvivalCost(
-      costs.shelter_health_loss,
-      shelterDamagePercent,
-      survivalCostPercent,
+    damageShelterWalls(
+      state.shelter,
+      this.scaledSurvivalCost(
+        costs.shelter_health_loss,
+        shelterDamagePercent,
+        survivalCostPercent,
+      ),
     );
     const hungerPercent = 100 + this.modifier(state, "rules.group_hunger_gain_percent");
     state.shelter.group_hunger += this.scaledSurvivalCost(
@@ -214,10 +270,10 @@ export class GameRules {
       100,
       survivalCostPercent,
     );
-    state.shelter.hope -= this.scaledSurvivalCost(
+    state.shelter.hope -= this.difficultyRules.hopeLoss(
       costs.hope_loss,
-      100,
-      survivalCostPercent,
+      this.modeSurvivalCostPercent(state.mode),
+      state,
     );
     if (shouldAdvanceInteractionCooldowns) {
       for (const companion of state.companions) {
@@ -304,7 +360,7 @@ export class GameRules {
   /** 合并游戏模式与难度档案的生存损耗比例。 */
   private survivalCostPercent(state: GameState): number {
     const modePercent = this.modeSurvivalCostPercent(state.mode);
-    const difficultyPercent = this.campaignProfiles.survivalCostPercent(state);
+    const difficultyPercent = this.difficultyRules.snapshot(state).survivalCostPercent;
     if (!Number.isInteger(difficultyPercent) || difficultyPercent < 0) {
       throw new DomainError(this.content.text("invalid_campaign_profile"));
     }
@@ -329,18 +385,37 @@ export class GameRules {
     return this.modifiers.passiveModifier(state, target);
   }
 
-  /** 根据失败类型和游戏模式创建唯一结局对象。 */
-  private failureEnding(
-    failureId: string,
-    mode: GameState["mode"],
-    values: Readonly<Record<string, string | number>> = {},
-  ): EndingState {
+  /** 读取一个失败结局的配置优先级并拒绝无效数值。 */
+  private failurePriority(failureId: FailureRuleId): number {
+    const priority = this.failureConfiguration(failureId).priority;
+    if (!Number.isInteger(priority) || priority <= 0) {
+      throw new DomainError(this.content.text("invalid_failure_ending_priority", {
+        failure_id: failureId,
+      }));
+    }
+    return priority;
+  }
+
+  /** 按稳定 ID 读取失败结局配置并在缺失时立即报错。 */
+  private failureConfiguration(
+    failureId: FailureRuleId,
+  ): GameContent["game"]["rules"]["failure_endings"][string] {
     const failure = this.content.game.rules.failure_endings[failureId];
     if (failure === undefined) {
       throw new DomainError(this.content.text("missing_failure_ending", {
         failure_id: failureId,
       }));
     }
+    return failure;
+  }
+
+  /** 根据失败类型和游戏模式创建唯一结局对象。 */
+  private failureEnding(
+    failureId: FailureRuleId,
+    mode: GameState["mode"],
+    values: Readonly<Record<string, string | number>> = {},
+  ): EndingState {
+    const failure = this.failureConfiguration(failureId);
     const textKey = failure.mode_text_keys?.[mode] ?? failure.text_key;
     return {
       ending_id: failure.ending_id,

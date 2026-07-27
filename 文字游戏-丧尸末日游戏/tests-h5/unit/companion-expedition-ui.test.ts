@@ -5,7 +5,6 @@ import {
   buildCompanionArchivePrompt,
   buildCompanionDetailBody,
   buildCompanionEquipmentPrompt,
-  buildCompanionManagementPrompt,
 } from "../../src/ui/pages/CompanionsPage";
 import {
   buildCommunicationLogDocument,
@@ -56,8 +55,20 @@ function companionView(canManage: boolean): UiCompanionView {
         slot: "weapon",
         description: "远程武器",
         availableQuantity: 1,
+        ownedQuantity: 1,
         equipped: false,
         disabled: false,
+      },
+      {
+        id: "scrap_knife",
+        name: "废铁短刀",
+        slot: "weapon",
+        description: "近战武器",
+        availableQuantity: 0,
+        ownedQuantity: 0,
+        equipped: false,
+        disabled: true,
+        disabledReason: webConfig.texts.companion_equipment_unowned,
       },
     ],
     armorOptions: [],
@@ -134,26 +145,19 @@ function expeditionFailure(): UiExpeditionFailureView {
   };
 }
 
-describe("伙伴档案与管理 UI 契约", () => {
-  it("锁定伙伴档案始终可点，管理列表保持灰态但仍可查需求", () => {
+describe("角色档案与配装 UI 契约", () => {
+  it("档案列表隐藏未拥有角色，详情页为空装备槽显示空位", () => {
     const locked = companionView(false);
-    const archive = buildCompanionArchivePrompt(webConfig, [locked]);
-    const management = buildCompanionManagementPrompt(webConfig, [locked]);
+    const active = companionView(true);
+    const archive = buildCompanionArchivePrompt(webConfig, [locked, active]);
 
-    expect(archive.options[0]).toMatchObject({ disabled: false });
-    expect(management.options[0]).toMatchObject({
-      disabled: false,
-      lockedAppearance: true,
-      disabledReason: webConfig.texts.companion_locked_management,
-    });
-    expect(buildCompanionDetailBody(webConfig, locked)).toContain(
-      webConfig.texts.companion_secret_locked,
-    );
-    expect(management.options[0]?.label).toContain("信任：0");
-    expect(management.options[0]?.label).not.toContain("信任：信任：");
+    expect(archive.options).toHaveLength(1);
+    expect(archive.options[0]).toMatchObject({ id: active.id, disabled: false });
+    expect(buildCompanionDetailBody(webConfig, active)).toContain("武器：空位");
+    expect(buildCompanionDetailBody(webConfig, active)).toContain("防具：空位");
   });
 
-  it("配装页只展示所选栏位的实时仓库装备", () => {
+  it("配装页展示完整栏位目录、拥有数量与未拥有灰态", () => {
     const prompt = buildCompanionEquipmentPrompt(
       webConfig,
       companionView(true),
@@ -163,9 +167,16 @@ describe("伙伴档案与管理 UI 契约", () => {
     expect(prompt.options.map((option) => option.id)).toEqual([
       "__unequip__",
       "pipe_rifle",
+      "scrap_knife",
     ]);
     expect(prompt.options[0]).toMatchObject({ disabled: true });
+    expect(prompt.options[1]?.label).toBe("管式步枪 ×1");
     expect(prompt.options[1]?.description).toContain("远程武器");
+    expect(prompt.options[2]).toMatchObject({
+      label: "废铁短刀 ×0",
+      disabled: true,
+      disabledReason: webConfig.texts.companion_equipment_unowned,
+    });
   });
 
   it("适配器把立绘键、仓库配装和互动真实接入领域", () => {
@@ -175,15 +186,30 @@ describe("伙伴档案与管理 UI 契约", () => {
     state.inventory.crafted_items.pipe_rifle = 1;
     const initial = adapter.getSnapshot();
     const haocai = initial.companions.find((companion) => companion.id === "haocai");
-    const linlan = initial.companions.find((companion) => companion.id === "linlan");
+    const equipmentCatalog = application.warehouseItemCatalog();
 
     expect(haocai).toMatchObject({
       portraitKey: "companion_haocai",
       portraitAssetPath: "",
       canManage: true,
     });
-    expect(linlan).toMatchObject({ canManage: false, secretUnlocked: false });
+    expect(initial.companions.map((companion) => companion.id)).toEqual([
+      "haocai",
+      "yangguan",
+    ]);
     expect(haocai?.weaponOptions.some((item) => item.id === "pipe_rifle")).toBe(true);
+    expect(haocai?.weaponOptions.map((item) => item.id)).toEqual(
+      equipmentCatalog
+        .filter((item) => item.category === "weapon")
+        .map((item) => item.itemId),
+    );
+    expect(haocai?.armorOptions).toContainEqual(expect.objectContaining({
+      id: "reinforced_coat",
+      availableQuantity: 0,
+      ownedQuantity: 0,
+      disabled: true,
+      disabledReason: webConfig.texts.companion_equipment_unowned,
+    }));
     expect(initial.managementCategories.find(
       (category) => category.id === "activity",
     )?.options.map((option) => option.id)).toContain("activity::shared_supper");
@@ -217,6 +243,24 @@ describe("伙伴档案与管理 UI 契约", () => {
     );
     expect(interactedCompanion?.interaction_count).toBe(1);
     expect(interactedCompanion?.interaction_cooldown_turns).toBeGreaterThan(0);
+  });
+
+  it("档案与远征候选同时排除 locked 和 dead 角色", () => {
+    const { adapter, application } = buildH5Harness();
+    adapter.execute({ type: "start_game", mode: "single", playerNames: ["所长"] });
+    const state = requireState(application);
+    const yangguan = state.companions.find(
+      (companion) => companion.companion_id === "yangguan",
+    );
+    if (yangguan === undefined) throw new Error("测试缺少阳关状态。");
+    yangguan.status = "dead";
+
+    expect(adapter.getSnapshot().companions.map((companion) => companion.id)).toEqual([
+      "haocai",
+    ]);
+    expect(application.expeditionCompanions().map(
+      (companion) => companion.companionId,
+    )).toEqual(["haocai"]);
   });
 });
 

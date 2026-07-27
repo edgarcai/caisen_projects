@@ -16,18 +16,30 @@ export interface CityAccessDecision {
   readonly accessSummary: string;
 }
 
+/** 远城侦察解锁规则的倒置端口。 */
+export interface RemoteCityUnlockPolicy {
+  /** 判断指定远城是否已经完成一周侦察。 */
+  isUnlocked(state: GameState, cityId: string): boolean;
+
+  /** 返回未解锁远城的配置化阻断原因。 */
+  lockedReason(cityId: string): string;
+}
+
 /** 依据城市拓扑、报纸情报、路径道具和已装备载具判定通行。 */
 export class CityAccessService {
   private readonly content: GameContent;
   private readonly survivalSystems: SurvivalSystemsConfigDocument;
+  private readonly remoteUnlockPolicy: RemoteCityUnlockPolicy | null;
 
   /** 注入唯一的城市内容源和仓库物品目录。 */
   public constructor(
     content: GameContent,
     survivalSystems: SurvivalSystemsConfigDocument,
+    remoteUnlockPolicy: RemoteCityUnlockPolicy | null = null,
   ) {
     this.content = content;
     this.survivalSystems = survivalSystems;
+    this.remoteUnlockPolicy = remoteUnlockPolicy;
   }
 
   /** 计算指定城市当前是否可达以及出发时需要扣除的步数。 */
@@ -41,6 +53,19 @@ export class CityAccessService {
     }
     if (relation === "neighbor") {
       return this.allowed(city, relation, travelStepCost, "city_access_neighbor");
+    }
+    if (
+      this.remoteUnlockPolicy !== null
+      && !this.remoteUnlockPolicy.isUnlocked(state, city.id)
+    ) {
+      return {
+        city,
+        relation,
+        travelStepCost,
+        accessible: false,
+        reason: this.remoteUnlockPolicy.lockedReason(city.id),
+        accessSummary: this.accessSummary(city, relation, travelStepCost),
+      };
     }
     const hasIntelligence =
       state.shelter.newspapers >= city.intelligence_newspapers_required;

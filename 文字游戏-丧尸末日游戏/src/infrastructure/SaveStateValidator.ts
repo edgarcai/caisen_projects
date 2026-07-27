@@ -77,6 +77,8 @@ const RESTORABLE_V8_STATE_FIELDS = [
   "pending_return_incident_id",
 ] as const;
 const V8_STATE_FIELDS = [...RESTORABLE_V8_STATE_FIELDS, "checkpoint"] as const;
+const RESTORABLE_V9_STATE_FIELDS = [...RESTORABLE_V8_STATE_FIELDS] as const;
+const V9_STATE_FIELDS = [...RESTORABLE_V9_STATE_FIELDS, "checkpoint"] as const;
 const PLAYER_FIELDS = [
   "name",
   "health",
@@ -106,6 +108,11 @@ const SHELTER_FIELDS = [
   "game_consoles",
 ] as const;
 const V6_SHELTER_FIELDS = [...SHELTER_FIELDS, "hope"] as const;
+const V9_SHELTER_FIELDS = [
+  ...V6_SHELTER_FIELDS,
+  "inner_wall_health",
+  "outer_wall_health",
+] as const;
 const CLOCK_FIELDS = ["year", "month", "day", "hour"] as const;
 const STORY_FIELDS = [
   "current_scene_id",
@@ -159,6 +166,7 @@ const INVENTORY_FIELDS = [
 const V7_INVENTORY_FIELDS = [...INVENTORY_FIELDS, "equipped_transport_ids"] as const;
 const MANAGEMENT_CYCLE_USAGE_FIELDS = ["cycle_index", "count"] as const;
 const RESEARCH_FIELDS = ["completed_project_ids"] as const;
+const V9_RESEARCH_FIELDS = [...RESEARCH_FIELDS, "slotted_item_id"] as const;
 const CAMPAIGN_FIELDS = [
   "difficulty_id",
   "origin_id",
@@ -422,9 +430,25 @@ export class SaveStateValidator {
     return state;
   }
 
-  /** 从已通过 v8 结构检查的数据创建副本并验证完整状态。 */
+  /** 在构造领域对象前验证 v9 研究槽与内外墙字段。 */
+  public validateRawV9(rawState: unknown): JsonObject {
+    const state = exactObject(rawState, V9_STATE_FIELDS, "v9 game_state");
+    this.validateRawV9Base(state, "v9 game_state");
+    if (state.checkpoint !== null) {
+      const checkpoint = exactObject(state.checkpoint, CHECKPOINT_FIELDS, "v9 checkpoint");
+      const snapshot = exactObject(
+        checkpoint.snapshot,
+        RESTORABLE_V9_STATE_FIELDS,
+        "v9 checkpoint.snapshot",
+      );
+      this.validateRawV9Base(snapshot, "v9 checkpoint.snapshot");
+    }
+    return state;
+  }
+
+  /** 从已通过 v9 结构检查的数据创建副本并验证完整状态。 */
   public parse(rawState: unknown): GameState {
-    const state = structuredClone(this.validateRawV8(rawState)) as unknown as GameState;
+    const state = structuredClone(this.validateRawV9(rawState)) as unknown as GameState;
     this.validate(state);
     return state;
   }
@@ -545,6 +569,7 @@ export class SaveStateValidator {
     shelterFields: readonly string[] = SHELTER_FIELDS,
     companionFields: readonly string[] = COMPANION_FIELDS,
     inventoryFields: readonly string[] = INVENTORY_FIELDS,
+    researchFields: readonly string[] = RESEARCH_FIELDS,
   ): void {
     this.validateGameplayContainers(
       state,
@@ -588,7 +613,7 @@ export class SaveStateValidator {
     }
     const inventory = exactObject(state.inventory, inventoryFields, `${path}.inventory`);
     requireObject(inventory.crafted_items, `${path}.inventory.crafted_items`);
-    exactObject(state.research, RESEARCH_FIELDS, `${path}.research`);
+    exactObject(state.research, researchFields, `${path}.research`);
     this.validateOptionalObject(state.expedition, expeditionFields, `${path}.expedition`);
   }
 
@@ -625,16 +650,22 @@ export class SaveStateValidator {
   }
 
   /** 校验 v7 可恢复状态的载具列表与周期经营用量。 */
-  private validateRawV7Base(state: JsonObject, path: string): void {
+  private validateRawV7Base(
+    state: JsonObject,
+    path: string,
+    shelterFields: readonly string[] = V6_SHELTER_FIELDS,
+    researchFields: readonly string[] = RESEARCH_FIELDS,
+  ): void {
     this.validateRawSurvivalBase(
       state,
       path,
       V5_EXPEDITION_FIELDS,
       V5_PENDING_FIELDS,
       V6_PLAYER_FIELDS,
-      V6_SHELTER_FIELDS,
+      shelterFields,
       V6_COMPANION_FIELDS,
       V7_INVENTORY_FIELDS,
+      researchFields,
     );
     exactObject(state.campaign, CAMPAIGN_FIELDS, `${path}.campaign`);
     const inventory = state.inventory as JsonObject;
@@ -660,6 +691,27 @@ export class SaveStateValidator {
   /** 校验 v8 可恢复状态的房间分配与遭遇战精确容器。 */
   private validateRawV8Base(state: JsonObject, path: string): void {
     this.validateRawV7Base(state, path);
+    this.validateRawV8Extensions(state, path);
+  }
+
+  /** 校验 v9 可恢复状态的墙体与研究槽精确容器。 */
+  private validateRawV9Base(state: JsonObject, path: string): void {
+    this.validateRawV7Base(
+      state,
+      path,
+      V9_SHELTER_FIELDS,
+      V9_RESEARCH_FIELDS,
+    );
+    this.validateRawV8Extensions(state, path);
+    const research = state.research as JsonObject;
+    requireNullableNonEmptyString(
+      research.slotted_item_id,
+      `${path}.research.slotted_item_id`,
+    );
+  }
+
+  /** 复用 v8 开始引入的文献、房间、遭遇与归来事项结构检查。 */
+  private validateRawV8Extensions(state: JsonObject, path: string): void {
     const archiveTotals = requireObject(
       state.archive_collection_totals,
       `${path}.archive_collection_totals`,
@@ -810,13 +862,25 @@ export class SaveStateValidator {
 
   /** 校验共享避难所的整数资源和耐久上限。 */
   private validateShelter(state: GameState): void {
-    const nonNegativeFields = V6_SHELTER_FIELDS.filter((field) => field !== "activity");
+    const nonNegativeFields = V9_SHELTER_FIELDS.filter((field) => field !== "activity");
     for (const field of nonNegativeFields) {
       requireInteger(state.shelter[field], `shelter.${field}`, 0);
     }
     requireInteger(state.shelter.activity, "shelter.activity");
     if (state.shelter.health > this.rules.limits.shelter_max_health) {
       throw new SaveDataError("避难所耐久超过配置上限。");
+    }
+    if (state.shelter.inner_wall_health > this.rules.limits.inner_wall_max_health) {
+      throw new SaveDataError("内墙耐久超过配置上限。");
+    }
+    if (state.shelter.outer_wall_health > this.rules.limits.outer_wall_max_health) {
+      throw new SaveDataError("外墙耐久超过配置上限。");
+    }
+    if (
+      state.shelter.health
+      !== state.shelter.inner_wall_health + state.shelter.outer_wall_health
+    ) {
+      throw new SaveDataError("避难所总耐久与内外墙之和不一致。");
     }
     if (state.shelter.hope > this.rules.limits.shelter_max_hope) {
       throw new SaveDataError("避难所希望超过配置上限。");
@@ -1230,6 +1294,22 @@ export class SaveStateValidator {
     const projects = new Map(
       this.survivalSystems.research.projects.map((project) => [project.project_id, project]),
     );
+    requireNullableNonEmptyString(
+      state.research.slotted_item_id,
+      "research.slotted_item_id",
+    );
+    if (state.research.slotted_item_id !== null) {
+      const researchableItemIds = new Set(
+        this.survivalSystems.research.projects.map(
+          (project) => project.research_input_item_id,
+        ),
+      );
+      if (!researchableItemIds.has(state.research.slotted_item_id)) {
+        throw new SaveDataError(
+          `研究槽引用不可研究物品：${state.research.slotted_item_id}。`,
+        );
+      }
+    }
     for (const projectId of completedIds) {
       const project = projects.get(projectId);
       if (project === undefined) {

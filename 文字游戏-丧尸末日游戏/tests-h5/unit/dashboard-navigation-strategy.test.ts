@@ -51,9 +51,9 @@ describe("局内仪表盘导航策略", () => {
       "archive_storage",
       "encounter_battle",
       "companions",
-      "companion_management",
       "transport_management",
       "facility_management",
+      "settlement_network",
       "use_food",
       "use_medicine",
       "feed_shelter",
@@ -80,10 +80,7 @@ describe("局内仪表盘导航策略", () => {
       type: "push_screen",
       screen: "companions",
     });
-    expect(resolveDashboardNavigationIntent("companion_management")).toEqual({
-      type: "push_screen",
-      screen: "companion_management",
-    });
+    expect(resolveDashboardNavigationIntent("companion_management")).toBeNull();
     expect(resolveDashboardNavigationIntent("shelter_map")).toEqual({
       type: "push_screen",
       screen: "shelter_map",
@@ -95,6 +92,10 @@ describe("局内仪表盘导航策略", () => {
     expect(resolveDashboardNavigationIntent("facility_management")).toEqual({
       type: "push_screen",
       screen: "management_categories",
+    });
+    expect(resolveDashboardNavigationIntent("settlement_network")).toEqual({
+      type: "push_screen",
+      screen: "settlement_network",
     });
     expect(resolveDashboardNavigationIntent("return_menu")).toEqual({
       type: "push_screen",

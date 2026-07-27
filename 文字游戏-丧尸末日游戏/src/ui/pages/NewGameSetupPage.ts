@@ -30,6 +30,8 @@ interface SetupOption<TId extends SelectionId> {
   readonly id: TId;
   readonly label: string;
   readonly description: string;
+  readonly incompatibleIds?: readonly string[];
+  readonly parentId?: string;
 }
 
 /** 可被中央列表与底部摘要共享的选择状态。 */
@@ -38,6 +40,9 @@ interface SetupSelection<TId extends SelectionId> {
   select(id: TId): SetupOption<TId>;
   advance(): SetupOption<TId>;
   options(): readonly SetupOption<TId>[];
+  canSelect(id: TId): boolean;
+  hideUnavailable(): boolean;
+  visibleOptionCount(): number;
 }
 
 /** 每个模式的玩家数可由上层领域快照注入。 */
@@ -66,8 +71,11 @@ export interface NewGameSetupPageView {
 /** 开局页内部用于刷新选中态的可视绑定。 */
 interface SelectionVisualBinding<TId extends SelectionId> {
   readonly id: TId;
+  readonly button: LayaSpriteLike;
   readonly label: LayaTextLike;
   readonly mark: LayaTextLike;
+  readonly startY: number;
+  readonly rowHeight: number;
 }
 
 /** 姓名输入区需要同时管理值、可见性和预设按钮。 */
@@ -105,15 +113,30 @@ export function createNewGameSetupPage(
     profileOptions.defaultSelection.originId,
     config.texts.profile_origin_label,
   );
-  const trait = createCampaignSelection(
+  const traits = createCompatibleTraitSelections(
     profileOptions.traits,
     profileOptions.defaultSelection.traitId,
+    profileOptions.defaultSelection.secondaryTraitId,
     config.texts.profile_trait_label,
+    config.texts.profile_secondary_trait_label,
   );
+  const trait = traits.primary;
+  const secondaryTrait = traits.secondary;
   const city = createCampaignSelection(
     profileOptions.cities,
     profileOptions.defaultSelection.homeCityId,
     config.texts.profile_city_label,
+  );
+  const district = createDistrictSelection(
+    profileOptions.districts,
+    profileOptions.defaultSelection.homeDistrictId,
+    (): string => city.current().id,
+    config.texts.profile_district_label,
+  );
+  const shelter = createCampaignSelection(
+    profileOptions.shelterTypes,
+    profileOptions.defaultSelection.shelterTypeId,
+    config.texts.profile_shelter_type_label,
   );
   const slot = createSlotSelection(saveSlots, config);
   const categoryOrder = config.new_game_setup.categories.map((item) => item.id);
@@ -156,7 +179,10 @@ export function createNewGameSetupPage(
     difficultyId: difficulty.current().id,
     originId: origin.current().id,
     traitId: trait.current().id,
+    secondaryTraitId: secondaryTrait.current().id,
     homeCityId: city.current().id,
+    homeDistrictId: district.current().id,
+    shelterTypeId: shelter.current().id,
   });
 
   /** 读取可写存档栏位，当浏览器无栏位时返回空值。 */
@@ -215,7 +241,10 @@ export function createNewGameSetupPage(
     refreshSelectionBindings("difficulty", difficulty, selectionBindings, config);
     refreshSelectionBindings("origin", origin, selectionBindings, config);
     refreshSelectionBindings("trait", trait, selectionBindings, config);
+    refreshSelectionBindings("secondary_trait", secondaryTrait, selectionBindings, config);
     refreshSelectionBindings("city", city, selectionBindings, config);
+    refreshSelectionBindings("district", district, selectionBindings, config);
+    refreshSelectionBindings("shelter", shelter, selectionBindings, config);
     refreshSelectionBindings("slot", slot, selectionBindings, config);
     refreshPreviewText(
       config,
@@ -225,7 +254,10 @@ export function createNewGameSetupPage(
       difficulty,
       origin,
       trait,
+      secondaryTrait,
       city,
+      district,
+      shelter,
       slot,
       previewTitles,
       previewDescriptions,
@@ -237,7 +269,10 @@ export function createNewGameSetupPage(
       difficulty,
       origin,
       trait,
+      secondaryTrait,
       city,
+      district,
+      shelter,
       slot,
     );
     if (summaryText !== null) {
@@ -248,7 +283,10 @@ export function createNewGameSetupPage(
         difficulty.current(),
         origin.current(),
         trait.current(),
+        secondaryTrait.current(),
         city.current(),
+        district.current(),
+        shelter.current(),
         slot?.current() ?? null,
       );
     }
@@ -269,7 +307,10 @@ export function createNewGameSetupPage(
       difficulty,
       origin,
       trait,
+      secondaryTrait,
       city,
+      district,
+      shelter,
       slot,
       maximumPlayers,
       config,
@@ -310,7 +351,10 @@ export function createNewGameSetupPage(
     difficulty,
     origin,
     trait,
+    secondaryTrait,
     city,
+    district,
+    shelter,
     slot,
     maximumPlayers,
     resolvedPlayerCounts,
@@ -357,7 +401,10 @@ interface SetupRenderContext {
   readonly difficulty: SetupSelection<string>;
   readonly origin: SetupSelection<string>;
   readonly trait: SetupSelection<string>;
+  readonly secondaryTrait: SetupSelection<string>;
   readonly city: SetupSelection<string>;
+  readonly district: SetupSelection<string>;
+  readonly shelter: SetupSelection<string>;
   readonly slot: SetupSelection<number> | null;
   readonly maximumPlayers: number;
   readonly resolvedPlayerCounts: Readonly<Record<string, number>>;
@@ -744,7 +791,8 @@ function renderSelectionGroup(
   options.forEach((option, index) => {
     /** 选中中央列表项后保持当前分类，并同步详情和摘要。 */
     const handleSelect = (): void => {
-      selection?.select(option.id);
+      if (selection?.canSelect(option.id) !== true) return;
+      selection.select(option.id);
       context.refreshAll();
     };
     const buttonHeight = Math.max(
@@ -778,8 +826,11 @@ function renderSelectionGroup(
     });
     bindings.push({
       id: option.id,
+      button,
       label: requireButtonLabel(button, `profile-${category}-option-${String(option.id)}`),
       mark,
+      startY,
+      rowHeight,
     });
   });
   context.selectionBindings.set(category, bindings);
@@ -880,7 +931,7 @@ function renderSetupSummary(
     color: context.config.theme.muted_text,
   });
   const gridTop = mobile
-    ? bodyTop + Math.max(context.config.typography.body_line_height * 7, height * 0.36)
+    ? bodyTop + Math.max(context.config.typography.body_line_height * 9, height * 0.4)
     : bodyTop;
   const gridLeft = mobile ? padding : padding + summaryWidth + context.config.layout.page.option_gap;
   const gridWidth = width - gridLeft - padding;
@@ -892,7 +943,10 @@ function renderSetupSummary(
     "difficulty",
     "origin",
     "trait",
+    "secondary_trait",
     "city",
+    "district",
+    "shelter",
     "slot",
   ];
   const availableGridHeight = Math.max(1, height - gridTop - padding);
@@ -964,7 +1018,195 @@ function createSelection<TId extends SelectionId>(
   };
   /** 返回只读选项集合供列表渲染。 */
   const readOptions = (): readonly SetupOption<TId>[] => options;
-  return { current, select, advance, options: readOptions };
+  /** 普通单选列表中的所有已配置项均可选。 */
+  const canSelect = (id: TId): boolean => options.some((option) => option.id === id);
+  /** 普通单选项不隐藏任何已配置项。 */
+  const hideUnavailable = (): boolean => false;
+  /** 普通单选列表的可见数量等于完整选项数。 */
+  const visibleOptionCount = (): number => options.length;
+  return {
+    current,
+    select,
+    advance,
+    options: readOptions,
+    canSelect,
+    hideUnavailable,
+    visibleOptionCount,
+  };
+}
+
+/** 为特性一和特性二创建共享互斥约束的两个单选模型。 */
+function createCompatibleTraitSelections(
+  options: readonly UiCampaignOptionView[],
+  primaryId: string,
+  secondaryId: string,
+  primaryLabel: string,
+  secondaryLabel: string,
+): {
+  readonly primary: SetupSelection<string>;
+  readonly secondary: SetupSelection<string>;
+} {
+  if (options.length < 2) throw new Error("双特性至少需要两个可用选项。");
+  let primaryIndex = requireSelectionIndex(options, primaryId, primaryLabel);
+  let secondaryIndex = requireSelectionIndex(options, secondaryId, secondaryLabel);
+
+  /** 读取经过边界校验的指定特性。 */
+  const optionAt = (index: number, fieldLabel: string): SetupOption<string> => {
+    const option = options[index];
+    if (option === undefined) throw new Error(`${fieldLabel}没有可用选项。`);
+    return option;
+  };
+  /** 判断候选特性与另一特性是否不重复且双向兼容。 */
+  const compatibleWith = (candidateId: string, otherId: string): boolean => {
+    const candidate = options.find((option) => option.id === candidateId);
+    const other = options.find((option) => option.id === otherId);
+    return candidate !== undefined
+      && other !== undefined
+      && candidate.id !== other.id
+      && !(candidate.incompatibleIds ?? []).includes(other.id)
+      && !(other.incompatibleIds ?? []).includes(candidate.id);
+  };
+  if (!compatibleWith(primaryId, secondaryId)) {
+    throw new Error("默认特性一与特性二重复或互斥。");
+  }
+
+  /** 构建一个可感知另一槽位当前值的特性选择器。 */
+  const createSlot = (
+    fieldLabel: string,
+    currentIndex: () => number,
+    updateIndex: (index: number) => void,
+    otherIndex: () => number,
+  ): SetupSelection<string> => {
+    /** 读取当前特性。 */
+    const current = (): SetupOption<string> => optionAt(currentIndex(), fieldLabel);
+    /** 判断稳定 ID 是否能放入当前特性槽位。 */
+    const canSelect = (id: string): boolean => compatibleWith(
+      id,
+      optionAt(otherIndex(), fieldLabel).id,
+    );
+    /** 选择一个与另一槽位兼容的特性。 */
+    const select = (id: string): SetupOption<string> => {
+      const nextIndex = options.findIndex((option) => option.id === id);
+      if (nextIndex < 0) throw new Error(`${fieldLabel}选项不存在：${id}`);
+      if (!canSelect(id)) throw new Error(`${fieldLabel}与另一特性重复或互斥。`);
+      updateIndex(nextIndex);
+      return current();
+    };
+    /** 循环到下一个与另一槽位兼容的特性。 */
+    const advance = (): SetupOption<string> => {
+      for (let offset = 1; offset <= options.length; offset += 1) {
+        const index = (currentIndex() + offset) % options.length;
+        const candidate = optionAt(index, fieldLabel);
+        if (canSelect(candidate.id)) {
+          updateIndex(index);
+          return current();
+        }
+      }
+      throw new Error(`${fieldLabel}没有可与另一特性搭配的选项。`);
+    };
+    /** 特性页保留互斥项作为灰色说明，不从列表隐藏。 */
+    const hideUnavailable = (): boolean => false;
+    /** 特性页始终展示完整目录。 */
+    const visibleOptionCount = (): number => options.length;
+    /** 返回完整特性目录供页面绘制。 */
+    const readOptions = (): readonly SetupOption<string>[] => options;
+    return {
+      current,
+      select,
+      advance,
+      options: readOptions,
+      canSelect,
+      hideUnavailable,
+      visibleOptionCount,
+    };
+  };
+
+  return {
+    primary: createSlot(
+      primaryLabel,
+      (): number => primaryIndex,
+      (index): void => { primaryIndex = index; },
+      (): number => secondaryIndex,
+    ),
+    secondary: createSlot(
+      secondaryLabel,
+      (): number => secondaryIndex,
+      (index): void => { secondaryIndex = index; },
+      (): number => primaryIndex,
+    ),
+  };
+}
+
+/** 为城市联动区划创建选择器，只展示当前城市下的区划。 */
+function createDistrictSelection(
+  options: UiCampaignProfileOptionsView["districts"],
+  initialId: string,
+  currentCityId: () => string,
+  fieldLabel: string,
+): SetupSelection<string> {
+  let selectedId = initialId;
+  if (!options.some((option) => option.id === initialId)) {
+    throw new Error(`${fieldLabel}的默认选项不存在：${initialId}`);
+  }
+  /** 读取当前城市的全部区划。 */
+  const cityOptions = (): readonly SetupOption<string>[] => options
+    .filter((option) => option.cityId === currentCityId())
+    .map((option) => ({ ...option, parentId: option.cityId }));
+  /** 城市变更后将失效区划自动对齐为该市第一个配置项。 */
+  const current = (): SetupOption<string> => {
+    const candidates = cityOptions();
+    const selected = candidates.find((option) => option.id === selectedId);
+    const resolved = selected ?? candidates[0];
+    if (resolved === undefined) throw new Error(`${fieldLabel}在当前城市下没有可用选项。`);
+    selectedId = resolved.id;
+    return resolved;
+  };
+  /** 判断区划是否属于当前城市。 */
+  const canSelect = (id: string): boolean => cityOptions().some((option) => option.id === id);
+  /** 选择当前城市下的一个区划。 */
+  const select = (id: string): SetupOption<string> => {
+    if (!canSelect(id)) throw new Error(`${fieldLabel}不属于当前城市：${id}`);
+    selectedId = id;
+    return current();
+  };
+  /** 在当前城市的区划中循环到下一项。 */
+  const advance = (): SetupOption<string> => {
+    const candidates = cityOptions();
+    const currentIndex = candidates.findIndex((option) => option.id === current().id);
+    const next = candidates[(currentIndex + 1) % candidates.length];
+    if (next === undefined) throw new Error(`${fieldLabel}在当前城市下没有可用选项。`);
+    selectedId = next.id;
+    return next;
+  };
+  /** 返回全部区划供一次性建立显示节点。 */
+  const readOptions = (): readonly SetupOption<string>[] => options.map((option) => ({
+    ...option,
+    parentId: option.cityId,
+  }));
+  /** 非当前城市区划应从列表隐藏，而非显示为互斥项。 */
+  const hideUnavailable = (): boolean => true;
+  /** 可见数量始终与当前城市区划数一致。 */
+  const visibleOptionCount = (): number => cityOptions().length;
+  return {
+    current,
+    select,
+    advance,
+    options: readOptions,
+    canSelect,
+    hideUnavailable,
+    visibleOptionCount,
+  };
+}
+
+/** 读取默认选项索引，并在配置引用未知 ID 时立即失败。 */
+function requireSelectionIndex(
+  options: readonly SetupOption<string>[],
+  id: string,
+  fieldLabel: string,
+): number {
+  const index = options.findIndex((option) => option.id === id);
+  if (index < 0) throw new Error(`${fieldLabel}的默认选项不存在：${id}`);
+  return index;
 }
 
 /** 按入口白名单排序模式，并为独立剧情或多人入口补入当前模式。 */
@@ -1105,8 +1347,14 @@ function resolveSelection(
       return context.origin;
     case "trait":
       return context.trait;
+    case "secondary_trait":
+      return context.secondaryTrait;
     case "city":
       return context.city;
+    case "district":
+      return context.district;
+    case "shelter":
+      return context.shelter;
     case "slot":
       return context.slot;
   }
@@ -1119,7 +1367,10 @@ function resolveCategoryContentHeight(
   difficulty: SetupSelection<string>,
   origin: SetupSelection<string>,
   trait: SetupSelection<string>,
+  secondaryTrait: SetupSelection<string>,
   city: SetupSelection<string>,
+  district: SetupSelection<string>,
+  shelter: SetupSelection<string>,
   slot: SetupSelection<number> | null,
   maximumPlayers: number,
   config: GameUiConfig,
@@ -1138,13 +1389,19 @@ function resolveCategoryContentHeight(
         ? origin
         : category === "trait"
           ? trait
-          : category === "city"
-            ? city
-            : slot;
+          : category === "secondary_trait"
+            ? secondaryTrait
+            : category === "city"
+              ? city
+              : category === "district"
+                ? district
+                : category === "shelter"
+                  ? shelter
+                  : slot;
   const rowHeight = layout.usesCompactUi
     ? config.new_game_setup.mobile.row_height
     : config.new_game_setup.desktop.row_height;
-  return headingHeight + Math.max(1, selection?.options().length ?? 1) * rowHeight;
+  return headingHeight + Math.max(1, selection?.visibleOptionCount() ?? 1) * rowHeight;
 }
 
 /** 只显示当前分类的中央选项组。 */
@@ -1195,10 +1452,24 @@ function refreshSelectionBindings<TId extends SelectionId>(
   config: GameUiConfig,
 ): void {
   const selectedId = selection?.current().id;
+  let visibleIndex = 0;
   bindings.get(category)?.forEach((binding) => {
     const selected = binding.id === selectedId;
-    binding.mark.visible = selected;
-    binding.label.color = selected ? config.theme.accent : config.theme.text;
+    const available = selection?.canSelect(binding.id as TId) ?? false;
+    const hidden = selection?.hideUnavailable() === true && !available;
+    binding.button.visible = !hidden;
+    binding.button.mouseEnabled = available;
+    if (!hidden) {
+      binding.button.y = binding.startY + visibleIndex * binding.rowHeight;
+      visibleIndex += 1;
+    }
+    binding.mark.visible = selected || (!available && !hidden);
+    binding.mark.text = selected
+      ? config.new_game_setup.copy.selected_mark
+      : config.new_game_setup.copy.incompatible_mark;
+    binding.label.color = selected
+      ? config.theme.accent
+      : available ? config.theme.text : config.theme.muted_text;
   });
 }
 
@@ -1211,7 +1482,10 @@ function refreshPreviewText(
   difficulty: SetupSelection<string>,
   origin: SetupSelection<string>,
   trait: SetupSelection<string>,
+  secondaryTrait: SetupSelection<string>,
   city: SetupSelection<string>,
+  district: SetupSelection<string>,
+  shelter: SetupSelection<string>,
   slot: SetupSelection<number> | null,
   titles: ReadonlyMap<NewGameSetupCategoryTokenId, LayaTextLike>,
   descriptions: ReadonlyMap<NewGameSetupCategoryTokenId, LayaTextLike>,
@@ -1235,9 +1509,15 @@ function refreshPreviewText(
         ? origin
         : category === "trait"
           ? trait
-          : category === "city"
-            ? city
-            : slot;
+          : category === "secondary_trait"
+            ? secondaryTrait
+            : category === "city"
+              ? city
+              : category === "district"
+                ? district
+                : category === "shelter"
+                  ? shelter
+                  : slot;
   const selected = selection?.current();
   title.text = selected?.label ?? config.texts.no_save;
   description.text = selected?.description ?? config.texts.no_save;
@@ -1251,7 +1531,10 @@ function refreshSummaryLabels(
   difficulty: SetupSelection<string>,
   origin: SetupSelection<string>,
   trait: SetupSelection<string>,
+  secondaryTrait: SetupSelection<string>,
   city: SetupSelection<string>,
+  district: SetupSelection<string>,
+  shelter: SetupSelection<string>,
   slot: SetupSelection<number> | null,
 ): void {
   const values: Readonly<Record<SummarySelectionCategory, string>> = {
@@ -1259,7 +1542,10 @@ function refreshSummaryLabels(
     difficulty: difficulty.current().label,
     origin: origin.current().label,
     trait: trait.current().label,
+    secondary_trait: secondaryTrait.current().label,
     city: city.current().label,
+    district: district.current().label,
+    shelter: shelter.current().label,
     slot: slot?.current().label ?? config.texts.no_save,
   };
   labels.forEach((label, category) => { label.text = values[category]; });
@@ -1281,7 +1567,10 @@ export function buildSetupSummary(
   difficulty: SetupOption<SelectionId>,
   origin: SetupOption<SelectionId>,
   trait: SetupOption<SelectionId>,
+  secondaryTrait: SetupOption<SelectionId>,
   city: SetupOption<SelectionId>,
+  district: SetupOption<SelectionId>,
+  shelter: SetupOption<SelectionId>,
   slot: SetupOption<SelectionId> | null,
 ): string {
   return formatTemplate(config.new_game_setup.copy.summary_format, {
@@ -1290,7 +1579,10 @@ export function buildSetupSummary(
     difficulty: difficulty.label,
     origin: origin.label,
     trait: trait.label,
+    secondary_trait: secondaryTrait.label,
     city: city.label,
+    district: district.label,
+    shelter: shelter.label,
     slot: slot?.label ?? config.texts.no_save,
   });
 }

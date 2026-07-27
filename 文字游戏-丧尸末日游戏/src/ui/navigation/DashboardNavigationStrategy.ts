@@ -20,9 +20,9 @@ export const DASHBOARD_ACTION_IDS = [
   "archive_storage",
   "encounter_battle",
   "companions",
-  "companion_management",
   "transport_management",
   "facility_management",
+  "settlement_network",
   "use_food",
   "use_medicine",
   "feed_shelter",
@@ -54,7 +54,6 @@ export type DashboardEntryId = InGameNavigationId | DashboardActionId;
 export type DashboardPushScreen =
   | "management_categories"
   | "companions"
-  | "companion_management"
   | "shelter_map"
   | "archive_storage"
   | "encounter_catalog"
@@ -63,6 +62,7 @@ export type DashboardPushScreen =
   | "settings"
   | "warehouse"
   | "transport_management"
+  | "settlement_network"
   | "research"
   | "crafting"
   | "history"
@@ -110,9 +110,9 @@ const DEFAULT_POLICY_ENTRIES = Object.freeze({
   archive_storage: { type: "push_screen", screen: "archive_storage" },
   encounter_battle: { type: "push_screen", screen: "encounter_catalog" },
   companions: { type: "push_screen", screen: "companions" },
-  companion_management: { type: "push_screen", screen: "companion_management" },
   transport_management: { type: "push_screen", screen: "transport_management" },
   facility_management: { type: "push_screen", screen: "management_categories" },
+  settlement_network: { type: "push_screen", screen: "settlement_network" },
   use_food: { type: "perform_supply_action", actionId: "use_food" },
   use_medicine: { type: "perform_supply_action", actionId: "use_medicine" },
   feed_shelter: { type: "perform_supply_action", actionId: "feed_shelter" },

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import gameConfigDocument from "../../config/game_config.json";
 import type { GameUiSnapshot, UiOptionView } from "../../src/ui/ports/GameUiPort";
 import {
   buildH5Harness,
@@ -107,7 +108,9 @@ describe("H5 剧情、战斗与探索命令流", () => {
     expect(state.battle).toMatchObject({ finished: true, retreated: true });
     expect(snapshot.battle).toBeNull();
     expect(requireAction(snapshot, "shelter_management").disabled).toBe(false);
-    expect(snapshot.managementCategories).toHaveLength(3);
+    expect(snapshot.managementCategories).toHaveLength(
+      gameConfigDocument.interface.pages.management_categories.length,
+    );
   });
 
   it("探索事件只抽取一次，并在显式存档恢复后继续同一事件", () => {
@@ -213,6 +216,15 @@ describe("H5 经营、物品与失败命令流", () => {
     });
     expect(unnecessary.accepted).toBe(false);
     expect(unnecessary.notice?.tone).toBe("warning");
+    expect(unnecessary.notice?.message).toBe("当前生命值已满，无需使用医疗用品。");
+    expect(unnecessary.notice?.message).not.toContain("白菜");
+    const fullFood = harness.adapter.execute({
+      type: "supply_action",
+      actionId: "use_food",
+    });
+    expect(fullFood.accepted).toBe(false);
+    expect(fullFood.notice?.message).toBe("当前饱食值已满，无需消耗食物。");
+    expect(fullFood.notice?.message).not.toContain("白菜");
     expect(JSON.stringify(state)).toBe(before);
 
     const player = requirePlayer(state);

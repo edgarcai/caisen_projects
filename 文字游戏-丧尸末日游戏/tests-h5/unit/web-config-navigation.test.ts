@@ -155,15 +155,13 @@ describe("局内导航配置完整性", () => {
 
   it("严格校验设施管理快捷路由及跨配置分类引用", () => {
     const parsed = parseWebGameConfig(webConfigDocument);
+    const managementCategoryIds = gameConfigDocument.interface.pages
+      .management_categories.map((category) => category.id);
     expect(parsed.dashboard_navigation.management_category_shortcuts).toEqual([
-      { entry_id: "facility_management", category_id: "upgrade" },
+      { entry_id: "facility_management", category_id: "facility_use" },
     ]);
     expect(() => {
-      validateDashboardNavigationReferences(parsed, [
-        "operation",
-        "activity",
-        "upgrade",
-      ]);
+      validateDashboardNavigationReferences(parsed, managementCategoryIds);
     }).not.toThrow();
 
     const duplicate = cloneWebConfig();
@@ -180,8 +178,11 @@ describe("局内导航配置完整性", () => {
     expect(() => parseWebGameConfig(duplicate)).toThrow("重复入口");
     expect(() => parseWebGameConfig(unknownEntry)).toThrow("引用未知入口");
     expect(() => {
-      validateDashboardNavigationReferences(parsed, ["operation", "activity"]);
-    }).toThrow("引用未知经营分类：upgrade");
+      validateDashboardNavigationReferences(
+        parsed,
+        managementCategoryIds.filter((categoryId) => categoryId !== "facility_use"),
+      );
+    }).toThrow("引用未知经营分类：facility_use");
   });
 
   it("系统确认与经营详情文案保持严格、完整且类别中性", () => {

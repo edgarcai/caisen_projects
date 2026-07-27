@@ -166,6 +166,18 @@ function validateResearchAndCrafting(config: SurvivalSystemsConfigDocument): voi
   const projectIds = projects.map((project) => project.project_id);
   const recipeIds = recipes.map((recipe) => recipe.recipe_id);
   const craftedIds = new Set(config.warehouse.crafted_items.map((item) => item.item_id));
+  const warehouseIds = new Set([
+    ...config.warehouse.resource_items,
+    ...config.warehouse.crafted_items,
+  ].map((item) => item.item_id));
+  const warehouseStateTargets = new Set(
+    config.warehouse.resource_items.map((item) => item.state_target),
+  );
+  requireInteger(config.research.slot_count, "research.slot_count", 1);
+  if (config.research.slot_count !== 1) {
+    throw new Error("当前研究台配置只支持一个方格。");
+  }
+  requireInteger(config.research.input_quantity, "research.input_quantity", 1);
   requireUniqueStrings(projectIds, "research project_id");
   requireUniqueStrings(recipeIds, "crafting recipe_id");
   const projectIdSet = new Set(projectIds);
@@ -179,17 +191,107 @@ function validateResearchAndCrafting(config: SurvivalSystemsConfigDocument): voi
     for (const recipeId of project.unlock_recipe_ids) {
       requireReference(recipeId, recipeIdSet, `${project.project_id}.unlock_recipe_ids`);
     }
+    requireReference(
+      project.research_input_item_id,
+      warehouseIds,
+      `${project.project_id}.research_input_item_id`,
+    );
+    validateSourceLocations(project.source_locations, `${project.project_id}.source_locations`);
+    validateCosts(
+      project.costs,
+      warehouseIds,
+      warehouseStateTargets,
+      `${project.project_id}.costs`,
+    );
+    const costTargets = new Set(project.costs.flatMap((cost) =>
+      "target" in cost ? [cost.target] : [],
+    ));
+    for (const requiredTarget of ["player.coins", "player.parts"] as const) {
+      if (!costTargets.has(requiredTarget)) {
+        throw new Error(`研究项目 ${project.project_id} 必须消耗${requiredTarget}。`);
+      }
+    }
   }
   for (const recipe of recipes) {
-    requireReference(
-      recipe.required_project_id,
-      projectIdSet,
-      `${recipe.recipe_id}.required_project_id`,
-    );
+    if (recipe.required_project_id !== null) {
+      requireReference(
+        recipe.required_project_id,
+        projectIdSet,
+        `${recipe.recipe_id}.required_project_id`,
+      );
+    }
     requireReference(recipe.output_item_id, craftedIds, `${recipe.recipe_id}.output_item_id`);
     requireInteger(recipe.output_quantity, `${recipe.recipe_id}.output_quantity`, 1);
     requireInteger(recipe.turns_consumed, `${recipe.recipe_id}.turns_consumed`, 1);
+    validateCosts(
+      recipe.costs,
+      warehouseIds,
+      warehouseStateTargets,
+      `${recipe.recipe_id}.costs`,
+    );
+    validateSourceLocations(
+      recipe.blueprint_source_locations,
+      `${recipe.recipe_id}.blueprint_source_locations`,
+    );
   }
+}
+
+/** 校验成本只引用已注册状态目标或仓库物品，且数量为正整数。 */
+function validateCosts(
+  costs: unknown,
+  warehouseIds: ReadonlySet<string>,
+  warehouseStateTargets: ReadonlySet<string>,
+  path: string,
+): void {
+  const entries = requireArray(costs, path);
+  if (entries.length === 0) {
+    throw new Error(`${path} 至少需要一项成本。`);
+  }
+  entries.forEach((entry, index) => {
+    const entryPath = `${path}[${String(index)}]`;
+    const cost = requireRecord(entry, entryPath);
+    requireInteger(cost.amount, `${entryPath}.amount`, 1);
+    const hasTarget = Object.hasOwn(cost, "target");
+    const hasItemId = Object.hasOwn(cost, "item_id");
+    if (hasTarget === hasItemId) {
+      throw new Error(`${entryPath} 必须且只能声明 target 或 item_id。`);
+    }
+    if (hasTarget) {
+      const target = requireNonEmptyString(cost.target, `${entryPath}.target`);
+      if (!warehouseStateTargets.has(target)) {
+        throw new Error(`${entryPath}.target 引用了未注册状态资源：${target}`);
+      }
+      if (cost.operation !== "subtract") {
+        throw new Error(`${entryPath}.operation 只支持 subtract。`);
+      }
+      return;
+    }
+    const itemId = requireNonEmptyString(cost.item_id, `${entryPath}.item_id`);
+    requireReference(itemId, warehouseIds, `${entryPath}.item_id`);
+  });
+}
+
+/** 校验配方、蓝图与研究物来源都使用非空城市和区划 ID。 */
+function validateSourceLocations(
+  locations: unknown,
+  path: string,
+): void {
+  const entries = requireArray(locations, path);
+  if (entries.length === 0) {
+    throw new Error(`${path} 至少需要一个出处。`);
+  }
+  const stableIds: string[] = [];
+  entries.forEach((entry, index) => {
+    const entryPath = `${path}[${String(index)}]`;
+    const location = requireRecord(entry, entryPath);
+    const cityId = requireNonEmptyString(location.city_id, `${entryPath}.city_id`);
+    const districtId = requireNonEmptyString(
+      location.district_id,
+      `${entryPath}.district_id`,
+    );
+    stableIds.push(`${cityId}:${districtId}`);
+  });
+  requireUniqueStrings(stableIds, path);
 }
 
 /** 校验远征限制、伙伴加成和惩罚范围。 */

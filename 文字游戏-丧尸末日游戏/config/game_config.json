@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "save_schema_version": 8,
+  "save_schema_version": 9,
   "game": {
     "tutorial_survival": "欢迎来到B-17避难所，所长。普通求生模式专注于资源、人员与远征经营，不包含主线剧情任务。\n\n【生存与时间】探索、设施建设、工作和修复等高消耗行动会增加饥饿；交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【城市与远征】出发前必须从仓库选择携带食物：每1份食物可支撑1次移动或探索行动。前往所在城市消耗1份，邻近城市消耗2份；远处城市还要收集报纸情报，并持有路线图或符合地貌的载具。携带食物无法支撑下一次行动时会被尸群强制逼退，只保住20%物资，所长生命降至7至45。\n\n【避难所与人物档案】人物档案和避难所信息在所有模式保留。供餐、修复、设施、工作、交易、招募、仓库、研发、制作与历史记录都可从指挥台进入。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录。系统每十个生存日建立检查点并自动保存；ESC功能菜单可以选择六个栏位存档、设置、回档、返回主菜单或退出。",
-    "tutorial": "欢迎来到B-17避难所，所长。活下去只是基础；你选择怎样活下去，才会决定所有人的结局。\n\n【生存与时间】只有探索、战斗、设施建设、工作和修复等高消耗行动会增加饥饿；剧情阅读、交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【远征食物】探索前依次查看城市需求、选择区划，再确认同行伙伴与携带物。每携带1份食物可获得1次移动或探索行动；城市路程与区划危险会按配置消耗对应食物。每次继续深入前都要检查剩余食物；食物无法支撑下一次行动会被尸群强制逼退，只保住20%本次物资，所长生命会降到7至45。\n\n【仓库、研发与制作】仓库统一显示资源和制作物，已装备的武器、防具不计入可用库存。研究台消耗资料与材料解锁技术，制作工坊据此生产远征物资、武器和防具。失败的研发或制作不会扣除任何材料。\n\n【四章主线】点击‘剧情任务’推进十三个连续场景。选择可能要求属性、资源、设施、伙伴状态或关键物品；锁定选择不会扣资源或消耗回合。主线包含《饥饿会说话》《尸群在唱谁的名字》《人比末日更会撒谎》《余烬之后是什么》四章。\n\n【三场Boss】铁轨屠夫、鸣钟母体与无冕王都有多条处理路线。战斗可执行攻击、防御、专注、使用医疗用品和撤退。单个战斗回合不会推进世界时间；整场胜利结算或成功撤退才消耗一次世界行动。\n\n【避难所管理】供餐、修复、设施、工作、交易和招募统一收在避难所管理中。设施提供即时效果或长期增益；工作产生收益与风险；交易不推进时间；资源不足时不会偷偷消耗回合。\n\n【伙伴、线索与结局】豪菜、阳关、林岚和小满拥有独立信任与状态。隐藏账本、病历、频率、名单和维护密钥会开启非暴力路线。最终结果会综合人性、证据、信任、线索、避难所状态及三场Boss的处理方式。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录，随后清空开始新一周。系统每十个生存日建立检查点并自动保存一次；ESC功能菜单仍可随时手动存档、设置、回档或退出。已经抽取的探索事件不能通过保存或读取免费重抽，旧 v1 至 v4 存档会安全迁移为 v5 区划状态。"
+    "tutorial": "欢迎来到B-17避难所，所长。活下去只是基础；你选择怎样活下去，才会决定所有人的结局。\n\n【生存与时间】只有探索、战斗、设施建设、工作和修复等高消耗行动会增加饥饿；剧情阅读、交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【远征食物】探索前依次查看城市需求、选择区划，再确认同行伙伴与携带物。每携带1份食物可获得1次移动或探索行动；城市路程与区划危险会按配置消耗对应食物。每次继续深入前都要检查剩余食物；食物无法支撑下一次行动会被尸群强制逼退，只保住20%本次物资，所长生命会降到7至45。\n\n【仓库、研发与制作】仓库统一显示资源和制作物，已装备的武器、防具不计入可用库存。研究台消耗资料与材料解锁技术，制作工坊据此生产远征物资、武器和防具。失败的研发或制作不会扣除任何材料。\n\n【四章主线】点击‘剧情任务’推进十三个连续场景。选择可能要求属性、资源、设施、伙伴状态或关键物品；锁定选择不会扣资源或消耗回合。主线包含《饥饿会说话》《尸群在唱谁的名字》《人比末日更会撒谎》《余烬之后是什么》四章。\n\n【三场Boss】铁轨屠夫、鸣钟母体与无冕王都有多条处理路线。战斗可执行攻击、防御、专注、使用医疗用品和撤退。单个战斗回合不会推进世界时间；整场胜利结算或成功撤退才消耗一次世界行动。\n\n【避难所管理】供餐、修复、设施、工作、交易和招募统一收在避难所管理中。设施提供即时效果或长期增益；工作产生收益与风险；交易仅在周五和周六开放，成交后推进两天；资源不足时不会偷偷消耗回合。\n\n【伙伴、线索与结局】豪菜、阳关、林岚和小满拥有独立信任与状态。隐藏账本、病历、频率、名单和维护密钥会开启非暴力路线。最终结果会综合人性、证据、信任、线索、避难所状态及三场Boss的处理方式。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录，随后清空开始新一周。系统每十个生存日建立检查点并自动保存一次；ESC功能菜单仍可随时手动存档、设置、回档或退出。已经抽取的探索事件不能通过保存或读取免费重抽，旧 v1 至 v8 存档会安全迁移为 v9 状态。"
   },
   "interface": {
     "cover": {
@@ -16,12 +16,32 @@
           "id": "operation",
           "label": "经营",
           "action_ids": ["feed_shelter", "repair_shelter"],
-          "domain_categories": ["job", "trade_buy", "trade_sell", "recruit"]
+          "domain_categories": ["recruit"]
+        },
+        {
+          "id": "work",
+          "label": "工作",
+          "domain_categories": ["job"]
+        },
+        {
+          "id": "trade_buy",
+          "label": "购买",
+          "domain_categories": ["trade_buy"]
+        },
+        {
+          "id": "trade_sell",
+          "label": "贩卖",
+          "domain_categories": ["trade_sell"]
         },
         {
           "id": "activity",
           "label": "活动",
           "domain_categories": ["activity"]
+        },
+        {
+          "id": "facility_use",
+          "label": "使用设施",
+          "domain_categories": ["facility_use"]
         },
         {
           "id": "upgrade",
@@ -267,10 +287,13 @@
       "exploration": {"player_hunger_gain": 4, "group_hunger_gain_per_person": 2},
       "combat": {"player_hunger_gain": 3, "group_hunger_gain_per_person": 2},
       "facility": {"player_hunger_gain": 3, "group_hunger_gain_per_person": 1},
+      "facility_use": {"player_hunger_gain": 2, "group_hunger_gain_per_person": 1},
       "job": {"player_hunger_gain": 4, "group_hunger_gain_per_person": 2},
       "activity": {"player_hunger_gain": 1, "group_hunger_gain_per_person": 1},
       "companion_interaction": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
       "recruit": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
+      "trade_buy": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
+      "trade_sell": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
       "use_food": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
       "use_medicine": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
       "feed_shelter": {"player_hunger_gain": 0, "group_hunger_gain_per_person": 0},
@@ -296,8 +319,11 @@
     "limits": {
       "player_max_health": 100,
       "shelter_max_health": 600,
+      "inner_wall_max_health": 300,
+      "outer_wall_max_health": 300,
       "shelter_max_hope": 100,
       "hope_min_game_over": 0,
+      "infection_pressure_game_over": 10,
       "player_hunger_game_over": 150,
       "group_hunger_game_over": 260,
       "activity_min_game_over": 0,
@@ -312,27 +338,14 @@
       "hope_loss": 1
     },
     "failure_endings": {
-      "shelter": {"ending_id": "shelter_breached", "text_key": "game_over_shelter"},
-      "hope": {"ending_id": "last_hope_extinguished", "text_key": "game_over_hope"},
-      "lifespan": {"ending_id": "natural_lifespan_ended", "text_key": "game_over_lifespan"},
-      "player_health": {
-        "ending_id": "last_commander_fallen",
-        "text_key": "game_over_player",
-        "mode_text_keys": {"multiplayer": "game_over_player_multiplayer"}
-      },
-      "player_hunger": {
-        "ending_id": "starved_commander",
-        "text_key": "game_over_player_hunger",
-        "mode_text_keys": {"multiplayer": "game_over_player_hunger_multiplayer"}
-      },
-      "group_hunger": {"ending_id": "shelter_famine", "text_key": "game_over_group_hunger"},
-      "activity_low": {"ending_id": "shelter_dissolved", "text_key": "game_over_activity_low"},
-      "activity_high": {"ending_id": "shelter_chaos", "text_key": "game_over_activity_high"},
-      "combat": {
-        "ending_id": "fallen_in_battle",
-        "text_key": "game_over_player",
-        "mode_text_keys": {"multiplayer": "game_over_player_multiplayer"}
-      }
+      "infection": {"ending_id": "infection_bloom", "text_key": "failure_ending_infection_bloom", "priority": 100},
+      "commander": {"ending_id": "commander_fallen", "text_key": "failure_ending_commander_fallen", "priority": 95},
+      "inner_wall": {"ending_id": "inner_wall_collapse", "text_key": "failure_ending_inner_wall_collapse", "priority": 90},
+      "activity_high": {"ending_id": "lost_exodus", "text_key": "failure_ending_lost_exodus", "priority": 85},
+      "outer_wall": {"ending_id": "outer_wall_overrun", "text_key": "failure_ending_outer_wall_overrun", "priority": 80},
+      "famine": {"ending_id": "famine_riot", "text_key": "failure_ending_famine_riot", "priority": 70},
+      "hope": {"ending_id": "hope_extinguished", "text_key": "failure_ending_hope_extinguished", "priority": 60},
+      "activity_low": {"ending_id": "settlement_schism", "text_key": "failure_ending_settlement_schism", "priority": 50}
     },
     "items": {
       "medical_supplies": {
@@ -366,7 +379,8 @@
       "equipped_transport_ids": []
     },
     "research": {
-      "completed_project_ids": []
+      "completed_project_ids": [],
+      "slotted_item_id": null
     },
     "management_cycle_usage": {},
     "expedition": null,
@@ -391,6 +405,8 @@
       "population": 3,
       "hope": 60,
       "group_hunger": 0,
+      "inner_wall_health": 130,
+      "outer_wall_health": 130,
       "health": 260,
       "defense_damage": 15,
       "activity": 55,
@@ -511,7 +527,7 @@
     {"id": "story", "label": "剧情任务", "style": "primary", "icon": "◈"},
     {"id": "explore", "label": "探索城市", "style": "primary", "icon": "⌖"},
     {"id": "shelter_management", "label": "避难所管理", "style": "secondary", "icon": "⚒"},
-    {"id": "companions", "label": "伙伴档案", "style": "secondary", "icon": "♟"},
+    {"id": "companions", "label": "角色档案", "style": "secondary", "icon": "♟"},
     {"id": "use_food", "label": "食用食物", "style": "secondary", "icon": "◐"},
     {"id": "use_medicine", "label": "使用医疗用品", "style": "secondary", "icon": "✚"},
     {"id": "feed_shelter", "label": "分发避难所食物", "style": "secondary", "icon": "♨"},
@@ -557,7 +573,7 @@
   "texts": {
     "welcome_log": "通讯接通。避难所等待你的第一项指令。",
     "new_game_started": "{player_name}成为避难所所长，开始生存。",
-    "new_game_profile_started": "模式：{mode}｜难度：{difficulty}｜起源：{origin}｜特性：{trait}｜出生地：{city}",
+    "new_game_profile_started": "模式：{mode}｜难度：{difficulty}｜起源：{origin}｜特性一：{trait}｜特性二：{secondary_trait}｜出生地：{city} · {district}｜避难所：{shelter_type}",
     "multiplayer_started": "{player_names}组成双人指挥组，将轮流执行生存行动。",
     "multiplayer_name_separator": "、",
     "story_mode_started": "{player_name}进入剧情沉浸模式，生存损耗降低，但命运的代价不会消失。",
@@ -653,13 +669,14 @@
     "invalid_survival_turn_count": "生存回合数必须是正整数。",
     "invalid_timeline_rule": "时间线配置必须是正整数：{rule_key}",
     "missing_failure_ending": "缺少失败结局配置：{failure_id}",
+    "invalid_failure_ending_priority": "失败结局优先级必须是正整数：{failure_id}",
     "next_player": "轮到 {player_name} 下达指令。",
     "medicine_success": "消耗{cost}份医疗用品，恢复了{healed}点生命。",
     "medicine_failed": "医疗用品不足，需要至少{cost}份。",
-    "medicine_not_needed": "{player_name}生命值已满，无需使用医疗用品。",
+    "medicine_not_needed": "当前生命值已满，无需使用医疗用品。",
     "food_success": "消耗{cost}份食物，个人饥饿值降低{reduced}点。",
     "food_failed": "食物不足，需要至少{cost}份。",
-    "food_not_needed": "{player_name}当前并不饥饿，无需消耗食物。",
+    "food_not_needed": "当前饱食值已满，无需消耗食物。",
     "shelter_food_success": "分发{cost}份食物，群体饥饿值降低{reduced}点。",
     "shelter_food_failed": "避难所食物不足，需要至少{cost}份。",
     "shelter_food_not_needed": "避难所当前没有群体饥饿，无需分发食物。",
@@ -676,6 +693,14 @@
     "game_over_group_hunger": "太久没有给伙伴们食物，避难所在混乱中解散。",
     "game_over_activity_low": "避难所失去凝聚力，在丧尸狂潮中解散。",
     "game_over_activity_high": "避难所陷入失控的狂欢，秩序彻底崩溃。",
+    "failure_ending_outer_wall_overrun": "【潮水越墙】\n外墙失守，尸潮在巡逻队完成下一次修补前涌入。\n\n最后一盏巡逻灯在清晨熄灭，再没有人回答墙内的呼叫。",
+    "failure_ending_inner_wall_collapse": "【心墙崩塌】\n长期失修使内墙在一次振动中倒塌，生活区失去最后隔离。\n\n灰尘散尽时，曾经记录每个人名字的白板被埋在瓦砾下。",
+    "failure_ending_hope_extinguished": "【无人守望】\n希望归零，幸存者不再相信明天值得等待。\n\n门被从内部打开。人们各自走入雨里，连争吵都已经显得多余。",
+    "failure_ending_famine_riot": "【空碗之夜】\n群体饥饿超过临界值，仓库在一夜之间变成战场。\n\n第二天没有人敲响吃饭的铃；锅里只剩下一层被刮花的金属。",
+    "failure_ending_infection_bloom": "【内部花开】\n隐瞒的感染在封闭房间内同时发作。\n\n通讯器里最后的声音是一句迟到的道歉，然后是漫长的撞门声。",
+    "failure_ending_commander_fallen": "【所长的空椅】\n最后一位所长在战斗、伤势或寿命终点中倒下。\n\n指挥室的椅子被推回桌下，却再没有人愿意坐上去。",
+    "failure_ending_settlement_schism": "【裂成两岸】\n活跃度跌至下限，无人再愿维持共同的秩序。\n\n两支队伍带着各自的火种离开，谁都没有回头看那块共同立起的招牌。",
+    "failure_ending_lost_exodus": "【没有回程】\n活跃度突破上限，狂热的人群擅自组织车队转移，随后全员失联。\n\n旧避难所与新目的地同时保持沉默，地图上只剩一条没画完的线。",
     "dashboard_time": "{year}年{month}月{day}日  {hour}:00",
     "dashboard_mode": "模式：{mode}",
     "dashboard_active_player": "当前所长：{player_name}",
@@ -715,7 +740,9 @@
     "shelter_facility_max_label": "{facility_name}（已满级）",
     "shelter_facility_level_missing": "设施 {facility_id} 缺少等级配置。",
     "shelter_facility_upgrade_label": "升级{facility_name}至 Lv.{level}",
-    "shelter_facility_upgrade_description": "{description}｜零件 {parts_cost}，金币 {coins_cost}｜耗时 {build_hours} 小时",
+    "shelter_facility_upgrade_description": "{description}｜升级后：{benefit}｜零件 {parts_cost}，金币 {coins_cost}｜耗时 {build_hours} 小时",
+    "shelter_facility_use_label": "使用设施：{action_name}",
+    "shelter_facility_use_description": "{facility_name} Lv.{minimum_level} 解锁｜{description}｜耗时 {duration_hours} 小时",
     "shelter_job_label": "工作：{job_name}",
     "shelter_job_description": "{description}｜耗时 {duration_hours} 小时",
     "shelter_trade_buy_label": "购买：{item_name} ×{quantity}",
@@ -730,10 +757,16 @@
     "shelter_facility_capacity_insufficient": "建设容量不足：当前总等级 {current}/{maximum}，请先升级避难所扩建。",
     "shelter_facility_resources_insufficient": "升级零件或金币不足。",
     "shelter_facility_upgrade_success": "{facility_name}已升级至 Lv.{level}，新的避难所能力开始生效。",
+    "shelter_unknown_facility_action": "未知设施功能：{action_id}",
+    "shelter_facility_action_invalid": "设施功能配置无效：{action_id}",
+    "shelter_facility_use_locked": "{facility_name}需要达到 Lv.{minimum_level} 才能使用这项功能。",
+    "shelter_facility_use_resources_insufficient": "使用设施所需物资不足。",
     "shelter_unknown_job": "未知工作：{job_id}",
     "shelter_job_locked": "当前条件不能安排这项工作。",
     "shelter_job_resources_insufficient": "完成工作所需资源不足。",
     "shelter_job_success": "工作【{job_name}】完成：{description}",
+    "shelter_job_repeated_success": "工作【{job_name}】已循环完成 {repetitions} 次。",
+    "shelter_job_repetition_invalid": "工作循环次数不在配置允许的范围内。",
     "shelter_activity_label": "活动：{activity_name}",
     "shelter_activity_description": "{description}｜耗时 {duration_hours} 小时",
     "shelter_unknown_activity": "未知避难所活动：{activity_id}",
@@ -741,6 +774,7 @@
     "shelter_activity_resources_insufficient": "组织这项活动所需资源不足。",
     "shelter_trade_locked": "该交易商尚未与你建立联系。",
     "shelter_trade_cycle_exhausted": "本周唯一一次交易机会已经使用，请等待下一周。",
+    "shelter_trade_schedule_unavailable": "交易队仅在{weekdays}停靠，当前无法买卖。",
     "shelter_trade_cycle_invalid_config": "交易周期配置无效。",
     "shelter_trade_coins_insufficient": "金币不足。",
     "shelter_trade_buy_success": "从{vendor_name}购入{item_name} ×{quantity}，支付{price}金币。",
@@ -768,26 +802,34 @@
     "management_field_quantity_label": "物资数量",
     "management_field_price_label": "结算价格",
     "management_field_role_label": "人员职责",
+    "management_field_upgrade_benefit_label": "升级后能力",
+    "management_field_repetitions_label": "循环次数",
+    "management_field_trade_schedule_label": "交易日程",
     "management_level_value": "Lv.{current}/{maximum}",
     "management_capacity_value": "{current}/{maximum}",
     "management_hours_value": "{hours} 小时",
     "management_percent_value": "{percent}%",
     "management_quantity_value": "{item_name} ×{quantity}",
     "management_coins_value": "{coins} 金币",
+    "management_repetitions_value": "可选 {options} 次，单次最多 {maximum} 次",
+    "management_trade_schedule_value": "{weekdays}｜成交后推进 {duration_days} 天",
     "management_requirement_level_label": "升级等级",
     "management_requirement_unlock_label": "解锁条件",
     "management_requirement_capacity_label": "建设容量",
     "management_requirement_cycle_label": "每周额度",
+    "management_requirement_schedule_label": "交易日期",
     "management_requirement_recruit_label": "人员状态",
     "management_requirement_action_label": "执行条件",
     "management_facility_level_available": "当前 Lv.{current}，最高 Lv.{maximum}，仍可继续升级。",
     "management_facility_level_full": "当前 Lv.{current}，已经达到最高 Lv.{maximum}。",
+    "management_facility_use_level": "{facility_name}当前 Lv.{current}，使用要求 Lv.{required}。",
     "management_unlock_not_required": "无需额外前置条件。",
     "management_unlock_satisfied": "全部前置条件已经满足。",
     "management_capacity_requirement": "当前总建设等级 {current}/{maximum}，升级后为 {next}/{maximum}。",
     "management_capacity_exempt": "扩建设施不占用总建设等级容量。",
     "management_resource_requirement": "{resource_name}当前 {current}，需要 {required}。",
     "management_cycle_requirement": "第 {cycle} 周最多交易 {maximum} 次，已使用 {used} 次。",
+    "management_schedule_requirement": "仅{weekdays}可交易；当前为{current_weekday}。",
     "management_recruit_already_joined": "该人员已经加入避难所，不能重复招募。",
     "management_recruit_available": "该人员尚未加入，可以在满足其余条件后招募。",
     "management_action_available": "当前状态允许执行。",

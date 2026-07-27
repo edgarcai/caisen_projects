@@ -4,6 +4,7 @@ import type {
   ArchiveCollectionOverview,
   ArchiveDocumentConfig,
   ArchiveDocumentListItem,
+  ArchiveLibrarySnapshot,
   ArchiveStorageConfig,
 } from "../domain/demo-systems";
 import { DomainError } from "../domain/errors";
@@ -98,6 +99,26 @@ export class ArchiveStorageService implements StateMutationObserver {
         totalDocuments: collection.documents.length,
       };
     });
+  }
+
+  /** 一次性生成馆藏概览、目录和已解锁正文，避免 UI 重复查询领域服务。 */
+  public librarySnapshot(state: GameState): ArchiveLibrarySnapshot {
+    return {
+      collections: this.overview(state).map((overview) => {
+        const documents = this.list(state, overview.collectionId);
+        return {
+          overview,
+          documents,
+          unlockedDocuments: documents
+            .filter((document) => document.unlocked)
+            .map((document) => this.detail(
+              state,
+              overview.collectionId,
+              document.documentId,
+            )),
+        };
+      }),
+    };
   }
 
   /** 返回指定分类的目录；未解锁条目只暴露配置化锁定文案。 */

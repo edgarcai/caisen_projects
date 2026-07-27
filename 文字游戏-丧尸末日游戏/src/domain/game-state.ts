@@ -11,12 +11,19 @@ export interface CampaignProfileState {
   home_city_id: string;
 }
 
+/** 新游戏临时提交的扩展档案；附加字段会转存到 story.flags。 */
+export interface NewGameCampaignProfileSelection extends CampaignProfileState {
+  secondary_trait_id?: string;
+  home_district_id?: string;
+  shelter_type_id?: string;
+}
+
 /** 新游戏创建时由界面一次性提交的完整配置。 */
 export interface NewGameSetup {
   mode: GameMode;
   playerNames: readonly string[];
   saveSlotId: number;
-  profile: CampaignProfileState;
+  profile: NewGameCampaignProfileSelection;
 }
 
 export interface PlayerState {
@@ -41,6 +48,11 @@ export interface ShelterState {
   population: number;
   hope: number;
   group_hunger: number;
+  /** v9 起分离保存的内墙耐久，由避难所维护恢复。 */
+  inner_wall_health: number;
+  /** v9 起分离保存的外墙耐久，由外墙巡逻恢复。 */
+  outer_wall_health: number;
+  /** 内外墙耐久之和，保留给旧内容与界面作兼容镜像。 */
   health: number;
   defense_damage: number;
   activity: number;
@@ -116,6 +128,8 @@ export interface InventoryState {
 
 export interface ResearchState {
   completed_project_ids: string[];
+  /** 研究台唯一方格中当前放入的物品。 */
+  slotted_item_id: string | null;
 }
 
 /** 按配置化文献分类保存历史累计入库份数。 */

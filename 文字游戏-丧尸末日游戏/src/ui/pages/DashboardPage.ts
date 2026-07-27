@@ -221,8 +221,23 @@ export class DashboardPage implements PageView {
       ),
       this.formatProfileField(
         config,
+        config.texts.profile_secondary_trait_label,
+        profile.secondaryTraitLabel,
+      ),
+      this.formatProfileField(
+        config,
         config.texts.profile_city_label,
         profile.homeCityLabel,
+      ),
+      this.formatProfileField(
+        config,
+        config.texts.profile_district_label,
+        profile.districtLabel,
+      ),
+      this.formatProfileField(
+        config,
+        config.texts.profile_shelter_type_label,
+        profile.shelterTypeLabel,
       ),
     ].join(config.texts.profile_field_separator);
   }

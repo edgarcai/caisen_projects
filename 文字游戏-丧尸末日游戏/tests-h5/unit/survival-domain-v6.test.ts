@@ -62,7 +62,7 @@ describe("v6 希望、寿命与模式规则", () => {
 
     expect(report.gameOver).toBe(true);
     expect(state.shelter.hope).toBe(0);
-    expect(state.ending?.ending_id).toBe("last_hope_extinguished");
+    expect(state.ending?.ending_id).toBe("hope_extinguished");
   });
 
   it("跨年时增加年龄并在到达寿命后生成失败结局", () => {
@@ -78,7 +78,7 @@ describe("v6 希望、寿命与模式规则", () => {
 
     expect(report.gameOver).toBe(true);
     expect(requirePlayer(state).age).toBe(70);
-    expect(state.ending?.ending_id).toBe("natural_lifespan_ended");
+    expect(state.ending?.ending_id).toBe("commander_fallen");
   });
 });
 

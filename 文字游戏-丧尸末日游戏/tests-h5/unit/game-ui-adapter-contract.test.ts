@@ -113,6 +113,15 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     expect(snapshot.meters).toHaveLength(5);
     expect(snapshot.resources).toHaveLength(14);
     expect(snapshot.shelterStats).toHaveLength(9);
+    if (snapshot.shelterWalls === null) throw new Error("缺少墙体分层快照。");
+    expect(snapshot.shelterWalls.innerHealth).toBeGreaterThan(0);
+    expect(snapshot.shelterWalls.innerMaximum).toBeGreaterThan(0);
+    expect(snapshot.shelterWalls.outerHealth).toBeGreaterThan(0);
+    expect(snapshot.shelterWalls.outerMaximum).toBeGreaterThan(0);
+    expect(snapshot.researchWorkbench).toMatchObject({
+      slotCount: 1,
+      slottedItemId: null,
+    });
     expect(snapshot.actionGroups.map((group) => group.id)).toEqual([
       "core",
       "supplies",
@@ -122,10 +131,14 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     expect(snapshot.cities).toHaveLength(8);
     expect(snapshot.managementCategories.map((category) => category.id)).toEqual([
       "operation",
+      "work",
+      "trade_buy",
+      "trade_sell",
       "activity",
+      "facility_use",
       "upgrade",
     ]);
-    expect(snapshot.companions).toHaveLength(4);
+    expect(snapshot.companions).toHaveLength(2);
     expect(adapter.canLoadGame()).toBe(false);
   });
 
@@ -395,6 +408,55 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     });
     expect(repaired.accepted).toBe(true);
     expect(state.shelter.health).toBeGreaterThan(100);
+  });
+
+  it("研究槽命令、出处投影与工作循环次数贯通 UI 端口", () => {
+    const { adapter, application } = buildH5Harness();
+    adapter.execute({ type: "start_game", mode: "single", playerNames: ["研究所长"] });
+    const state = requireState(application);
+    const player = requirePlayer(state);
+    state.shelter.books = 1;
+    player.parts = 8;
+    player.coins = 4;
+
+    const beforeSlot = adapter.getSnapshot();
+    expect(beforeSlot.researchWorkbench?.candidates.find(
+      (candidate) => candidate.id === "books",
+    )).toMatchObject({
+      name: "旧书",
+      ownedQuantity: 1,
+      sourceDescription: "A市·C区",
+    });
+    expect(beforeSlot.researchProjects.find(
+      (project) => project.id === "field_logistics",
+    )).toMatchObject({
+      requiredItemName: "旧书",
+      sourceDescription: "A市·C区",
+      slotted: false,
+    });
+
+    expect(adapter.execute({ type: "research_slot", itemId: "books" }).accepted)
+      .toBe(true);
+    expect(adapter.getSnapshot().researchWorkbench).toMatchObject({
+      slottedItemId: "books",
+      slottedItemName: "旧书",
+    });
+    expect(adapter.execute({ type: "research_clear" }).accepted).toBe(true);
+    expect(adapter.getSnapshot().researchWorkbench?.slottedItemId).toBeNull();
+
+    const job = adapter.getSnapshot().managementCategories
+      .find((category) => category.id === "work")
+      ?.options.find((option) => option.id === "job::sort_salvage");
+    expect(job?.repetitionOptions).toEqual([1, 2, 3, 5, 10]);
+    const turnBefore = state.turn_number;
+    const worked = adapter.execute({
+      type: "management_action",
+      categoryId: "work",
+      optionId: "job::sort_salvage",
+      repetitions: 3,
+    });
+    expect(worked.accepted).toBe(true);
+    expect(state.turn_number).toBe(turnBefore + 6);
   });
 
   it("剧情模式使用单所长输入，回档通过独立命令而非普通读档", () => {

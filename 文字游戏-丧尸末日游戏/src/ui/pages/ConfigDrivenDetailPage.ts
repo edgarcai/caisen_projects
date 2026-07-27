@@ -5,6 +5,7 @@ import {
   type RequirementViewText,
 } from "../components/RequirementView";
 import type { UiFactory } from "../components/UiFactory";
+import type { PageActionSpec } from "../components/PageActionBar";
 import type { LayaRuntimeLike } from "../laya/LayaRuntime";
 import type {
   UiDetailFieldView,
@@ -30,6 +31,7 @@ export interface ConfigDrivenDetailPageSpec {
   readonly confirmDisabled: boolean;
   readonly onBack: () => void;
   readonly onConfirm: () => void;
+  readonly footerActions?: readonly PageActionSpec[];
 }
 
 /**
@@ -50,7 +52,7 @@ export function createConfigDrivenDetailPage(
     spec.testId,
     spec.view.title,
     spec.onBack,
-    [
+    spec.footerActions ?? [
       {
         id: "back",
         testId: `${spec.testId}-back`,

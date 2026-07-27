@@ -4,26 +4,35 @@ import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import v6ToV7MigrationDocument from "../../config/save_migrations/v6_to_v7.json";
 import v7ToV8MigrationDocument from "../../config/save_migrations/v7_to_v8.json";
+import v8ToV9MigrationDocument from "../../config/save_migrations/v8_to_v9.json";
 import { validateSurvivalSystemsConfig } from "../../src/config/survivalSystemsValidator";
+import { mergeCampaignProfileExpansion } from "../../src/config/campaignProfileExpansionAdapter";
+import { contentExpansionCatalog } from "../../src/config/contentExpansion";
 import type {
   GameConfigDocument,
   StoryConfigDocument,
   V6ToV7SaveMigrationConfig,
   V7ToV8SaveMigrationConfig,
+  V8ToV9SaveMigrationConfig,
 } from "../../src/domain/content";
 import type { GameState } from "../../src/domain/game-state";
 import {
   SaveStateValidator,
   V6ToV7SaveMigrator,
   V7ToV8SaveMigrator,
+  V8ToV9SaveMigrator,
 } from "../../src/infrastructure";
 import type { V6ToV7SaveMigrationContext } from "../../src/infrastructure";
 import { buildH5Harness, requireState } from "../helpers/H5TestHarness";
 
-const game = gameDocument as unknown as GameConfigDocument;
+const game = mergeCampaignProfileExpansion(
+  gameDocument as unknown as GameConfigDocument,
+  contentExpansionCatalog,
+);
 const story = storyDocument as unknown as StoryConfigDocument;
 const migration: V6ToV7SaveMigrationConfig = v6ToV7MigrationDocument;
 const currentMigration: V7ToV8SaveMigrationConfig = v7ToV8MigrationDocument;
+const v8ToV9Migration: V8ToV9SaveMigrationConfig = v8ToV9MigrationDocument;
 
 /** 使用权威内容构造 v6→v7 迁移上下文。 */
 function createMigrationContext(): V6ToV7SaveMigrationContext {
@@ -71,6 +80,10 @@ function downgradeRestorableState(rawState: Record<string, unknown>): void {
   delete rawState.shelter_room_assignments;
   delete rawState.encounter_battle;
   delete rawState.pending_return_incident_id;
+  delete (rawState.research as Record<string, unknown>).slotted_item_id;
+  const shelter = rawState.shelter as Record<string, unknown>;
+  delete shelter.inner_wall_health;
+  delete shelter.outer_wall_health;
   const inventory = rawState.inventory as Record<string, unknown>;
   delete inventory.equipped_transport_ids;
 }
@@ -119,12 +132,13 @@ function facilityLevelsOf(rawState: Record<string, unknown>): Record<string, num
   return rawState.facility_levels as Record<string, number>;
 }
 
-/** 将 v7 迁移结果提升到当前 v8 后执行完整领域校验。 */
+/** 将 v7 迁移结果提升到当前 v9 后执行完整领域校验。 */
 function validateV7AsCurrent(rawState: Record<string, unknown>): void {
-  const current = new V7ToV8SaveMigrator(currentMigration).migrate({
+  const v8 = new V7ToV8SaveMigrator(currentMigration).migrate({
     schema_version: 7,
     game_state: rawState,
   });
+  const current = new V8ToV9SaveMigrator(v8ToV9Migration).migrate(v8);
   createValidator().parse(current.game_state);
 }
 

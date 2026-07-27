@@ -14,6 +14,7 @@ export interface GameRouteContext {
   readonly saveSlotsMode?: SaveSlotsPageMode;
   readonly categoryId?: string;
   readonly optionId?: string;
+  readonly repetitions?: number;
   readonly companionId?: string;
   readonly equipmentSlot?: UiCompanionEquipmentSlot;
   readonly roomId?: string;
@@ -22,6 +23,7 @@ export interface GameRouteContext {
   readonly encounterId?: string;
   readonly cityId?: string;
   readonly districtId?: string;
+  readonly outpostId?: string;
   readonly districtExplorationPath?: readonly number[];
   readonly document?: UiDocumentView;
 }

@@ -5,9 +5,20 @@ import {
   validateNamePresetCoverage,
 } from "./config/configLoader";
 import type { WebGameConfig } from "./config/types";
+import { coopDemoConfig } from "./config/coopDemoConfig";
+import type { StorageLike } from "./domain/ports";
+import type { CoopRoomGateway } from "./domain/coop";
 import type { LayaRuntimeGlobal } from "./engine/runtimeLoader";
-import { createBrowserUiSettingsRepository } from "./infrastructure";
-import { GameUiAdapter } from "./presentation";
+import {
+  BroadcastChannelCoopGateway,
+  CompositeCoopRoomGateway,
+  createBrowserUiSettingsRepository,
+  LocalAccountRepository,
+  MemoryStorage,
+  WebSocketCoopGateway,
+} from "./infrastructure";
+import { CoopUiAdapter, GameUiAdapter } from "./presentation";
+import { CoopSessionService } from "./services";
 import { GameShell } from "./ui";
 import { createBrowserNativeTextInputPolicy } from "./ui/interactions/NativeTextInputPolicy";
 import { createDashboardNavigationPolicy } from "./ui/navigation/DashboardNavigationStrategy";
@@ -79,6 +90,18 @@ export async function mountGame(
     ),
   );
   const adapter = new GameUiAdapter(application, config);
+  const coopSession = new CoopSessionService(
+    new LocalAccountRepository(
+      resolveBrowserStorage(),
+      coopDemoConfig.accountStorageKey,
+    ),
+    createCoopGateway(),
+    coopDemoConfig.rules,
+  );
+  const coopAdapter = new CoopUiAdapter(
+    coopSession,
+    coopDemoConfig.defaults.tradeOffer,
+  );
   const settingsRepository = createBrowserUiSettingsRepository(
     config.storage.settings_key,
     config.storage.settings_schema_version,
@@ -96,6 +119,7 @@ export async function mountGame(
     createDashboardNavigationPolicy(
       config.dashboard_navigation.management_category_shortcuts,
     ),
+    coopAdapter,
   );
   await shell.mount();
 
@@ -116,6 +140,7 @@ export async function mountGame(
   /** 释放显示树和只读诊断接口，支持开发期热重载。 */
   const destroy = (): void => {
     shell.destroy();
+    coopSession.leaveRoom();
     if (window.__SHELTER_GAME__ === debug) {
       delete window.__SHELTER_GAME__;
     }
@@ -124,17 +149,47 @@ export async function mountGame(
   return mountedGame;
 }
 
-/** 深度优先查找带稳定 name 的 Laya 显示节点。 */
-function findDisplayNode(
+/** 组合零服务器本地通道与可配置跨设备 WebSocket 通道。 */
+function createCoopGateway(): CompositeCoopRoomGateway {
+  const gateways: CoopRoomGateway[] = [
+    new BroadcastChannelCoopGateway(coopDemoConfig.channelPrefix),
+  ];
+  if (coopDemoConfig.transport.websocketEnabled) {
+    gateways.push(new WebSocketCoopGateway(coopDemoConfig.transport));
+  }
+  return new CompositeCoopRoomGateway(gateways);
+}
+
+/** 优先使用浏览器本地存储，隐私模式拒绝访问时降级到内存。 */
+function resolveBrowserStorage(): StorageLike {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return new MemoryStorage();
+  }
+}
+
+/** 从显示栈顶向下查找第一个可见且带稳定 name 的 Laya 节点。 */
+function findVisibleDisplayNode(
   runtime: LayaRuntimeGlobal,
   root: Laya.Node,
   nodeName: string,
+  stage: Laya.Stage,
 ): Laya.Sprite | null {
-  if (root.name === nodeName && root instanceof runtime.Sprite) {
+  if (
+    root.name === nodeName
+    && root instanceof runtime.Sprite
+    && isDisplayNodeHierarchyVisible(root, stage)
+  ) {
     return root;
   }
-  for (let index = 0; index < root.numChildren; index += 1) {
-    const matched = findDisplayNode(runtime, root.getChildAt(index), nodeName);
+  for (let index = root.numChildren - 1; index >= 0; index -= 1) {
+    const matched = findVisibleDisplayNode(
+      runtime,
+      root.getChildAt(index),
+      nodeName,
+      stage,
+    );
     if (matched !== null) {
       return matched;
     }
@@ -148,10 +203,8 @@ function resolveNodeBounds(
   stage: Laya.Stage,
   nodeName: string,
 ): GameDebugNodeBounds | null {
-  const node = findDisplayNode(runtime, stage, nodeName);
-  if (node === null || !isDisplayNodeHierarchyVisible(node, stage)) {
-    return null;
-  }
+  const node = findVisibleDisplayNode(runtime, stage, nodeName, stage);
+  if (node === null) return null;
   const origin = node.localToGlobal(new runtime.Point(0, 0), true, stage);
   return {
     x: origin.x,

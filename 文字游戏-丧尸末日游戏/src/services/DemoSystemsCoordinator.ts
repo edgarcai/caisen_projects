@@ -2,6 +2,7 @@ import type {
   ArchiveCollectionOverview,
   ArchiveDocumentConfig,
   ArchiveDocumentListItem,
+  ArchiveLibrarySnapshot,
   DemoSystemsConfig,
   EncounterAvailableAction,
   EncounterBattleCommand,
@@ -299,6 +300,11 @@ export class DemoSystemsCoordinator {
   /** 返回所有文献分类的收集进度。 */
   public archiveOverview(state: GameState): readonly ArchiveCollectionOverview[] {
     return this.archiveStorage.overview(state);
+  }
+
+  /** 返回可直接投影为页面链的完整只读文献馆藏。 */
+  public archiveLibrary(state: GameState): ArchiveLibrarySnapshot {
+    return this.archiveStorage.librarySnapshot(state);
   }
 
   /** 为新开局按初始库存建立持久化文献馆藏进度。 */

@@ -440,6 +440,8 @@ describe("文献存储目录", () => {
     state.shelter.books = 1;
     state.archive_collection_totals.books = 1;
     requirePlayer(state).parts = 8;
+    requirePlayer(state).coins = 4;
+    harness.application.slotResearchItem("books");
 
     expect(harness.application.archiveDetail("books", "book_01").document_id).toBe("book_01");
     expect(harness.application.completeResearch("field_logistics").stateChanged).toBe(true);

@@ -7,6 +7,26 @@ export interface ClockAdvance {
   yearChanged: boolean;
 }
 
+/** 返回公历日期的星期索引，周日为 0、周六为 6。 */
+export function weekdayIndex(clock: GameClockState): number {
+  return new Date(Date.UTC(clock.year, clock.month - 1, clock.day)).getUTCDay();
+}
+
+/** 按配置化活动时段计算一个生存日包含的回合数。 */
+export function playableTurnsPerDay(time: GameRuleConfig["time"]): number {
+  const playableHours = time.day_end_hour - time.day_start_hour;
+  if (
+    !Number.isInteger(playableHours)
+    || playableHours <= 0
+    || !Number.isInteger(time.hours_per_action)
+    || time.hours_per_action <= 0
+    || playableHours % time.hours_per_action !== 0
+  ) {
+    throw new RangeError("每日行动时段与单回合小时数无法整除。");
+  }
+  return playableHours / time.hours_per_action;
+}
+
 /** 判断指定公历年是否为闰年。 */
 export function isLeapYear(year: number): boolean {
   return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);

@@ -18,7 +18,7 @@ import type { InventoryService } from "./InventoryService";
 import type { StateOperations } from "./StateOperations";
 import type { StoryService } from "./StoryService";
 
-/** 将伙伴档案、配装与互动从剧情和仓库用例中独立出来。 */
+/** 将角色档案、配装与互动从剧情和仓库用例中独立出来。 */
 export class CompanionManagementService {
   private readonly content: GameContent;
   private readonly inventory: InventoryService;
@@ -38,35 +38,37 @@ export class CompanionManagementService {
     this.story = story;
   }
 
-  /** 返回全部伙伴的立绘键、档案、秘密和管理状态。 */
+  /** 仅返回已拥有且可行动角色的立绘、档案与配装状态。 */
   public views(state: GameState): readonly CompanionManagementView[] {
     const secretTrust = this.content.game.rules.companion_secret_unlock_trust;
     const catalog = new Map(this.inventory.catalog().map((item) => [item.itemId, item]));
-    return state.companions.map((companion) => {
-      const profile = this.requireProfile(companion.companion_id);
-      const secretUnlocked = companion.trust >= secretTrust;
-      return {
-        companionId: companion.companion_id,
-        name: profile.name,
-        role: profile.role,
-        portraitKey: profile.portrait_key,
-        introduction: profile.introduction,
-        secret: secretUnlocked ? profile.secret : "",
-        secretUnlocked,
-        status: companion.status,
-        trust: companion.trust,
-        equippedWeaponId: companion.equipped_weapon_id,
-        equippedArmorId: companion.equipped_armor_id,
-        equippedWeaponName: companion.equipped_weapon_id === null
-          ? null
-          : catalog.get(companion.equipped_weapon_id)?.name ?? null,
-        equippedArmorName: companion.equipped_armor_id === null
-          ? null
-          : catalog.get(companion.equipped_armor_id)?.name ?? null,
-        interactionCooldownTurns: companion.interaction_cooldown_turns,
-        interactionCount: companion.interaction_count,
-      };
-    });
+    return state.companions
+      .filter((companion) => companion.status === "active")
+      .map((companion) => {
+        const profile = this.requireProfile(companion.companion_id);
+        const secretUnlocked = companion.trust >= secretTrust;
+        return {
+          companionId: companion.companion_id,
+          name: profile.name,
+          role: profile.role,
+          portraitKey: profile.portrait_key,
+          introduction: profile.introduction,
+          secret: secretUnlocked ? profile.secret : "",
+          secretUnlocked,
+          status: companion.status,
+          trust: companion.trust,
+          equippedWeaponId: companion.equipped_weapon_id,
+          equippedArmorId: companion.equipped_armor_id,
+          equippedWeaponName: companion.equipped_weapon_id === null
+            ? null
+            : catalog.get(companion.equipped_weapon_id)?.name ?? null,
+          equippedArmorName: companion.equipped_armor_id === null
+            ? null
+            : catalog.get(companion.equipped_armor_id)?.name ?? null,
+          interactionCooldownTurns: companion.interaction_cooldown_turns,
+          interactionCount: companion.interaction_count,
+        };
+      });
   }
 
   /** 返回指定伙伴与槽位的可用装备目录。 */
@@ -92,6 +94,7 @@ export class CompanionManagementService {
           slot,
           description: item.description,
           availableQuantity,
+          ownedQuantity: this.inventory.ownedQuantity(state, item.itemId),
           equipped,
           available: equipped || availableQuantity > 0,
         };

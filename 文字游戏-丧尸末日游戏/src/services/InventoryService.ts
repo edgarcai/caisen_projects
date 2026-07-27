@@ -102,6 +102,22 @@ export class InventoryService {
     return this.availableCraftedQuantity(state, crafted);
   }
 
+  /** 返回指定物品的总拥有数量，已装备数量也计入其中。 */
+  public ownedQuantity(
+    state: GameState,
+    itemId: string,
+    playerIndex: number = state.active_player_index,
+  ): number {
+    const resource = this.config.warehouse.resource_items.find(
+      (item) => item.item_id === itemId,
+    );
+    if (resource !== undefined) {
+      return this.operations.read(resource.state_target, state, playerIndex);
+    }
+    const crafted = this.requireCraftedItem(itemId);
+    return state.inventory.crafted_items[crafted.item_id] ?? 0;
+  }
+
   /** 按稳定物品 ID 返回配置中的持久名称映射，供跨读档读模型使用。 */
   public itemNames(itemIds: readonly string[]): Readonly<Record<string, string>> {
     return Object.fromEntries([...new Set(itemIds)].map((itemId) => {

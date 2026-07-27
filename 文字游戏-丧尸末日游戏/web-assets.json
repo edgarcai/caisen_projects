@@ -169,6 +169,14 @@
       "target": "public/config/save_migrations/v6_to_v7.json"
     },
     {
+      "source": "config/save_migrations/v7_to_v8.json",
+      "target": "public/config/save_migrations/v7_to_v8.json"
+    },
+    {
+      "source": "config/save_migrations/v8_to_v9.json",
+      "target": "public/config/save_migrations/v8_to_v9.json"
+    },
+    {
       "source": "config/web_config.json",
       "target": "public/config/web_config.json"
     },

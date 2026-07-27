@@ -1,14 +1,18 @@
 import type { GameApplication } from "../application";
 import { formatTemplate } from "../domain/content";
+import { readCampaignMetadataFlag } from "../domain/campaign-profile-metadata";
 import type { DistrictExplorationLayerProjection } from "../domain/district-exploration-tree";
-import type { EncounterBattleCommand } from "../domain/demo-systems";
+import type {
+  ArchiveLibrarySnapshot,
+  EncounterBattleCommand,
+} from "../domain/demo-systems";
 import { GameApplicationError } from "../domain/errors";
 import { activePlayer, isEnded, isVictory } from "../domain/game-state";
 import type {
-  CampaignProfileState,
   CompanionState,
   GameMode,
   GameState,
+  NewGameCampaignProfileSelection,
   ShelterState,
 } from "../domain/game-state";
 import type {
@@ -51,7 +55,9 @@ import type {
   UiNoticeView,
   UiPromptView,
   UiResearchProjectView,
+  UiResearchWorkbenchView,
   UiSaveSlotView,
+  UiShelterWallView,
   UiStoryAccess,
   UiStatView,
   UiTone,
@@ -60,6 +66,10 @@ import type {
   UiWarehouseItemView,
   UiWeeklyArchiveView,
 } from "../ui/ports/GameUiPort";
+import {
+  buildEmptySettlementNetworkUiProjection,
+  buildSettlementNetworkUiProjection,
+} from "./SettlementNetworkUiPresenter";
 
 interface GameActionPresentation {
   readonly id: string;
@@ -161,9 +171,10 @@ export class GameUiAdapter implements GameUiPort {
             this.application.shelterRoomAssignmentOptions(room.roomId),
           ]),
         );
-    const archives = state === null
+    const archiveLibrary = this.application.archiveLibrary();
+    const archives = archiveLibrary === null
       ? { storage: null, collections: {}, documents: {} }
-      : this.archiveViews(state);
+      : this.archiveViews(archiveLibrary);
     const encounterCatalog = state === null
       ? null
       : this.encounterCatalogView(state);
@@ -176,6 +187,19 @@ export class GameUiAdapter implements GameUiPort {
     const returnIncident = state === null
       ? null
       : this.returnIncidentView();
+    const cities = state === null ? [] : this.cityViews(state);
+    const expeditionCompanions = state === null
+      ? []
+      : this.expeditionCompanionViews();
+    const settlementNetwork = state === null
+      ? buildEmptySettlementNetworkUiProjection(this.application)
+      : buildSettlementNetworkUiProjection(
+          this.application,
+          state,
+          this.webConfig,
+          cities,
+          expeditionCompanions,
+        );
     return {
       revision: this.revision,
       brand: {
@@ -199,6 +223,7 @@ export class GameUiAdapter implements GameUiPort {
       meters: state === null ? [] : this.meterViews(state),
       resources: state === null ? [] : this.resourceViews(state),
       shelterStats: state === null ? [] : this.shelterStatViews(state.shelter),
+      shelterWalls: state === null ? null : this.shelterWallView(),
       mission: storyStatus === null
         ? null
         : {
@@ -210,7 +235,7 @@ export class GameUiAdapter implements GameUiPort {
       logs: this.visibleLogs(),
       actionGroups: state === null ? [] : this.actionGroupViews(state),
       storyPrompt: storyAccess === "mode" ? this.storyPromptView() : null,
-      cities: state === null ? [] : this.cityViews(state),
+      cities,
       explorationPrompt: state === null ? null : this.explorationPromptView(state),
       battle: state === null ? null : this.battleView(state),
       managementCategories: state === null ? [] : this.managementCategoryViews(state),
@@ -227,12 +252,19 @@ export class GameUiAdapter implements GameUiPort {
       returnIncident,
       warehouseItems: state === null ? [] : this.warehouseItemViews(state),
       transportLoadoutOptions: state === null ? [] : this.transportLoadoutOptionViews(),
+      researchWorkbench: state === null ? null : this.researchWorkbenchView(),
       researchProjects: state === null ? [] : this.researchProjectViews(),
       craftingRecipes: state === null ? [] : this.craftingRecipeViews(),
-      expeditionCompanions: state === null ? [] : this.expeditionCompanionViews(),
+      expeditionCompanions,
       expeditionCarryItems: state === null ? [] : this.expeditionCarryItemViews(),
       expeditionStatus: state === null ? null : this.expeditionStatusView(),
       expeditionFailure: state === null ? null : this.expeditionFailureView(),
+      settlementNetworkRules: settlementNetwork.rules,
+      settlementCities: settlementNetwork.cities,
+      cityReconMissions: settlementNetwork.missions,
+      outpostShelterTypes: settlementNetwork.shelterTypes,
+      outposts: settlementNetwork.outposts,
+      settlementAvailableCompanions: settlementNetwork.availableCompanions,
       weeklyArchives: state === null ? [] : this.weeklyArchiveViews(),
       tutorial: {
         title: this.actionLabel("tutorial"),
@@ -372,6 +404,14 @@ export class GameUiAdapter implements GameUiPort {
         const report = this.application.completeResearch(command.projectId);
         return { accepted: report.stateChanged, report };
       }
+      case "research_slot": {
+        const report = this.application.slotResearchItem(command.itemId);
+        return { accepted: report.stateChanged, report };
+      }
+      case "research_clear": {
+        const report = this.application.clearResearchSlot();
+        return { accepted: report.stateChanged, report };
+      }
       case "craft_item": {
         const report = this.application.craftItem(command.recipeId);
         return { accepted: report.stateChanged, report };
@@ -444,6 +484,40 @@ export class GameUiAdapter implements GameUiPort {
         const report = this.application.returnExpeditionSafely();
         return { accepted: report.stateChanged, report };
       }
+      case "city_recon_start": {
+        const report = this.application.startCityRecon(
+          command.cityId,
+          command.companionId,
+        );
+        return { accepted: report.stateChanged, report };
+      }
+      case "city_recon_complete": {
+        const report = this.application.completeCityRecon(command.cityId);
+        return { accepted: report.stateChanged, report };
+      }
+      case "outpost_establish": {
+        const report = this.application.establishOutpost(
+          command.cityId,
+          command.districtId,
+          command.shelterTypeId,
+        );
+        return { accepted: report.stateChanged, report };
+      }
+      case "outpost_assign": {
+        const report = this.application.assignCompanionToOutpost(
+          command.outpostId,
+          command.companionId,
+        );
+        return { accepted: report.stateChanged, report };
+      }
+      case "outpost_recall": {
+        const report = this.application.recallOutpostCompanion(command.companionId);
+        return { accepted: report.stateChanged, report };
+      }
+      case "outpost_supply": {
+        const report = this.application.supplyOutpost(command.outpostId);
+        return { accepted: report.stateChanged, report };
+      }
       case "story_choice": {
         if (this.application.state?.mode !== "story") {
           throw new GameApplicationError(
@@ -492,7 +566,11 @@ export class GameUiAdapter implements GameUiPort {
           return { accepted: report.stateChanged, report };
         }
         const option = this.resolveManagementOption(command.categoryId, command.optionId);
-        const report = this.application.performManagement(option.category, option.optionId);
+        const report = this.application.performManagement(
+          option.category,
+          option.optionId,
+          option.category === "job" ? command.repetitions ?? 1 : 1,
+        );
         return { accepted: report.stateChanged, report };
       }
       case "supply_action": {
@@ -609,10 +687,17 @@ export class GameUiAdapter implements GameUiPort {
     return { single, multiplayer, story, endless };
   }
 
-  /** 把领域配置中的难度、起源、特性与城市转换为开局选择模型。 */
+  /** 把领域配置中的完整开局档案转换为页面选择模型。 */
   private campaignProfileOptions(): UiCampaignProfileOptionsView {
     const game = this.application.content.game;
     const allowedHomeCityIds = new Set(game.rules.world_map.home_city_ids);
+    const cities = game.cities.filter((city) => allowedHomeCityIds.has(city.id));
+    const defaultCity = cities.find(
+      (city) => city.id === game.campaign_profiles.migration_default.home_city_id,
+    );
+    if (defaultCity === undefined) {
+      throw new Error(this.application.content.text("invalid_campaign_profile"));
+    }
     return {
       difficulties: game.campaign_profiles.difficulties.map((item) => ({
         id: item.id,
@@ -628,19 +713,45 @@ export class GameUiAdapter implements GameUiPort {
         id: item.id,
         label: item.label,
         description: item.description,
+        incompatibleIds: item.incompatible_trait_ids,
       })),
-      cities: game.cities
-        .filter((city) => allowedHomeCityIds.has(city.id))
-        .map((city) => ({
+      cities: cities.map((city) => ({
           id: city.id,
-          label: `${city.name} · ${city.district}`,
+          label: city.name,
           description: city.description,
-        })),
+      })),
+      districts: cities.flatMap((city) => city.districts.map((district) => ({
+        id: district.id,
+        cityId: city.id,
+        label: district.code,
+        description: district.description,
+      }))),
+      shelterTypes: game.campaign_profiles.shelter_types.map((item) => ({
+        id: item.id,
+        label: item.label,
+        description: formatTemplate(
+          this.webConfig.texts.profile_shelter_detail_format,
+          {
+            description: item.description,
+            capacity: item.starting_capacity,
+            facility_slots: item.initial_facility_slots,
+            inner_wall: item.inner_wall_health,
+            outer_wall: item.outer_wall_health,
+            bonuses: item.bonuses.join(
+              this.webConfig.texts.profile_shelter_bonus_separator,
+            ),
+          },
+        ),
+      })),
       defaultSelection: {
         difficultyId: game.campaign_profiles.migration_default.difficulty_id,
         originId: game.campaign_profiles.migration_default.origin_id,
         traitId: game.campaign_profiles.migration_default.trait_id,
+        secondaryTraitId:
+          game.campaign_profiles.additional_defaults.secondary_trait_id,
         homeCityId: game.campaign_profiles.migration_default.home_city_id,
+        homeDistrictId: defaultCity.default_district_id,
+        shelterTypeId: game.campaign_profiles.additional_defaults.shelter_type_id,
       },
     };
   }
@@ -649,6 +760,19 @@ export class GameUiAdapter implements GameUiPort {
   private campaignProfileView(state: GameState): UiCampaignProfileView {
     const profiles = this.application.content.game.campaign_profiles;
     const city = this.application.content.city(state.campaign.home_city_id);
+    const secondaryTraitId = readCampaignMetadataFlag(
+      state.story.flags,
+      profiles.metadata_flags.secondary_trait_prefix,
+    ) ?? profiles.additional_defaults.secondary_trait_id;
+    const districtId = readCampaignMetadataFlag(
+      state.story.flags,
+      profiles.metadata_flags.home_district_prefix,
+    ) ?? city.default_district_id;
+    const shelterTypeId = readCampaignMetadataFlag(
+      state.story.flags,
+      profiles.metadata_flags.shelter_type_prefix,
+    ) ?? profiles.additional_defaults.shelter_type_id;
+    const district = this.application.content.district(city.id, districtId);
     return {
       modeLabel: this.presentation.mode_labels[state.mode],
       difficultyLabel: this.requireCampaignLabel(
@@ -663,10 +787,16 @@ export class GameUiAdapter implements GameUiPort {
         profiles.traits,
         state.campaign.trait_id,
       ),
-      homeCityLabel: [city.name, city.district].join(
-        this.webConfig.texts.profile_field_separator,
+      secondaryTraitLabel: this.requireCampaignLabel(
+        profiles.traits,
+        secondaryTraitId,
       ),
-      districtLabel: city.district,
+      homeCityLabel: city.name,
+      districtLabel: district.code,
+      shelterTypeLabel: this.requireCampaignLabel(
+        profiles.shelter_types,
+        shelterTypeId,
+      ),
     };
   }
 
@@ -685,12 +815,15 @@ export class GameUiAdapter implements GameUiPort {
   /** 将 UI 使用的驼峰字段转换为领域存档使用的稳定字段名。 */
   private toDomainCampaignProfile(
     selection: UiCampaignProfileSelection,
-  ): CampaignProfileState {
+  ): NewGameCampaignProfileSelection {
     return {
       difficulty_id: selection.difficultyId,
       origin_id: selection.originId,
       trait_id: selection.traitId,
+      secondary_trait_id: selection.secondaryTraitId,
       home_city_id: selection.homeCityId,
+      home_district_id: selection.homeDistrictId,
+      shelter_type_id: selection.shelterTypeId,
     };
   }
 
@@ -714,12 +847,28 @@ export class GameUiAdapter implements GameUiPort {
           writable: true,
         };
       }
-      const difficulty = this.application.content.game.campaign_profiles.difficulties.find(
+      const profiles = this.application.content.game.campaign_profiles;
+      const difficulty = profiles.difficulties.find(
         (item) => item.id === slot.difficultyId,
+      )?.label ?? this.webConfig.texts.save_slot_unknown_value;
+      const origin = profiles.origins.find(
+        (item) => item.id === slot.originId,
+      )?.label ?? this.webConfig.texts.save_slot_unknown_value;
+      const primaryTrait = profiles.traits.find(
+        (item) => item.id === slot.traitId,
+      )?.label ?? this.webConfig.texts.save_slot_unknown_value;
+      const secondaryTrait = profiles.traits.find(
+        (item) => item.id === slot.secondaryTraitId,
+      )?.label ?? this.webConfig.texts.save_slot_unknown_value;
+      const shelterType = profiles.shelter_types.find(
+        (item) => item.id === slot.shelterTypeId,
       )?.label ?? this.webConfig.texts.save_slot_unknown_value;
       const city = slot.homeCityId === null
         ? null
         : this.application.content.game.cities.find((item) => item.id === slot.homeCityId);
+      const district = city?.districts.find(
+        (item) => item.id === slot.homeDistrictId,
+      ) ?? (slot.homeDistrictId === null ? city?.districts[0] : undefined);
       return {
         slotId: slot.slotId,
         status: slot.status,
@@ -730,10 +879,16 @@ export class GameUiAdapter implements GameUiPort {
             : this.presentation.mode_labels[slot.mode],
           names: slot.playerNames.join(this.webConfig.texts.save_slot_name_separator),
           difficulty,
+          origin,
+          traits: [primaryTrait, secondaryTrait].join(
+            this.webConfig.texts.save_slot_name_separator,
+          ),
+          shelter: shelterType,
           days: slot.survivalDays ?? this.webConfig.texts.save_slot_unknown_value,
           city: city === undefined || city === null
             ? this.webConfig.texts.save_slot_unknown_value
-            : `${city.name} · ${city.district}`,
+            : city.name,
+          district: district?.code ?? this.webConfig.texts.save_slot_unknown_value,
           saved_at: slot.savedAt ?? this.webConfig.texts.save_slot_unknown_value,
         }),
         loadable: true,
@@ -1105,7 +1260,7 @@ export class GameUiAdapter implements GameUiPort {
     });
   }
 
-  /** 把伙伴状态、信任与档案转换为独立资料卡。 */
+  /** 把已拥有角色的状态、信任与档案转换为独立资料卡。 */
   private companionViews(state: GameState): UiCompanionView[] {
     const catalog = new Map(
       this.application.warehouseItemCatalog().map((item) => [item.itemId, item]),
@@ -1120,9 +1275,11 @@ export class GameUiAdapter implements GameUiPort {
       const secret = companion.secretUnlocked
         ? companion.secret
         : this.webConfig.texts.companion_secret_locked;
+      /** 只向活跃角色查询指定槽位的可用装备。 */
       const equipmentOptions = (slot: "weapon" | "armor") => companion.status === "active"
         ? this.application.companionEquipmentOptions(companion.companionId, slot)
         : [];
+      /** 把已装备 ID 和名称组装为档案页只读物品。 */
       const equippedItem = (itemId: string | null, name: string | null) => {
         if (itemId === null || name === null) return null;
         return {
@@ -1168,11 +1325,12 @@ export class GameUiAdapter implements GameUiPort {
           slot: option.slot,
           description: option.description,
           availableQuantity: option.availableQuantity,
+          ownedQuantity: option.ownedQuantity,
           equipped: option.equipped,
           disabled: !option.available,
           disabledReason: option.available
             ? undefined
-            : this.application.content.text("management_failed"),
+            : this.webConfig.texts.companion_equipment_unowned,
         })),
         armorOptions: equipmentOptions("armor").map((option) => ({
           id: option.itemId,
@@ -1180,11 +1338,12 @@ export class GameUiAdapter implements GameUiPort {
           slot: option.slot,
           description: option.description,
           availableQuantity: option.availableQuantity,
+          ownedQuantity: option.ownedQuantity,
           equipped: option.equipped,
           disabled: !option.available,
           disabledReason: option.available
             ? undefined
-            : this.application.content.text("management_failed"),
+            : this.webConfig.texts.companion_equipment_unowned,
         })),
         interactionOptions: this.application
           .companionInteractionOptions(companion.companionId)
@@ -1243,7 +1402,31 @@ export class GameUiAdapter implements GameUiPort {
       available: project.available,
       costDescription: project.costDescription,
       expeditionStepBonus: project.expeditionStepBonus,
+      requiredItemId: project.requiredItemId,
+      requiredItemName: project.requiredItemName,
+      sourceDescription: project.sourceDescription,
+      slotted: project.slotted,
     }));
+  }
+
+  /** 把领域单槽研究台投影为只读候选样本和当前占用状态。 */
+  private researchWorkbenchView(): UiResearchWorkbenchView {
+    const workbench = this.application.researchWorkbench();
+    return {
+      slotCount: workbench.slotCount,
+      slottedItemId: workbench.slottedItemId,
+      slottedItemName: workbench.slottedItemName,
+      candidates: workbench.candidates.map((candidate) => ({
+        id: candidate.itemId,
+        name: candidate.itemName,
+        ownedQuantity: candidate.ownedQuantity,
+        sourceDescription: candidate.sourceDescription,
+        projectId: candidate.projectId,
+        projectName: candidate.projectName,
+        researchCompleted: candidate.researchCompleted,
+        available: candidate.available,
+      })),
+    };
   }
 
   /** 把制作服务结果转换为配方页面模型。 */
@@ -1257,7 +1440,21 @@ export class GameUiAdapter implements GameUiPort {
       costDescription: recipe.costDescription,
       outputItemId: recipe.outputItemId,
       outputQuantity: recipe.outputQuantity,
+      blueprintSourceDescription: recipe.blueprintSourceDescription,
     }));
+  }
+
+  /** 把避难所分层墙体快照转换为 UI 端口的稳定命名。 */
+  private shelterWallView(): UiShelterWallView {
+    const walls = this.application.shelterWallStatus();
+    return {
+      innerHealth: walls.innerWallHealth,
+      innerMaximum: walls.innerWallMaximum,
+      outerHealth: walls.outerWallHealth,
+      outerMaximum: walls.outerWallMaximum,
+      totalHealth: walls.totalHealth,
+      totalMaximum: walls.totalMaximum,
+    };
   }
 
   /** 把可用伙伴投影为远征准备选项。 */
@@ -1354,17 +1551,16 @@ export class GameUiAdapter implements GameUiPort {
   }
 
   /** 将文献领域目录一次投影为总览、分类目录和已解锁正文。 */
-  private archiveViews(state: GameState): {
+  private archiveViews(library: ArchiveLibrarySnapshot): {
     readonly storage: UiArchiveStoragePageView;
     readonly collections: Readonly<Record<string, UiArchiveCollectionPageView>>;
     readonly documents: Readonly<Record<string, UiArchiveDocumentPageView>>;
   } {
-    void state;
-    const overviews = this.application.archiveOverview();
     const collections: Record<string, UiArchiveCollectionPageView> = {};
     const documents: Record<string, UiArchiveDocumentPageView> = {};
-    for (const overview of overviews) {
-      const list = this.application.archiveList(overview.collectionId);
+    for (const collection of library.collections) {
+      const { overview } = collection;
+      const list = collection.documents;
       collections[overview.collectionId] = {
         collectionId: overview.collectionId,
         title: overview.label,
@@ -1390,16 +1586,12 @@ export class GameUiAdapter implements GameUiPort {
           tone: document.unlocked ? "primary" : "muted",
         })),
       };
-      for (const document of list.filter((candidate) => candidate.unlocked)) {
-        const detail = this.application.archiveDetail(
-          overview.collectionId,
-          document.documentId,
-        );
+      for (const detail of collection.unlockedDocuments) {
         documents[archiveDocumentViewKey(
           overview.collectionId,
-          document.documentId,
+          detail.document_id,
         )] = {
-          documentId: document.documentId,
+          documentId: detail.document_id,
           title: detail.title,
           metadataLines: [formatTemplate(
             this.webConfig.texts.archive_document_metadata_format,
@@ -1416,7 +1608,7 @@ export class GameUiAdapter implements GameUiPort {
         body: this.webConfig.texts.archive_storage_body,
         emptyText: this.webConfig.texts.archive_storage_empty,
         backLabel: this.webConfig.texts.back,
-        collections: overviews.map((overview) => ({
+        collections: library.collections.map(({ overview }) => ({
           collectionId: overview.collectionId,
           label: overview.label,
           description: overview.description,
@@ -1655,6 +1847,9 @@ export class GameUiAdapter implements GameUiPort {
           ?? this.application.content.text("management_failed"),
       tone: option.available ? "primary" : "default",
       fields: option.fields,
+      repetitionOptions: option.category === "job"
+        ? [...this.application.content.story.work.repetition_options]
+        : [],
       requirements: option.requirements.map((requirement) => ({
         id: requirement.id,
         label: requirement.label,
@@ -1686,6 +1881,7 @@ export class GameUiAdapter implements GameUiPort {
       disabledReason: blockedReason ?? undefined,
       tone: this.actionTone(action.style),
       fields: [],
+      repetitionOptions: [],
       requirements: [{
         id: `${actionId}-availability`,
         label: this.application.content.text("management_requirement_action_label"),

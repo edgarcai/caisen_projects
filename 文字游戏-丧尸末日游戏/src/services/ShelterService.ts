@@ -1,15 +1,18 @@
-import type {
-  FacilityConfig,
-  FacilityLevelConfig,
-  JobConfig,
-  NumericEffectConfig,
-  RecruitConfig,
-  RequirementConfig,
-  ShelterActivityConfig,
-  TradeConfig,
+import {
+  formatTemplate,
+  type FacilityConfig,
+  type FacilityActionConfig,
+  type FacilityLevelConfig,
+  type JobConfig,
+  type ModeRestrictedContentConfig,
+  type NumericEffectConfig,
+  type RecruitConfig,
+  type RequirementConfig,
+  type ShelterActivityConfig,
+  type TradeConfig,
 } from "../domain/content";
 import { ShelterManagementError, StateOperationError } from "../domain/errors";
-import { activePlayer, type GameState } from "../domain/game-state";
+import { activePlayer, cloneGameState, type GameState } from "../domain/game-state";
 import type { RandomSource, RuleModifierProvider } from "../domain/ports";
 import type {
   ManagementCategory,
@@ -18,10 +21,13 @@ import type {
   ManagementRequirement,
   ManagementResolution,
 } from "../domain/reports";
+import { isStaticStateOperationTargetSupported } from "../domain/state-operation-targets";
+import type { CampaignDifficultyRules } from "./CampaignDifficultyRules";
 import type { GameContent } from "./GameContent";
 import type { StateOperations } from "./StateOperations";
 import type { StoryService } from "./StoryService";
 import type { TradeAmbushService } from "./TradeAmbushService";
+import { playableTurnsPerDay, weekdayIndex } from "./GameClock";
 
 interface TradeCycleSnapshot {
   readonly cycleIndex: number;
@@ -36,28 +42,36 @@ export class ShelterService implements RuleModifierProvider {
   private readonly story: StoryService;
   private readonly random: RandomSource;
   private readonly tradeAmbush: TradeAmbushService;
+  private readonly difficultyRules: CampaignDifficultyRules;
   private readonly facilityById: ReadonlyMap<string, FacilityConfig>;
+  private readonly facilityActionById: ReadonlyMap<string, FacilityActionConfig>;
   private readonly jobById: ReadonlyMap<string, JobConfig>;
   private readonly activityById: ReadonlyMap<string, ShelterActivityConfig>;
   private readonly tradeById: ReadonlyMap<string, TradeConfig>;
   private readonly recruitById: ReadonlyMap<string, RecruitConfig>;
 
-  /** 注入内容、状态操作器、剧情条件检查器、随机源与交易风险服务。 */
+  /** 注入内容、状态操作器、剧情条件、随机源、交易风险与难度经济规则。 */
   public constructor(
     content: GameContent,
     operations: StateOperations,
     story: StoryService,
     random: RandomSource,
     tradeAmbush: TradeAmbushService,
+    difficultyRules: CampaignDifficultyRules,
   ) {
     this.content = content;
     this.operations = operations;
     this.story = story;
     this.random = random;
     this.tradeAmbush = tradeAmbush;
+    this.difficultyRules = difficultyRules;
     this.facilityById = new Map(
       content.story.facilities.map((facility) => [facility.facility_id, facility]),
     );
+    this.facilityActionById = new Map(
+      content.story.facility_actions.map((action) => [action.action_id, action]),
+    );
+    this.validateFacilityActions();
     this.jobById = new Map(content.story.jobs.map((job) => [job.job_id, job]));
     this.activityById = new Map(
       content.story.activities.map((activity) => [activity.activity_id, activity]),
@@ -72,11 +86,16 @@ export class ShelterService implements RuleModifierProvider {
   public options(state: GameState): ManagementOption[] {
     return [
       ...this.facilityOptions(state),
+      ...this.facilityActionOptions(state),
       ...this.jobOptions(state),
       ...this.activityOptions(state),
       ...this.tradeOptions(state),
       ...this.recruitOptions(state),
-    ];
+    ].filter((option) => this.isManagementOptionAllowed(
+      state,
+      option.category,
+      option.optionId,
+    ));
   }
 
   /** 按经营类别路由一个具体命令。 */
@@ -84,10 +103,13 @@ export class ShelterService implements RuleModifierProvider {
     state: GameState,
     category: ManagementCategory,
     optionId: string,
+    repetitions = 1,
   ): ManagementResolution {
+    this.assertManagementOptionAllowed(state, category, optionId);
     switch (category) {
       case "facility": return this.upgradeFacility(state, optionId);
-      case "job": return this.performJob(state, optionId);
+      case "facility_use": return this.useFacility(state, optionId);
+      case "job": return this.performJobRepeated(state, optionId, repetitions);
       case "activity": return this.performActivity(state, optionId);
       case "trade_buy": return this.buyTrade(state, optionId);
       case "trade_sell": return this.sellTrade(state, optionId);
@@ -99,6 +121,97 @@ export class ShelterService implements RuleModifierProvider {
           }),
         );
     }
+  }
+
+  /** 返回指定模式是否可以查看和执行该经营项。 */
+  private isManagementOptionAllowed(
+    state: GameState,
+    category: ManagementCategory,
+    optionId: string,
+  ): boolean {
+    const capability = this.managementOptionConfig(category, optionId)
+      ?.required_mode_capability;
+    return capability === undefined
+      || this.content.game.mode_capabilities[state.mode].includes(capability);
+  }
+
+  /** 拒绝通过伪造界面命令越过模式内容边界。 */
+  private assertManagementOptionAllowed(
+    state: GameState,
+    category: ManagementCategory,
+    optionId: string,
+  ): void {
+    const capability = this.managementOptionConfig(category, optionId)
+      ?.required_mode_capability;
+    if (
+      capability !== undefined
+      && !this.content.game.mode_capabilities[state.mode].includes(capability)
+    ) {
+      throw new ShelterManagementError(this.content.text(
+        "mode_capability_unavailable",
+        { capability },
+      ));
+    }
+  }
+
+  /** 按经营类别与稳定 ID 返回可选的模式限制配置。 */
+  private managementOptionConfig(
+    category: ManagementCategory,
+    optionId: string,
+  ): ModeRestrictedContentConfig | undefined {
+    switch (category) {
+      case "facility": return this.facilityById.get(optionId);
+      case "facility_use": return this.facilityActionById.get(optionId);
+      case "job": return this.jobById.get(optionId);
+      case "activity": return this.activityById.get(optionId);
+      case "trade_buy":
+      case "trade_sell": return this.tradeById.get(optionId);
+      case "recruit": return this.recruitById.get(optionId);
+      default: return undefined;
+    }
+  }
+
+  /** 构造已建设设施的主动能力，并显示等级、成本与执行耗时。 */
+  private facilityActionOptions(state: GameState): ManagementOption[] {
+    return this.content.story.facility_actions.map((action) => {
+      const facility = this.requireFacility(action.facility_id);
+      const currentLevel = state.facility_levels[facility.facility_id] ?? 0;
+      const levelRequirement = this.facilityUseLevelRequirement(
+        action,
+        facility,
+        currentLevel,
+      );
+      const requirements = [
+        levelRequirement,
+        ...this.effectCostRequirements(action.action_id, action.costs ?? [], state),
+      ];
+      return {
+        optionId: action.action_id,
+        label: this.content.text("shelter_facility_use_label", {
+          action_name: action.name,
+        }),
+        category: "facility_use",
+        available: requirements.every((requirement) => requirement.met),
+        description: this.content.text("shelter_facility_use_description", {
+          facility_name: facility.name,
+          description: action.description,
+          minimum_level: action.minimum_level,
+          duration_hours: action.duration_hours,
+        }),
+        fields: [
+          {
+            id: "level",
+            label: this.content.text("management_field_current_level_label"),
+            value: this.content.text("management_level_value", {
+              current: currentLevel,
+              maximum: facility.max_level,
+            }),
+          },
+          this.durationField(action.duration_hours),
+        ],
+        requirements,
+      };
+    });
   }
 
   /** 生成设施等级、人口和当前可执行项目的总览。 */
@@ -181,6 +294,7 @@ export class ShelterService implements RuleModifierProvider {
         );
       }
       const [partsCost, coinsCost] = this.facilityCosts(state, level);
+      const benefit = this.facilityBenefitDescription(level);
       const requirements = [
         this.facilityLevelRequirement(facility, currentLevel),
         this.unlockRequirement(
@@ -215,6 +329,7 @@ export class ShelterService implements RuleModifierProvider {
           parts_cost: partsCost,
           coins_cost: coinsCost,
           build_hours: level.build_hours,
+          benefit,
         }),
         fields: this.facilityFields(state, facility, level),
         requirements,
@@ -231,6 +346,14 @@ export class ShelterService implements RuleModifierProvider {
       ];
       const fields: ManagementField[] = [
         this.durationField(job.duration_hours),
+        {
+          id: "repetitions",
+          label: this.content.text("management_field_repetitions_label"),
+          value: this.content.text("management_repetitions_value", {
+            options: this.content.story.work.repetition_options.join(" / "),
+            maximum: this.content.story.work.maximum_repetitions,
+          }),
+        },
       ];
       if (job.risk !== undefined) {
         fields.push({
@@ -289,6 +412,7 @@ export class ShelterService implements RuleModifierProvider {
     const options: ManagementOption[] = [];
     for (const trade of this.content.story.trades) {
       const buyPrice = this.tradeBuyPrice(state, trade);
+      const sellPrice = this.tradeSellPrice(state, trade);
       const sharedRequirements = [
         this.unlockRequirement(
           `${trade.trade_id}-unlock`,
@@ -296,6 +420,7 @@ export class ShelterService implements RuleModifierProvider {
           state,
         ),
         this.tradeCycleRequirement(state),
+        this.tradeScheduleRequirement(state),
       ];
       const buyRequirements = [
         ...sharedRequirements,
@@ -340,9 +465,9 @@ export class ShelterService implements RuleModifierProvider {
         available: sellRequirements.every((requirement) => requirement.met),
         description: this.content.text("shelter_trade_sell_description", {
           vendor_name: trade.vendor_name,
-          price: trade.sell_price,
+          price: sellPrice,
         }),
-        fields: this.tradeFields(trade, trade.sell_price),
+        fields: this.tradeFields(trade, sellPrice),
         requirements: sellRequirements,
       });
     }
@@ -444,7 +569,86 @@ export class ShelterService implements RuleModifierProvider {
     };
   }
 
-  /** 结算工作成本、随机产出和风险事件。 */
+  /** 校验设施等级与资源后执行一次配置化设施能力。 */
+  private useFacility(
+    state: GameState,
+    actionId: string,
+  ): ManagementResolution {
+    const action = this.facilityActionById.get(actionId);
+    if (action === undefined) {
+      throw new ShelterManagementError(
+        this.content.text("shelter_unknown_facility_action", { action_id: actionId }),
+      );
+    }
+    const facility = this.requireFacility(action.facility_id);
+    const currentLevel = state.facility_levels[facility.facility_id] ?? 0;
+    if (currentLevel < action.minimum_level) {
+      return this.unavailable(this.content.text("shelter_facility_use_locked", {
+        facility_name: facility.name,
+        minimum_level: action.minimum_level,
+      }));
+    }
+    if (!this.canPayEffects(state, action.costs ?? [])) {
+      return this.unavailable(
+        this.content.text("shelter_facility_use_resources_insufficient"),
+      );
+    }
+    this.applyEffects(action.costs ?? [], state);
+    this.applyEffects(action.rewards ?? [], state);
+    return {
+      messages: [action.result_text],
+      applied: true,
+      consumesTurn: true,
+      turnsConsumed: this.durationTurns(action.duration_hours),
+    };
+  }
+
+  /** 在副本中循环执行配置次数，全部成功后才原子提交工作收益。 */
+  private performJobRepeated(
+    state: GameState,
+    jobId: string,
+    repetitions: number,
+  ): ManagementResolution {
+    const work = this.content.story.work;
+    const job = this.jobById.get(jobId);
+    if (job === undefined) {
+      throw new ShelterManagementError(
+        this.content.text("shelter_unknown_job", { job_id: jobId }),
+      );
+    }
+    if (
+      !Number.isInteger(repetitions)
+      || repetitions < 1
+      || repetitions > work.maximum_repetitions
+      || !work.repetition_options.includes(repetitions)
+    ) {
+      return this.unavailable(this.content.text("shelter_job_repetition_invalid"));
+    }
+    const working = cloneGameState(state);
+    const messages: string[] = [];
+    let turnsConsumed = 0;
+    for (let index = 0; index < repetitions; index += 1) {
+      const resolution = this.performJob(working, jobId);
+      if (!resolution.applied) return resolution;
+      messages.push(...resolution.messages);
+      turnsConsumed += resolution.turnsConsumed;
+    }
+    if (repetitions > 1) {
+      messages.push(this.content.text("shelter_job_repeated_success", {
+        job_name: job.name,
+        repetitions,
+      }));
+    }
+    this.commitJobState(working, state);
+    return {
+      messages,
+      applied: true,
+      consumesTurn: true,
+      turnsConsumed,
+    };
+  }
+
+  /** 结算单次工作成本、随机产出和风险事件。 */
   private performJob(state: GameState, jobId: string): ManagementResolution {
     const job = this.jobById.get(jobId);
     if (job === undefined) {
@@ -484,6 +688,14 @@ export class ShelterService implements RuleModifierProvider {
     };
   }
 
+  /** 只提交工作效果允许改动的聚合字段。 */
+  private commitJobState(source: GameState, target: GameState): void {
+    target.players = source.players;
+    target.shelter = source.shelter;
+    target.story = source.story;
+    target.archive_collection_totals = source.archive_collection_totals;
+  }
+
   /** 支付活动成本并结算希望、活跃度等配置化收益。 */
   private performActivity(
     state: GameState,
@@ -516,6 +728,9 @@ export class ShelterService implements RuleModifierProvider {
   /** 支付金币并购入一份配置化商品。 */
   private buyTrade(state: GameState, tradeId: string): ManagementResolution {
     const trade = this.trade(tradeId);
+    if (!this.tradeScheduleAvailable(state)) {
+      return this.unavailable(this.tradeScheduleUnavailableMessage());
+    }
     if (!this.tradeCycleAvailable(state)) {
       return this.unavailable(this.content.text("shelter_trade_cycle_exhausted"));
     }
@@ -544,14 +759,17 @@ export class ShelterService implements RuleModifierProvider {
         }),
       ],
       applied: true,
-      consumesTurn: false,
-      turnsConsumed: 0,
+      consumesTurn: true,
+      turnsConsumed: this.tradeDurationTurns(),
     };
   }
 
   /** 出售一份配置化商品并获得金币。 */
   private sellTrade(state: GameState, tradeId: string): ManagementResolution {
     const trade = this.trade(tradeId);
+    if (!this.tradeScheduleAvailable(state)) {
+      return this.unavailable(this.tradeScheduleUnavailableMessage());
+    }
     if (!this.tradeCycleAvailable(state)) {
       return this.unavailable(this.content.text("shelter_trade_cycle_exhausted"));
     }
@@ -566,8 +784,9 @@ export class ShelterService implements RuleModifierProvider {
     }
     const ambushed = this.ambushedTradeResolution(state, trade);
     if (ambushed !== null) return ambushed;
+    const price = this.tradeSellPrice(state, trade);
     this.operations.write(trade.resource_target, current - trade.quantity, state);
-    activePlayer(state).coins += trade.sell_price;
+    activePlayer(state).coins += price;
     this.markTradeUsage(state);
     return {
       messages: [
@@ -575,12 +794,12 @@ export class ShelterService implements RuleModifierProvider {
           vendor_name: trade.vendor_name,
           item_name: trade.item_name,
           quantity: trade.quantity,
-          price: trade.sell_price,
+          price,
         }),
       ],
       applied: true,
-      consumesTurn: false,
-      turnsConsumed: 0,
+      consumesTurn: true,
+      turnsConsumed: this.tradeDurationTurns(),
     };
   }
 
@@ -651,8 +870,35 @@ export class ShelterService implements RuleModifierProvider {
         }),
       },
     ];
-    if (level !== null) fields.push(this.durationField(level.build_hours));
+    if (level !== null) {
+      fields.push({
+        id: "upgrade-benefit",
+        label: this.content.text("management_field_upgrade_benefit_label"),
+        value: this.facilityBenefitDescription(level),
+      });
+      fields.push(this.durationField(level.build_hours));
+    }
     return fields;
+  }
+
+  /** 把下一级配置化效果转为玩家可直接理解的能力预览。 */
+  private facilityBenefitDescription(level: FacilityLevelConfig): string {
+    const configuration = this.content.story.facility_management;
+    return (level.effects ?? []).map((effect) => {
+      const effectName = configuration.effect_target_names[effect.target];
+      if (effectName === undefined) {
+        throw new ShelterManagementError(`设施效果缺少展示名称：${effect.target}`);
+      }
+      const amount = typeof effect.amount === "number"
+        ? String(effect.amount)
+        : `${String(effect.amount[0])}~${String(effect.amount[1])}`;
+      const template = effect.operation === "add"
+        ? configuration.effect_add_format
+        : effect.operation === "subtract"
+          ? configuration.effect_subtract_format
+          : configuration.effect_set_format;
+      return formatTemplate(template, { effect_name: effectName, amount });
+    }).join(configuration.effect_separator);
   }
 
   /** 说明设施是否仍有可建设等级。 */
@@ -668,6 +914,25 @@ export class ShelterService implements RuleModifierProvider {
         met ? "management_facility_level_available" : "management_facility_level_full",
         { current: currentLevel, maximum: facility.max_level },
       ),
+      met,
+    };
+  }
+
+  /** 说明主动设施能力所需等级是否已经满足。 */
+  private facilityUseLevelRequirement(
+    action: FacilityActionConfig,
+    facility: FacilityConfig,
+    currentLevel: number,
+  ): ManagementRequirement {
+    const met = currentLevel >= action.minimum_level;
+    return {
+      id: `${action.action_id}-level`,
+      label: this.content.text("management_requirement_level_label"),
+      description: this.content.text("management_facility_use_level", {
+        facility_name: facility.name,
+        current: currentLevel,
+        required: action.minimum_level,
+      }),
       met,
     };
   }
@@ -786,6 +1051,14 @@ export class ShelterService implements RuleModifierProvider {
         label: this.content.text("management_field_price_label"),
         value: this.content.text("management_coins_value", { coins: price }),
       },
+      {
+        id: "schedule",
+        label: this.content.text("management_field_trade_schedule_label"),
+        value: this.content.text("management_trade_schedule_value", {
+          weekdays: this.tradeAllowedWeekdaysDescription(),
+          duration_days: this.content.story.trade.cycle.duration_days,
+        }),
+      },
     ];
   }
 
@@ -801,6 +1074,20 @@ export class ShelterService implements RuleModifierProvider {
         maximum: cycle.maximum,
       }),
       met: cycle.used < cycle.maximum,
+    };
+  }
+
+  /** 生成当前日期是否位于周五、周六交易窗口的实时需求。 */
+  private tradeScheduleRequirement(state: GameState): ManagementRequirement {
+    const currentWeekday = weekdayIndex(state.clock);
+    return {
+      id: "trade-schedule",
+      label: this.content.text("management_requirement_schedule_label"),
+      description: this.content.text("management_schedule_requirement", {
+        weekdays: this.tradeAllowedWeekdaysDescription(),
+        current_weekday: this.tradeWeekdayLabel(currentWeekday),
+      }),
+      met: this.tradeScheduleAvailable(state),
     };
   }
 
@@ -848,6 +1135,14 @@ export class ShelterService implements RuleModifierProvider {
       || configuration.days <= 0
       || !Number.isInteger(configuration.maximum_transactions)
       || configuration.maximum_transactions <= 0
+      || !Number.isInteger(configuration.duration_days)
+      || configuration.duration_days <= 0
+      || configuration.allowed_weekdays.length === 0
+      || configuration.allowed_weekdays.some(
+        (weekday) => !Number.isInteger(weekday) || weekday < 0 || weekday > 6,
+      )
+      || new Set(configuration.allowed_weekdays).size
+        !== configuration.allowed_weekdays.length
     ) {
       throw new ShelterManagementError(
         this.content.text("shelter_trade_cycle_invalid_config"),
@@ -866,6 +1161,44 @@ export class ShelterService implements RuleModifierProvider {
   private tradeCycleAvailable(state: GameState): boolean {
     const cycle = this.tradeCycleSnapshot(state);
     return cycle.used < cycle.maximum;
+  }
+
+  /** 检查当前公历日期是否位于配置化买卖窗口。 */
+  private tradeScheduleAvailable(state: GameState): boolean {
+    return this.content.story.trade.cycle.allowed_weekdays.includes(
+      weekdayIndex(state.clock),
+    );
+  }
+
+  /** 将交易窗口的星期索引格式化为可读列表。 */
+  private tradeAllowedWeekdaysDescription(): string {
+    return this.content.story.trade.cycle.allowed_weekdays
+      .map((weekday) => this.tradeWeekdayLabel(weekday))
+      .join("、");
+  }
+
+  /** 从交易配置返回指定星期的展示名称。 */
+  private tradeWeekdayLabel(weekday: number): string {
+    const label = this.content.story.trade.cycle.weekday_labels[String(weekday)];
+    if (label === undefined || label.trim() === "") {
+      throw new ShelterManagementError(
+        this.content.text("shelter_trade_cycle_invalid_config"),
+      );
+    }
+    return label;
+  }
+
+  /** 返回非交易日时的配置化阻断文案。 */
+  private tradeScheduleUnavailableMessage(): string {
+    return this.content.text("shelter_trade_schedule_unavailable", {
+      weekdays: this.tradeAllowedWeekdaysDescription(),
+    });
+  }
+
+  /** 把成交占用的生存日换算为世界回合数。 */
+  private tradeDurationTurns(): number {
+    return this.content.story.trade.cycle.duration_days
+      * playableTurnsPerDay(this.content.game.rules.time);
   }
 
   /** 在成功成交或遭遇伏击后记录本周期一次交易。 */
@@ -896,8 +1229,8 @@ export class ShelterService implements RuleModifierProvider {
         result: resolution.message,
       })],
       applied: true,
-      consumesTurn: false,
-      turnsConsumed: 0,
+      consumesTurn: true,
+      turnsConsumed: this.tradeDurationTurns(),
     };
   }
 
@@ -911,6 +1244,51 @@ export class ShelterService implements RuleModifierProvider {
       ));
     }
     return name;
+  }
+
+  /** 按稳定 ID 返回设施配置，避免主动能力引用不存在的设施。 */
+  private requireFacility(facilityId: string): FacilityConfig {
+    const facility = this.facilityById.get(facilityId);
+    if (facility === undefined) {
+      throw new ShelterManagementError(
+        this.content.text("shelter_unknown_facility", { facility_id: facilityId }),
+      );
+    }
+    return facility;
+  }
+
+  /** 启动时验证主动设施目录的 ID、设施引用、等级、耗时与数值目标。 */
+  private validateFacilityActions(): void {
+    const seenIds = new Set<string>();
+    for (const action of this.content.story.facility_actions) {
+      const facility = this.facilityById.get(action.facility_id);
+      const effects = [...(action.costs ?? []), ...(action.rewards ?? [])];
+      const invalidEffect = effects.some((effect) => {
+        const amount: unknown = effect.amount;
+        return !isStaticStateOperationTargetSupported(effect.target)
+          || !isValidFacilityEffectAmount(amount);
+      });
+      if (
+        action.action_id.trim() === ""
+        || action.name.trim() === ""
+        || action.description.trim() === ""
+        || action.result_text.trim() === ""
+        || seenIds.has(action.action_id)
+        || facility === undefined
+        || !Number.isInteger(action.minimum_level)
+        || action.minimum_level < 1
+        || action.minimum_level > facility.max_level
+        || !Number.isInteger(action.duration_hours)
+        || action.duration_hours < 1
+        || invalidEffect
+      ) {
+        throw new ShelterManagementError(this.content.text(
+          "shelter_facility_action_invalid",
+          { action_id: action.action_id },
+        ));
+      }
+      seenIds.add(action.action_id);
+    }
   }
 
   /** 检查当前所长能否支付设施升级的实际成本。 */
@@ -928,7 +1306,13 @@ export class ShelterService implements RuleModifierProvider {
   /** 按设施和伙伴议价特性计算实际买入价。 */
   private tradeBuyPrice(state: GameState, trade: TradeConfig): number {
     const percent = 100 + this.passiveModifier(state, "rules.trade_buy_price_percent");
-    return Math.max(1, Math.floor((trade.buy_price * percent) / 100));
+    const passivePrice = Math.max(1, Math.floor((trade.buy_price * percent) / 100));
+    return this.difficultyRules.tradeBuyPrice(passivePrice, state);
+  }
+
+  /** 按难度经济倍率的倒数计算实际卖出价。 */
+  private tradeSellPrice(state: GameState, trade: TradeConfig): number {
+    return this.difficultyRules.tradeSellPrice(trade.sell_price, state);
   }
 
   /** 将配置耗时换算为至少一个完整生存回合。 */
@@ -1001,4 +1385,22 @@ export class ShelterService implements RuleModifierProvider {
       turnsConsumed: 0,
     };
   }
+}
+
+/** 校验设施数值效果是非负整数或有序的二元随机区间。 */
+function isValidFacilityEffectAmount(value: unknown): boolean {
+  if (typeof value === "number") {
+    return Number.isInteger(value) && value >= 0;
+  }
+  if (!Array.isArray(value) || value.length !== 2) {
+    return false;
+  }
+  const minimum: unknown = value[0];
+  const maximum: unknown = value[1];
+  return typeof minimum === "number"
+    && typeof maximum === "number"
+    && Number.isInteger(minimum)
+    && Number.isInteger(maximum)
+    && minimum >= 0
+    && maximum >= minimum;
 }

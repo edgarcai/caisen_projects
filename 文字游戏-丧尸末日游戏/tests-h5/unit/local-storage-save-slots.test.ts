@@ -95,6 +95,8 @@ function createState(options: StateOptions = {}): GameState {
       population: 3,
       hope: 60,
       group_hunger: 0,
+      inner_wall_health: 100,
+      outer_wall_health: 100,
       health: 200,
       defense_damage: 15,
       activity: 30,
@@ -139,6 +141,7 @@ function createState(options: StateOptions = {}): GameState {
     },
     research: {
       completed_project_ids: [],
+      slotted_item_id: null,
     },
     archive_collection_totals: {
       newspapers: 0,
@@ -266,7 +269,10 @@ describe("LocalStorageSaveRepository 配置化手动槽位", () => {
       difficultyId: null,
       originId: null,
       traitId: null,
+      secondaryTraitId: null,
       homeCityId: null,
+      homeDistrictId: null,
+      shelterTypeId: null,
       savedAt: null,
     });
     expect(repository.exists()).toBe(true);

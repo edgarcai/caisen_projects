@@ -1,4 +1,6 @@
 import { SaveDataError } from "../domain/errors";
+import { readCampaignMetadataFlag } from "../domain/campaign-profile-metadata";
+import type { CampaignMetadataFlagConfig } from "../domain/content";
 import type { GameState } from "../domain/game-state";
 import type {
   SaveRepository,
@@ -21,23 +23,26 @@ export interface SaveStateValidationPort {
   /** 校验迁移前的 v2 状态。 */
   validateRawV2(rawState: unknown): unknown;
 
-  /** 校验当前 v3 状态的精确结构。 */
+  /** 校验存档 v3 状态的精确结构。 */
   validateRawV3(rawState: unknown): unknown;
 
-  /** 校验当前 v4 状态的精确结构。 */
+  /** 校验存档 v4 状态的精确结构。 */
   validateRawV4?(rawState: unknown): unknown;
 
-  /** 校验当前 v5 状态的精确结构。 */
+  /** 校验存档 v5 状态的精确结构。 */
   validateRawV5?(rawState: unknown): unknown;
 
-  /** 校验当前 v6 状态的精确结构。 */
+  /** 校验存档 v6 状态的精确结构。 */
   validateRawV6?(rawState: unknown): unknown;
 
-  /** 校验当前 v7 状态的精确结构。 */
+  /** 校验存档 v7 状态的精确结构。 */
   validateRawV7?(rawState: unknown): unknown;
 
-  /** 校验当前 v8 状态的精确结构。 */
+  /** 校验存档 v8 状态的精确结构。 */
   validateRawV8?(rawState: unknown): unknown;
+
+  /** 校验当前 v9 状态的精确结构。 */
+  validateRawV9?(rawState: unknown): unknown;
 
   /** 校验已经构造完成的领域聚合。 */
   validate(state: GameState): void;
@@ -54,6 +59,7 @@ export interface LocalStorageSaveOptions {
   backupSlots: number;
   validator: SaveStateValidationPort;
   migrators?: readonly SaveMigrator[];
+  campaignMetadataFlags?: CampaignMetadataFlagConfig;
   now?: () => Date;
 }
 
@@ -71,6 +77,7 @@ export class LocalStorageSaveRepository implements SaveRepository {
   private readonly backupSlots: number;
   private readonly validator: SaveStateValidationPort;
   private readonly migrators: ReadonlyMap<number, SaveMigrator>;
+  private readonly campaignMetadataFlags: CampaignMetadataFlagConfig | null;
   private readonly now: () => Date;
   private activeSlotId: number;
 
@@ -97,6 +104,7 @@ export class LocalStorageSaveRepository implements SaveRepository {
     this.slotCount = options.slotCount;
     this.backupSlots = options.backupSlots;
     this.validator = options.validator;
+    this.campaignMetadataFlags = options.campaignMetadataFlags ?? null;
     this.now = options.now ?? (() => new Date());
     this.activeSlotId = FIRST_SAVE_SLOT_ID;
     const migrators = new Map<number, SaveMigrator>();
@@ -335,7 +343,19 @@ export class LocalStorageSaveRepository implements SaveRepository {
       difficultyId: state.campaign.difficulty_id,
       originId: state.campaign.origin_id,
       traitId: state.campaign.trait_id,
+      secondaryTraitId: this.readProfileMetadata(
+        state,
+        "secondary_trait_prefix",
+      ),
       homeCityId: state.campaign.home_city_id,
+      homeDistrictId: this.readProfileMetadata(
+        state,
+        "home_district_prefix",
+      ),
+      shelterTypeId: this.readProfileMetadata(
+        state,
+        "shelter_type_prefix",
+      ),
       savedAt: candidate.savedAt,
     };
   }
@@ -353,9 +373,26 @@ export class LocalStorageSaveRepository implements SaveRepository {
       difficultyId: null,
       originId: null,
       traitId: null,
+      secondaryTraitId: null,
       homeCityId: null,
+      homeDistrictId: null,
+      shelterTypeId: null,
       savedAt: null,
     };
+  }
+
+  /** 从配置化 story.flags 命名空间投影一项开局摘要元数据。 */
+  private readProfileMetadata(
+    state: GameState,
+    key: keyof Pick<
+      CampaignMetadataFlagConfig,
+      "secondary_trait_prefix" | "home_district_prefix" | "shelter_type_prefix"
+    >,
+  ): string | null {
+    const flags = this.campaignMetadataFlags;
+    return flags === null
+      ? null
+      : readCampaignMetadataFlag(state.story.flags, flags[key]);
   }
 
   /** 判断序列化文档能否通过当前迁移链和全部状态校验。 */
@@ -426,6 +463,11 @@ export class LocalStorageSaveRepository implements SaveRepository {
           throw new SaveDataError("缺少存档版本 7 的结构校验器。");
         }
         this.validator.validateRawV7(prepared.game_state);
+      } else if (version === 8) {
+        if (this.validator.validateRawV8 === undefined) {
+          throw new SaveDataError("缺少存档版本 8 的结构校验器。");
+        }
+        this.validator.validateRawV8(prepared.game_state);
       } else {
         throw new SaveDataError(`缺少存档版本 ${String(version)} 的结构校验器。`);
       }
@@ -485,6 +527,13 @@ export class LocalStorageSaveRepository implements SaveRepository {
         throw new SaveDataError("缺少当前存档版本 8 的结构校验器。");
       }
       this.validator.validateRawV8(rawState);
+      return;
+    }
+    if (this.schemaVersion === 9) {
+      if (this.validator.validateRawV9 === undefined) {
+        throw new SaveDataError("缺少当前存档版本 9 的结构校验器。");
+      }
+      this.validator.validateRawV9(rawState);
       return;
     }
     throw new SaveDataError(

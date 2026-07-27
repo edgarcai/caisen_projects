@@ -327,18 +327,41 @@ function createProfileOptions(): UiCampaignProfileOptionsView {
       { id: "engineer", label: "工程师", description: "更擅长修复设施。" },
     ],
     traits: [
-      { id: "calm", label: "冷静", description: "危机中保持判断力。" },
+      {
+        id: "calm",
+        label: "冷静",
+        description: "危机中保持判断力。",
+        incompatibleIds: ["reckless"],
+      },
       { id: "runner", label: "疾行", description: "远征时行动更快。" },
+      {
+        id: "reckless",
+        label: "莽撞",
+        description: "用风险换取机会。",
+        incompatibleIds: ["calm"],
+      },
     ],
     cities: [
-      { id: "city_a", label: "A市 · 北区", description: "医院与旧商业街相邻。" },
-      { id: "city_b", label: "B市 · 河岸", description: "水路发达但桥梁失守。" },
+      { id: "city_a", label: "A市", description: "医院与旧商业街相邻。" },
+      { id: "city_b", label: "B市", description: "水路发达但桥梁失守。" },
+    ],
+    districts: [
+      { id: "city_a_a", cityId: "city_a", label: "A区", description: "旧城核心。" },
+      { id: "city_a_b", cityId: "city_a", label: "B区", description: "医疗街区。" },
+      { id: "city_b_a", cityId: "city_b", label: "A区", description: "河岸码头。" },
+    ],
+    shelterTypes: [
+      { id: "bunker", label: "防空洞避难所", description: "内墙稳固。" },
+      { id: "subway", label: "地铁避难所", description: "通道众多。" },
     ],
     defaultSelection: {
       difficultyId: "survivor",
       originId: "medic",
       traitId: "calm",
+      secondaryTraitId: "runner",
       homeCityId: "city_a",
+      homeDistrictId: "city_a_a",
+      shelterTypeId: "bunker",
     },
   };
 }
@@ -526,7 +549,10 @@ describe("新游戏配置页", () => {
         difficultyId: "nightmare",
         originId: "medic",
         traitId: "calm",
+        secondaryTraitId: "runner",
         homeCityId: "city_a",
+        homeDistrictId: "city_a_a",
+        shelterTypeId: "bunker",
       },
       3,
       "single",
@@ -712,6 +738,48 @@ describe("新游戏配置页", () => {
     view.page.destroy();
   });
 
+  it("双特性禁止重复与互斥，城市变更后区划自动联动", () => {
+    const view = createTestView(
+      createLayout(false),
+      createSaveSlots(),
+      "single",
+      1,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+    );
+    const root = view.page.root as unknown as FakeNode;
+
+    view.selectCategory("secondary_trait");
+    const incompatibleSecondary = requireNode(
+      root,
+      "profile-secondary_trait-option-reckless",
+    );
+    expect(incompatibleSecondary.mouseEnabled).toBe(false);
+    expect(requireText(
+      root,
+      "profile-secondary_trait-option-reckless-selected",
+    ).text).toBe(webConfig.new_game_setup.copy.incompatible_mark);
+    incompatibleSecondary.emit("click");
+    expect(view.readProfile().secondaryTraitId).toBe("runner");
+
+    view.selectCategory("trait");
+    requireNode(root, "profile-trait-option-reckless").emit("click");
+    expect(view.readProfile().traitId).toBe("reckless");
+    expect(view.readProfile().secondaryTraitId).toBe("runner");
+
+    view.selectCategory("city");
+    requireNode(root, "profile-city-option-city_b").emit("click");
+    expect(view.readProfile()).toMatchObject({
+      homeCityId: "city_b",
+      homeDistrictId: "city_b_a",
+    });
+    view.selectCategory("district");
+    expect(requireNode(root, "profile-district-option-city_a_a").visible).toBe(false);
+    expect(requireNode(root, "profile-district-option-city_b_a").visible).toBe(true);
+    view.page.destroy();
+  });
+
   it("拒绝无效玩家数量和不存在的默认档案 ID", () => {
     const runtime = createFakeRuntime();
     const factory = createFactory(runtime);
@@ -838,7 +906,7 @@ describe("开局引导与制作方页", () => {
     view.destroy();
   });
 
-  it("全部质量视口的长教程正文可滚至末尾且按钮固定在底部", () => {
+  it("全部质量视口的教程依真实字高分页且每页无需滚动", () => {
     const viewportIds = [
       "desktop",
       "minimum_mobile",
@@ -854,6 +922,7 @@ describe("开局引导与制作方页", () => {
     for (const viewportId of viewportIds) {
       const runtime = createFakeRuntime();
       const layout = createQualityViewportLayout(viewportId);
+      const onComplete = vi.fn();
       const view = createGuidedTutorialPage(
         runtime,
         createFactory(runtime),
@@ -865,7 +934,7 @@ describe("开局引导与制作方页", () => {
           width: webConfig.guided_tutorial.fallback_target_width,
           height: webConfig.guided_tutorial.fallback_target_height,
         }),
-        { onComplete: vi.fn(), onSkip: vi.fn() },
+        { onComplete, onSkip: vi.fn() },
       );
       const root = view.root as unknown as FakeNode;
       const viewport = requireNode(root, "guided-tutorial-instruction-scroll");
@@ -878,44 +947,29 @@ describe("开局引导与制作方页", () => {
       expect(resolveGlobalY(viewport) + viewport.height).toBeLessThanOrEqual(
         resolveGlobalY(nextButton),
       );
-      webConfig.guided_tutorial.steps.forEach((step, stepIndex) => {
+      const visitedSteps = new Set<number>();
+      let safetyCounter = 0;
+      while (!onComplete.mock.calls.length) {
+        visitedSteps.add(view.currentStepIndex());
         const instruction = requireText(root, "guided-tutorial-instruction");
-        expect(instruction.text).toBe(step.instruction);
+        expect(instruction.text.length).toBeGreaterThan(0);
         expect(instruction.height).toBeGreaterThanOrEqual(instruction.textHeight);
+        expect(instruction.height).toBeLessThanOrEqual(viewport.height);
         expect(Math.abs(content.y)).toBe(0);
-
-        if (instruction.height > viewport.height) {
-          viewport.emit("mousewheel", { delta: -1 });
-          expect(content.y).toBeLessThan(0);
-          viewport.emit("mousewheel", { delta: 1 });
-          expect(Math.abs(content.y)).toBe(0);
-
-          if (layout.kind === "mobile") {
-            const stage = runtime.stage as unknown as FakeStage;
-            stage.mouseY = viewport.height;
-            viewport.emit("mousedown");
-            stage.mouseY = -instruction.height;
-            stage.emit("mousemove");
-            stage.emit("mouseup");
-            expect(content.y).toBeLessThan(0);
-          }
-          const attempts = Math.ceil(
-            instruction.height / webConfig.controls.scroll_step,
-          ) + 1;
-          for (let attempt = 0; attempt < attempts; attempt += 1) {
-            viewport.emit("mousewheel", { delta: -1 });
-          }
-          expect(content.y).toBeLessThan(0);
-          expect(instruction.y + instruction.height + content.y)
-            .toBeLessThanOrEqual(viewport.height);
-          expect(instruction.y + instruction.height + content.y)
-            .toBeGreaterThan(0);
+        viewport.emit("mousewheel", { delta: -1 });
+        expect(Math.abs(content.y)).toBe(0);
+        if (view.instructionPageCount() > 1) {
+          expect(requireText(root, "guided-tutorial-step").text).toContain(
+            webConfig.guided_tutorial.page_separator.trim(),
+          );
         }
-
-        if (stepIndex < webConfig.guided_tutorial.steps.length - 1) {
-          view.next();
-        }
-      });
+        view.next();
+        safetyCounter += 1;
+        expect(safetyCounter).toBeLessThan(
+          webConfig.guided_tutorial.steps.length * 8,
+        );
+      }
+      expect(visitedSteps.size).toBe(webConfig.guided_tutorial.steps.length);
       view.destroy();
     }
   });

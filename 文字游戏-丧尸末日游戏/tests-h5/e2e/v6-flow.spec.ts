@@ -8,6 +8,7 @@ import type {
   UiCompanionView,
 } from "../../src/ui/ports/GameUiPort";
 import type { DistrictExplorationTreeConfig } from "../../src/domain/district-exploration-tree";
+import { originOptions } from "../../src/config/contentExpansion";
 
 interface ConfiguredMode {
   readonly id: GameMode;
@@ -97,8 +98,6 @@ type CssNodeBounds = Omit<DebugNodeBounds, "stageWidth" | "stageHeight">;
 const TARGET_PROJECTS = new Set(["desktop", "mobile"]);
 const DESKTOP_PROJECT = "desktop";
 const MOBILE_PROJECT = "mobile";
-const REQUIRED_MODE_COUNT = 4;
-const REQUIRED_ORIGIN_COUNT = 5;
 
 /** 读取一份仓库权威 JSON 配置，避免测试复制产品 ID 与数值。 */
 function loadConfig(relativePath: string): unknown {
@@ -345,14 +344,34 @@ async function clickScrollableLayaNode(
   await clickLayaNode(page, nodeName);
 }
 
-/** 清空本地状态并走到自动更新日志页。 */
+/** 清空本地状态，并允许发布者闪屏被点击或按配置自动结束。 */
 async function bootFreshGame(page: Page): Promise<void> {
   await page.goto("/");
   await page.evaluate(() => { localStorage.clear(); });
   await page.reload();
   await expect(page.locator("#boot-status")).toBeHidden();
-  await waitForScreen(page, "publisher_splash");
-  await clickLayaNode(page, "page-publisher-splash");
+  await expect.poll(async () => {
+    const screen = await page.evaluate(() => (
+      document.body.dataset.gameScreen ?? null
+    ));
+    if (screen === "update_log") return screen;
+    if (screen !== "publisher_splash") return "pending";
+    const splash = await readLayaNodeBounds(page, "page-publisher-splash");
+    return splash === null ? "pending" : screen;
+  }).toMatch(/^(publisher_splash|update_log)$/);
+  const screen = await page.evaluate(() => (
+    document.body.dataset.gameScreen ?? null
+  ));
+  if (screen === "publisher_splash") {
+    try {
+      await clickLayaNode(page, "page-publisher-splash");
+    } catch (error) {
+      const currentScreen = await page.evaluate(() => (
+        document.body.dataset.gameScreen ?? null
+      ));
+      if (currentScreen !== "update_log") throw error;
+    }
+  }
   await waitForScreen(page, "update_log");
 }
 
@@ -507,11 +526,9 @@ function requireShelterStat(
   return value;
 }
 
-/** 从伙伴互动页按页面栈逐级返回指挥台。 */
+/** 从角色互动页按页面栈逐级返回指挥台。 */
 async function returnFromCompanionInteraction(page: Page): Promise<void> {
   await clickLayaNode(page, "page-companion-interaction-back");
-  await waitForScreen(page, "companion_management_detail");
-  await clickLayaNode(page, "page-companion-management-detail-back");
   await waitForScreen(page, "companion_detail");
   await clickLayaNode(page, "page-companion-detail-back");
   await waitForScreen(page, "companions");
@@ -519,7 +536,7 @@ async function returnFromCompanionInteraction(page: Page): Promise<void> {
   await waitForScreen(page, "dashboard");
 }
 
-/** 在桌面或紧凑指挥台中打开真实伙伴入口。 */
+/** 在桌面或紧凑指挥台中打开真实角色档案入口。 */
 async function openCompanionArchive(page: Page): Promise<void> {
   const layout = await page.evaluate(() => document.body.dataset.gameLayout);
   if (layout === "desktop") {
@@ -534,8 +551,8 @@ async function openCompanionArchive(page: Page): Promise<void> {
   await waitForScreen(page, "companions");
 }
 
-/** 完整执行伙伴档案、配装和互动并返回互动后快照。 */
-async function exerciseCompanionManagement(
+/** 完整执行角色档案、配装和互动并返回互动后快照。 */
+async function exerciseCharacterArchive(
   page: Page,
   equipmentId: string,
   interactionId: string,
@@ -561,13 +578,7 @@ async function exerciseCompanionManagement(
     await readLayaNodeBounds(page, `companion-${companion.id}-archive`),
   ).not.toBeNull();
 
-  await clickLayaNode(page, "page-companion-detail-manage");
-  await waitForScreen(page, "companion_management_detail");
-  await clickScrollableLayaNode(
-    page,
-    "page-companion-management-detail-option-weapon",
-    "page-companion-management-detail-scroll",
-  );
+  await clickLayaNode(page, "page-companion-detail-weapon");
   await waitForScreen(page, "companion_equipment");
   await clickScrollableLayaNode(
     page,
@@ -583,18 +594,14 @@ async function exerciseCompanionManagement(
   await clickLayaNode(page, "page-message-close");
   await waitForScreen(page, "companion_equipment");
   await clickLayaNode(page, "page-companion-equipment-back");
-  await waitForScreen(page, "companion_management_detail");
+  await waitForScreen(page, "companion_detail");
 
   const beforeInteraction = await readDebugSnapshot(page);
   const hopeBefore = requireShelterStat(beforeInteraction, "shelter-hope");
   const interactionCountBefore = beforeInteraction.companions.find(
     (candidate) => candidate.id === companion.id,
   )?.interactionCount ?? -1;
-  await clickScrollableLayaNode(
-    page,
-    "page-companion-management-detail-option-interaction",
-    "page-companion-management-detail-scroll",
-  );
+  await clickLayaNode(page, "page-companion-detail-interaction");
   await waitForScreen(page, "companion_interaction");
   await clickScrollableLayaNode(
     page,
@@ -702,7 +709,7 @@ async function beginUnassistedHomeExpedition(
   for (let quantity = 0; quantity < requiredFoodQuantity; quantity += 1) {
     await clickScrollableLayaNode(
       page,
-      `page-expedition-item-${survivalConfig.expedition.action_food_item_id}`,
+      `page-expedition-item-${survivalConfig.expedition.action_food_item_id}-increase`,
       "page-expedition-prepare-scroll",
     );
   }
@@ -778,7 +785,7 @@ async function seedExhaustedExpedition(
   });
 }
 
-test("五个起源与普通入口模式均由建档 UI 暴露并可真实进入无尽求生", async ({
+test("配置化起源与普通入口模式均由建档 UI 暴露并可真实进入无尽求生", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== DESKTOP_PROJECT, "仅在桌面基准项目验证全量建档列表");
@@ -791,11 +798,14 @@ test("五个起源与普通入口模式均由建档 UI 暴露并可真实进入�
     (mode) => mode.id,
   );
   const domainModeIds = Object.keys(gameConfig.rules.player_counts).sort();
-  expect(configuredModeIds).toHaveLength(REQUIRED_MODE_COUNT);
+  expect(configuredModeIds).toHaveLength(domainModeIds.length);
   expect([...configuredModeIds].sort()).toEqual(domainModeIds);
-  expect((await readDebugSnapshot(page)).campaignProfileOptions.origins)
-    .toHaveLength(REQUIRED_ORIGIN_COUNT);
-  expect(gameConfig.campaign_profiles.origins).toHaveLength(REQUIRED_ORIGIN_COUNT);
+  const configuredOrigins = originOptions;
+  const exposedOrigins = (await readDebugSnapshot(page)).campaignProfileOptions.origins;
+  expect(exposedOrigins).toHaveLength(configuredOrigins.length);
+  expect(exposedOrigins.map(({ id, label }) => ({ id, label }))).toEqual(
+    configuredOrigins.map(({ id, label }) => ({ id, label })),
+  );
 
   await clickLayaNode(page, "profile-category-mode");
   for (const modeId of webConfig.new_game_setup.entry_mode_ids) {
@@ -820,12 +830,12 @@ test("五个起源与普通入口模式均由建档 UI 暴露并可真实进入�
   await selectSetupOption(page, "mode", endlessMode.id);
 
   await clickLayaNode(page, "profile-category-origin");
-  for (const origin of gameConfig.campaign_profiles.origins) {
+  for (const origin of configuredOrigins) {
     expect(
       await readLayaNodeBounds(page, `profile-origin-option-${origin.id}`),
     ).not.toBeNull();
   }
-  const selectedOrigin = gameConfig.campaign_profiles.origins.at(-1);
+  const selectedOrigin = configuredOrigins.at(-1);
   if (selectedOrigin === undefined) {
     throw new Error("配置缺少可选起源。");
   }
@@ -839,7 +849,7 @@ test("五个起源与普通入口模式均由建档 UI 暴露并可真实进入�
   expect(runtimeErrors).toEqual([]);
 });
 
-test("伙伴档案可查看立绘、完成配装与互动，手机可打开完整通讯", async ({
+test("角色档案可查看立绘、完成配装与互动，手机可打开完整通讯", async ({
   page,
 }, testInfo) => {
   test.slow();
@@ -862,7 +872,7 @@ test("伙伴档案可查看立绘、完成配装与互动，手机可打开完�
   await seedCraftedEquipment(page, weapon.item_id);
   await reloadAndLoadFirstSlot(page);
 
-  const result = await exerciseCompanionManagement(
+  const result = await exerciseCharacterArchive(
     page,
     weapon.item_id,
     interaction.interaction_id,

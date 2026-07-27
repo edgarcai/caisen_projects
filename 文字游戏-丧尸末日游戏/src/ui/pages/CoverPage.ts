@@ -12,11 +12,14 @@ import type {
 import type { UiBrandView } from "../ports/GameUiPort";
 import {
   buildCoverMenuItems,
+  resolveCoverAccountGeometry,
   resolveCoverChangelogGeometry,
   resolveCoverHorizontalPosition,
   resolveCoverMenuItemGeometry,
   resolveCoverMenuLayout,
   resolveCoverSettingsGeometry,
+  resolveCoverStoreGeometry,
+  resolveCoverTextRecordsGeometry,
 } from "../models/CoverMenuModel";
 import {
   resolveCoverArtworkGeometry,
@@ -70,7 +73,7 @@ export class CoverPage implements PageView {
     );
   }
 
-  /** 在安全区绘制设置与右下灰色更新日志入口。 */
+  /** 在安全区绘制顶部账户和底部商店、更新日志、文本记录工具行。 */
   private renderUtilities(
     factory: UiFactory,
     config: GameUiConfig,
@@ -85,12 +88,36 @@ export class CoverPage implements PageView {
       onClick: actions.openSettings,
     });
     factory.button(this.root, {
+      testId: "menu-account-login",
+      label: config.texts.account_login,
+      ...resolveCoverAccountGeometry(config, layout),
+      tone: "default",
+      fontSize: config.typography.caption_size,
+      onClick: actions.showAccountLogin,
+    });
+    factory.button(this.root, {
+      testId: "menu-store",
+      label: config.texts.store,
+      ...resolveCoverStoreGeometry(config, layout),
+      tone: "default",
+      fontSize: config.typography.caption_size,
+      onClick: actions.showStore,
+    });
+    factory.button(this.root, {
       testId: "menu-update-log",
       label: config.texts.update_log,
       ...resolveCoverChangelogGeometry(config, layout),
       tone: "muted",
       fontSize: config.typography.caption_size,
       onClick: actions.showUpdateLog ?? (() => undefined),
+    });
+    factory.button(this.root, {
+      testId: "menu-text-records",
+      label: config.texts.text_records,
+      ...resolveCoverTextRecordsGeometry(config, layout),
+      tone: "muted",
+      fontSize: config.typography.caption_size,
+      onClick: actions.showTextRecords,
     });
   }
 

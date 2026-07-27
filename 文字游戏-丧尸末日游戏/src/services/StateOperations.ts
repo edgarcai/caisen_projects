@@ -6,39 +6,11 @@ import {
   type PlayerState,
 } from "../domain/game-state";
 import type { RandomSource } from "../domain/ports";
-
-const PLAYER_FIELDS = new Set([
-  "age",
-  "lifespan",
-  "health",
-  "attack",
-  "defense",
-  "agility",
-  "medical_supplies",
-  "food",
-  "hunger",
-  "intelligence",
-  "coins",
-  "parts",
-  "negative_status",
-  "antidotes",
-]);
-
-const SHELTER_FIELDS = new Set([
-  "population",
-  "hope",
-  "group_hunger",
-  "health",
-  "defense_damage",
-  "activity",
-  "newspapers",
-  "books",
-  "magazines",
-  "toys",
-  "game_consoles",
-]);
-
-const STORY_FIELDS = new Set(["humanity", "evidence", "infection_pressure"]);
+import { isStateOperationFieldAllowed } from "../domain/state-operation-targets";
+import {
+  damageShelterWalls,
+  synchronizeShelterHealth,
+} from "../domain/shelter-fortification";
 
 /** 配置化数值写入成功后可订阅的最小观察者端口。 */
 export interface StateMutationObserver {
@@ -98,15 +70,18 @@ export class StateOperations {
     if (parts.length === 2) {
       const [root, field] = parts;
       if (root === "player" && field !== undefined) {
-        this.requireAllowed(field, PLAYER_FIELDS, target);
+        this.requireAllowed(root, field, target);
         return this.readNumericField(this.playerAt(state, playerIndex), field, target);
       }
       if (root === "shelter" && field !== undefined) {
-        this.requireAllowed(field, SHELTER_FIELDS, target);
+        this.requireAllowed(root, field, target);
+        if (field === "health") {
+          return state.shelter.inner_wall_health + state.shelter.outer_wall_health;
+        }
         return this.readNumericField(state.shelter, field, target);
       }
       if (root === "story" && field !== undefined) {
-        this.requireAllowed(field, STORY_FIELDS, target);
+        this.requireAllowed(root, field, target);
         return this.readNumericField(state.story, field, target);
       }
       if (root === "facility" && field !== undefined) {
@@ -142,7 +117,7 @@ export class StateOperations {
     if (parts.length === 2) {
       const [root, field] = parts;
       if (root === "player" && field !== undefined) {
-        this.requireAllowed(field, PLAYER_FIELDS, target);
+        this.requireAllowed(root, field, target);
         this.writeObservedNumericField(
           this.playerAt(state, playerIndex),
           field,
@@ -153,12 +128,23 @@ export class StateOperations {
         return;
       }
       if (root === "shelter" && field !== undefined) {
-        this.requireAllowed(field, SHELTER_FIELDS, target);
+        this.requireAllowed(root, field, target);
+        if (field === "health") {
+          this.writeShelterTotalHealth(value, target, state);
+          return;
+        }
+        if (field === "inner_wall_health" || field === "outer_wall_health") {
+          const previousValue = state.shelter[field];
+          state.shelter[field] = Math.max(0, value);
+          synchronizeShelterHealth(state.shelter);
+          this.notifyObservers(target, previousValue, state.shelter[field], state);
+          return;
+        }
         this.writeObservedNumericField(state.shelter, field, value, target, state);
         return;
       }
       if (root === "story" && field !== undefined) {
-        this.requireAllowed(field, STORY_FIELDS, target);
+        this.requireAllowed(root, field, target);
         this.writeObservedNumericField(state.story, field, value, target, state);
         return;
       }
@@ -181,6 +167,22 @@ export class StateOperations {
       return;
     }
     throw new StateOperationError(`状态目标不可写：${target}`);
+  }
+
+  /** 兼容旧内容对总耐久的写入：损伤先落外墙，修复先落内墙。 */
+  private writeShelterTotalHealth(
+    value: number,
+    target: string,
+    state: GameState,
+  ): void {
+    const previousValue = state.shelter.health;
+    if (value < previousValue) {
+      damageShelterWalls(state.shelter, previousValue - value);
+    } else {
+      state.shelter.inner_wall_health += value - previousValue;
+      synchronizeShelterHealth(state.shelter);
+    }
+    this.notifyObservers(target, previousValue, state.shelter.health, state);
   }
 
   /** 依次应用数值效果，并收集结果文案需要的变量。 */
@@ -284,8 +286,8 @@ export class StateOperations {
   }
 
   /** 要求目标字段位于配置可访问白名单中。 */
-  private requireAllowed(field: string, allowed: ReadonlySet<string>, target: string): void {
-    if (!allowed.has(field)) {
+  private requireAllowed(root: string, field: string, target: string): void {
+    if (!isStateOperationFieldAllowed(root, field)) {
       throw new StateOperationError(`状态目标未列入白名单：${target}`);
     }
   }

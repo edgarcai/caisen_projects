@@ -1,9 +1,10 @@
 import { GameApplicationError } from "../domain/errors";
 import type { GameMode } from "../domain/game-state";
+import type { ModeCapabilityId } from "../domain/content";
 import type { GameContent } from "./GameContent";
 
 /** 当前版本需要在应用层强制执行的模式能力。 */
-export type GameModeCapability = "narrative" | "boss_combat" | "endless_survival";
+export type GameModeCapability = ModeCapabilityId;
 
 /** 从配置读取模式权限并为应用用例提供统一守卫。 */
 export class GameModeCapabilityPolicy {

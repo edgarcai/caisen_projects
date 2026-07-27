@@ -33,7 +33,10 @@ export interface SaveSlotSummary {
   readonly difficultyId: string | null;
   readonly originId: string | null;
   readonly traitId: string | null;
+  readonly secondaryTraitId: string | null;
   readonly homeCityId: string | null;
+  readonly homeDistrictId: string | null;
+  readonly shelterTypeId: string | null;
   readonly savedAt: string | null;
 }
 

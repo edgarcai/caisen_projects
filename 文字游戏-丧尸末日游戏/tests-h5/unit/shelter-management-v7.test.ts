@@ -9,6 +9,10 @@ import {
   StateOperations,
   TradeAmbushService,
 } from "../../src/services";
+import {
+  nextManagementRepetition,
+  resolveManagementRepetitions,
+} from "../../src/ui/pages/ManagementPages";
 import { buildH5Harness, requirePlayer, requireState } from "../helpers/H5TestHarness";
 
 /** 为经营测试提供可复现的整数与加权结果。 */
@@ -131,6 +135,8 @@ describe("v7 每周交易与途中风险", () => {
     application.startNewGame(["交易所长"], "single");
     const state = requireState(application);
     requirePlayer(state).coins = 1_000;
+    state.clock = { year: 2166, month: 1, day: 3, hour: 6 };
+    state.survival_days = 2;
 
     expect(application.performManagement("trade_buy", "caravan_food").stateChanged)
       .toBe(true);
@@ -139,7 +145,8 @@ describe("v7 每周交易与途中风险", () => {
       .toBe(false);
     expect(JSON.stringify(state)).toBe(afterFirst);
 
-    state.survival_days = 7;
+    state.clock = { year: 2166, month: 1, day: 10, hour: 6 };
+    state.survival_days = 9;
     expect(application.performManagement("trade_buy", "caravan_medicine").stateChanged)
       .toBe(true);
     expect(state.management_cycle_usage.weekly_trade).toEqual({
@@ -183,12 +190,14 @@ describe("v7 每周交易与途中风险", () => {
     const player = requirePlayer(state);
     player.coins = 100;
     player.health = 3;
+    state.clock = { year: 2166, month: 1, day: 3, hour: 6 };
+    state.survival_days = 2;
 
     const report = application.performManagement("trade_buy", "caravan_food");
 
     expect(report).toMatchObject({ stateChanged: true, gameOver: true });
     expect(requirePlayer(state).health).toBe(0);
-    expect(state.ending?.ending_id).toBe("last_commander_fallen");
+    expect(state.ending?.ending_id).toBe("commander_fallen");
     expect(report.messages).toContain(state.ending?.message);
     expect(state.communication_log.at(-1)?.message).toBe(state.ending?.message);
     expect(() => application.performAction("use_medicine")).toThrow("游戏已经结束");
@@ -204,6 +213,8 @@ describe("v7 每周交易与途中风险", () => {
     const player = requirePlayer(state);
     player.coins = 100;
     state.shelter.hope = 0;
+    state.clock = { year: 2166, month: 1, day: 3, hour: 6 };
+    state.survival_days = 2;
 
     expect(application.managementOptions().length).toBeGreaterThan(0);
     expect(state.ending).toBeNull();
@@ -212,7 +223,7 @@ describe("v7 每周交易与途中风险", () => {
 
     expect(report).toMatchObject({ stateChanged: true, gameOver: true });
     expect(state.shelter.hope).toBe(0);
-    expect(state.ending?.ending_id).toBe("last_hope_extinguished");
+    expect(state.ending?.ending_id).toBe("hope_extinguished");
     expect(state.communication_log.at(-1)?.message).toBe(state.ending?.message);
   });
 
@@ -271,7 +282,11 @@ describe("v7 经营详情 UI", () => {
 
     expect(snapshot.managementCategories.map((category) => category.id)).toEqual([
       "operation",
+      "work",
+      "trade_buy",
+      "trade_sell",
       "activity",
+      "facility_use",
       "upgrade",
     ]);
     expect(wall?.fields.map((field) => field.id)).toContain("capacity");
@@ -280,5 +295,35 @@ describe("v7 经营详情 UI", () => {
         && requirement.status === "unmet",
     )).toBe(true);
     expect(wall?.disabledReason).toContain("零件");
+  });
+
+  it("工作循环读取领域配置，买入与卖出不暴露循环次数", () => {
+    const { adapter } = buildH5Harness();
+    adapter.execute({ type: "start_game", mode: "single", playerNames: ["轮班所长"] });
+    const snapshot = adapter.getSnapshot();
+    const work = snapshot.managementCategories.find(
+      (category) => category.id === "work",
+    );
+    const buyCategory = snapshot.managementCategories.find(
+      (category) => category.id === "trade_buy",
+    );
+    const sellCategory = snapshot.managementCategories.find(
+      (category) => category.id === "trade_sell",
+    );
+    const job = work?.options.find((option) => option.id === "job::sort_salvage");
+    const buy = buyCategory?.options.find(
+      (option) => option.id === "trade_buy::caravan_food",
+    );
+    const sell = sellCategory?.options.find(
+      (option) => option.id === "trade_sell::caravan_food",
+    );
+
+    expect(job?.repetitionOptions).toEqual([1, 2, 3, 5, 10]);
+    expect(buy?.repetitionOptions).toEqual([]);
+    expect(sell?.repetitionOptions).toEqual([]);
+    expect(resolveManagementRepetitions(job?.repetitionOptions ?? [], 5)).toBe(5);
+    expect(resolveManagementRepetitions(job?.repetitionOptions ?? [], 4)).toBe(1);
+    expect(nextManagementRepetition(job?.repetitionOptions ?? [], 3)).toBe(5);
+    expect(nextManagementRepetition(job?.repetitionOptions ?? [], 10)).toBe(1);
   });
 });

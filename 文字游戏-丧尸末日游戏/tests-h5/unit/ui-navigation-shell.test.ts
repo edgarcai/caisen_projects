@@ -16,12 +16,15 @@ import { DelayedHoverIntent } from "../../src/ui/interactions/DelayedHoverIntent
 import { PageStack } from "../../src/ui/navigation/PageStack";
 import {
   buildCoverMenuItems,
+  resolveCoverAccountGeometry,
   resolveCoverArtwork,
   resolveCoverChangelogGeometry,
   resolveCoverDescriptionGeometry,
   resolveCoverMenuLayout,
   resolveCoverMenuItemGeometry,
   resolveCoverSettingsGeometry,
+  resolveCoverStoreGeometry,
+  resolveCoverTextRecordsGeometry,
 } from "../../src/ui/models/CoverMenuModel";
 import { resolvePageScaffoldGeometry } from "../../src/ui/pages/PageView";
 import {
@@ -226,6 +229,9 @@ describe("五入口响应式封面与系统键契约", () => {
       startMultiplayer: vi.fn(),
       startStory: vi.fn(),
       showCredits: vi.fn(),
+      showAccountLogin: vi.fn(),
+      showStore: vi.fn(),
+      showTextRecords: vi.fn(),
       openSettings: vi.fn(),
     };
   }
@@ -304,7 +310,7 @@ describe("五入口响应式封面与系统键契约", () => {
     expect(last.y + last.height).toBeLessThanOrEqual(landscape.stageHeight);
   });
 
-  it("手机竖屏与横屏的鸣谢均不与更新日志重叠", () => {
+  it("手机竖屏与横屏的鸣谢均不与底部工具行重叠", () => {
     const layouts = [
       resolveTestLayout(
         webConfig.engine.mobile_design_width,
@@ -320,20 +326,31 @@ describe("五入口响应式封面与系统键契约", () => {
     const itemCount = buildCoverMenuItems(webConfig, false, createActions()).length;
 
     for (const layout of layouts) {
-      const credits = resolveCoverMenuItemGeometry(
-        webConfig,
-        layout,
-        itemCount - 1,
-        itemCount,
-      );
       const changelog = resolveCoverChangelogGeometry(webConfig, layout);
-      const separated =
-        credits.x + credits.width <= changelog.x ||
-        changelog.x + changelog.width <= credits.x ||
-        credits.y + credits.height <= changelog.y ||
-        changelog.y + changelog.height <= credits.y;
-
-      expect(separated).toBe(true);
+      const store = resolveCoverStoreGeometry(webConfig, layout);
+      const textRecords = resolveCoverTextRecordsGeometry(webConfig, layout);
+      const utilities = [textRecords, changelog, store];
+      for (let index = 0; index < itemCount; index += 1) {
+        const item = resolveCoverMenuItemGeometry(
+          webConfig,
+          layout,
+          index,
+          itemCount,
+        );
+        for (const utility of utilities) {
+          const separated =
+            item.x + item.width <= utility.x ||
+            utility.x + utility.width <= item.x ||
+            item.y + item.height <= utility.y ||
+            utility.y + utility.height <= item.y;
+          expect(separated).toBe(true);
+        }
+      }
+      expect(textRecords.x + textRecords.width).toBeLessThanOrEqual(changelog.x);
+      expect(changelog.x + changelog.width).toBeLessThanOrEqual(store.x);
+      expect(store.x + store.width).toBeLessThanOrEqual(
+        layout.stageWidth - layout.safeArea.right,
+      );
     }
   });
 
@@ -375,6 +392,12 @@ describe("五入口响应式封面与系统键契约", () => {
       expect(geometry.y + geometry.height).toBeLessThanOrEqual(
         layout.stageHeight - layout.safeArea.bottom,
       );
+      const account = resolveCoverAccountGeometry(webConfig, layout);
+      expect(account.x + account.width).toBe(
+        layout.stageWidth -
+          layout.safeArea.right -
+          tokens.settings_button_offset,
+      );
       if (layout.kind === "mobile") {
         expect(tokens.settings_button_anchor).toBe("left");
         expect(geometry.x).toBe(
@@ -382,11 +405,7 @@ describe("五入口响应式封面与系统键契约", () => {
         );
       } else {
         expect(tokens.settings_button_anchor).toBe("right");
-        expect(geometry.x + geometry.width).toBe(
-          layout.stageWidth -
-            layout.safeArea.right -
-            tokens.settings_button_offset,
-        );
+        expect(geometry.x + geometry.width).toBeLessThanOrEqual(account.x);
       }
     }
   });
@@ -408,10 +427,8 @@ describe("五入口响应式封面与系统键契约", () => {
 
     expect(compactDesktop.kind).toBe("compact");
     expect(tokens.settings_button_anchor).toBe("right");
-    expect(settings.x + settings.width).toBe(
-      compactDesktop.stageWidth -
-        compactDesktop.safeArea.right -
-        tokens.settings_button_offset,
+    expect(settings.x + settings.width).toBeLessThanOrEqual(
+      resolveCoverAccountGeometry(webConfig, compactDesktop).x,
     );
   });
 
@@ -436,11 +453,13 @@ describe("五入口响应式封面与系统键契约", () => {
     intent.destroy();
   });
 
-  it("鸣谢文档正文严格为空", () => {
+  it("鸣谢文档使用配置逐行列出版权提示和测试名单", () => {
     expect(createCreditsDocument(webConfig)).toEqual({
       title: "鸣谢",
-      body: "",
+      body: webConfig.texts.credits_body,
     });
+    expect(webConfig.texts.credits_body.split("\n")).toContain("西出阳关故人");
+    expect(webConfig.texts.credits_body).toContain("未内置受版权保护的原曲音源");
   });
 });
 

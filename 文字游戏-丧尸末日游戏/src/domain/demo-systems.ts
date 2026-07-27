@@ -362,6 +362,18 @@ export interface ArchiveCollectionOverview {
   readonly totalDocuments: number;
 }
 
+/** 一类文献的收集概览、完整目录与已解锁正文快照。 */
+export interface ArchiveLibraryCollectionSnapshot {
+  readonly overview: ArchiveCollectionOverview;
+  readonly documents: readonly ArchiveDocumentListItem[];
+  readonly unlockedDocuments: readonly ArchiveDocumentConfig[];
+}
+
+/** 供封面和局内页面共用的只读文献馆藏快照。 */
+export interface ArchiveLibrarySnapshot {
+  readonly collections: readonly ArchiveLibraryCollectionSnapshot[];
+}
+
 /** 三个 Demo 领域能力共用的顶层配置文档。 */
 export interface DemoSystemsConfig {
   readonly schema_version: number;

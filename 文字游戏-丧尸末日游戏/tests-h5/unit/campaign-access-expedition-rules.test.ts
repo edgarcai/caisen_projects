@@ -78,6 +78,24 @@ function configuredDefaultDistrict(
   return application.content.district(city.id, city.default_district_id);
 }
 
+/** 使用真实七日侦察用例解锁一座已满足交通条件的远城。 */
+function completeConfiguredRecon(
+  application: GameApplication,
+  cityId: string,
+  companionId = "haocai",
+): void {
+  const state = requireState(application);
+  state.shelter.newspapers = Math.max(
+    state.shelter.newspapers,
+    application.content.city(cityId).intelligence_newspapers_required,
+  );
+  const started = application.startCityRecon(cityId, companionId);
+  expect(started.stateChanged, `开始侦察 ${cityId}`).toBe(true);
+  state.survival_days += 7;
+  const completed = application.completeCityRecon(cityId);
+  expect(completed.stateChanged, `完成侦察 ${cityId}`).toBe(true);
+}
+
 describe("游戏模式能力隔离", () => {
   it("单人和多人仅保留生存能力，剧情模式独占叙事与首领战", () => {
     const matrix = [
@@ -163,7 +181,7 @@ describe("城市拓扑与通行矩阵", () => {
     expect(() => startConfiguredGame({ homeCityId: "city_h" })).toThrow(/出生城市/);
   });
 
-  it("大陆链远城要求情报与路线，路线图不能解锁岛屿", () => {
+  it("大陆链远城要求情报、载具与七日侦察，路线图不能替代", () => {
     const application = startConfiguredGame({ homeCityId: "city_a" });
     const state = requireState(application);
     const initial = new Map(
@@ -182,16 +200,23 @@ describe("城市拓扑与通行矩阵", () => {
     )?.accessible).toBe(false);
 
     state.inventory.crafted_items.route_map = 1;
-    const unlocked = new Map(
-      application.expeditionCities().map((decision) => [decision.city.id, decision]),
-    );
+    expect(application.expeditionCities().find(
+      (decision) => decision.city.id === "city_c",
+    )?.accessible).toBe(false);
+    state.inventory.crafted_items.armored_car = 1;
+    state.inventory.equipped_transport_ids = ["armored_car"];
     for (const cityId of ["city_c", "city_d", "city_e", "city_f", "city_g"]) {
-      expect(unlocked.get(cityId)?.accessible, cityId).toBe(true);
+      completeConfiguredRecon(application, cityId);
+      expect(application.expeditionCities().find(
+        (decision) => decision.city.id === cityId,
+      )?.accessible, cityId).toBe(true);
     }
-    expect(unlocked.get("city_h")?.accessible).toBe(false);
+    expect(application.expeditionCities().find(
+      (decision) => decision.city.id === "city_h",
+    )?.accessible).toBe(false);
   });
 
-  it("非 A 出生时可用情报加路线图或载具重新开放远处 A 市", () => {
+  it("非 A 出生时仍需载具与七日侦察开放远处 A 市", () => {
     const routeApplication = startConfiguredGame({ homeCityId: "city_d" });
     const routeState = requireState(routeApplication);
     const cityA = routeApplication.content.game.cities.find(
@@ -216,6 +241,13 @@ describe("城市拓扑与通行矩阵", () => {
     routeState.inventory.crafted_items.route_map = 1;
     expect(routeApplication.expeditionCities().find(
       (decision) => decision.city.id === "city_a",
+    )?.accessible).toBe(false);
+
+    routeState.inventory.crafted_items.armored_car = 1;
+    routeState.inventory.equipped_transport_ids = ["armored_car"];
+    completeConfiguredRecon(routeApplication, "city_a");
+    expect(routeApplication.expeditionCities().find(
+      (decision) => decision.city.id === "city_a",
     )?.accessible).toBe(true);
 
     const transportApplication = startConfiguredGame({ homeCityId: "city_d" });
@@ -223,6 +255,7 @@ describe("城市拓扑与通行矩阵", () => {
     transportState.shelter.newspapers = cityA.intelligence_newspapers_required;
     transportState.inventory.crafted_items.armored_car = 1;
     transportState.inventory.equipped_transport_ids = ["armored_car"];
+    completeConfiguredRecon(transportApplication, "city_a");
     expect(transportApplication.expeditionCities().find(
       (decision) => decision.city.id === "city_a",
     )).toMatchObject({ relation: "remote", accessible: true });
@@ -239,8 +272,13 @@ describe("城市拓扑与通行矩阵", () => {
       application.expeditionCities().map((decision) => [decision.city.id, decision]),
     );
     expect(landTransport.get("city_d")?.accessible).toBe(true);
-    expect(landTransport.get("city_g")?.accessible).toBe(true);
+    expect(landTransport.get("city_g")?.accessible).toBe(false);
     expect(landTransport.get("city_h")?.accessible).toBe(false);
+
+    completeConfiguredRecon(application, "city_g");
+    expect(application.expeditionCities().find(
+      (decision) => decision.city.id === "city_g",
+    )?.accessible).toBe(true);
 
     state.inventory.crafted_items.motorboat = 1;
     state.inventory.equipped_transport_ids = ["motorboat"];
@@ -250,6 +288,7 @@ describe("城市拓扑与通行矩阵", () => {
 
     state.inventory.crafted_items.helicopter = 1;
     state.inventory.equipped_transport_ids = ["motorboat", "helicopter"];
+    completeConfiguredRecon(application, "city_h");
     expect(application.expeditionCities().find(
       (decision) => decision.city.id === "city_h",
     )?.accessible).toBe(true);
@@ -268,6 +307,10 @@ describe("城市拓扑与通行矩阵", () => {
       (decision) => decision.city.id === "city_h",
     )?.accessible).toBe(false);
     expect(application.toggleTransport("helicopter").stateChanged).toBe(true);
+    expect(application.expeditionCities().find(
+      (decision) => decision.city.id === "city_h",
+    )?.accessible).toBe(false);
+    completeConfiguredRecon(application, "city_h");
     expect(application.expeditionCities().find(
       (decision) => decision.city.id === "city_h",
     )?.accessible).toBe(true);
@@ -364,7 +407,9 @@ describe("远征路费与首事件步数", () => {
       const district = configuredDefaultDistrict(application, scenario.cityId);
       if (scenario.relation === "remote") {
         state.shelter.newspapers = 10;
-        state.inventory.crafted_items.route_map = 1;
+        state.inventory.crafted_items.armored_car = 1;
+        state.inventory.equipped_transport_ids = ["armored_car"];
+        completeConfiguredRecon(application, scenario.cityId);
       }
       const report = application.prepareExpedition(
         scenario.cityId,

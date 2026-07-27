@@ -10,6 +10,7 @@ import type {
   LayaTextLike,
 } from "../laya/LayaRuntime";
 import type { PageView } from "./PageView";
+import { paginateTutorialInstruction } from "../models/GuidedTutorialPagination";
 
 /** 教程聚焦区域在舞台坐标系中的矩形。 */
 export interface GuidedTutorialTargetBounds {
@@ -34,6 +35,8 @@ export interface GuidedTutorialActions {
 /** 渲染后可由上层控制的通讯式分步教程。 */
 export interface GuidedTutorialPageView extends PageView {
   currentStepIndex(): number;
+  currentInstructionPageIndex(): number;
+  instructionPageCount(): number;
   next(): void;
   previous(): void;
   refreshTarget(): void;
@@ -54,6 +57,7 @@ interface TutorialInstructionRegion {
   readonly scroll: ScrollRegion;
   readonly instruction: LayaTextLike;
   readonly targetState: LayaTextLike;
+  readonly viewportHeight: number;
 }
 
 /** 对话框在当前断点的几何结果。 */
@@ -122,24 +126,16 @@ export function createGuidedTutorialPage(
     (): void => { previousAction(); },
   );
   let stepIndex = 0;
+  let instructionPageIndex = 0;
+  let instructionPages: readonly string[] = [""];
   let completed = false;
 
   /** 刷新当前步骤的文案、按钮和聚焦区域。 */
-  const refresh = (): void => {
+  const refresh = (pagePosition: "first" | "last" | "preserve" = "preserve"): void => {
     const step = requireTutorialStep(config, stepIndex);
     const total = config.guided_tutorial.steps.length;
-    bindings.step.text = formatTemplate(config.guided_tutorial.step_format, {
-      current: stepIndex + 1,
-      total,
-    });
     bindings.speaker.text = step.speaker;
     bindings.title.text = step.title;
-    bindings.nextLabel.text = stepIndex === total - 1
-      ? config.guided_tutorial.complete_label
-      : config.guided_tutorial.next_label;
-    bindings.previousLabel.color = stepIndex === 0
-      ? config.theme.muted_text
-      : config.theme.text;
     const target = resolveTarget(step.target_test_id);
     const placedDialog = resolveTutorialDialogPlacement(
       config,
@@ -148,11 +144,30 @@ export function createGuidedTutorialPage(
       target,
     );
     dialog.pos(placedDialog.x, placedDialog.y);
-    refreshTutorialInstructionRegion(
+    instructionPages = paginateTutorialInstructionRegion(
       bindings.instructionRegion,
       config,
       step.instruction,
       target === null,
+    );
+    instructionPageIndex = pagePosition === "first"
+      ? 0
+      : pagePosition === "last"
+        ? instructionPages.length - 1
+        : Math.min(instructionPageIndex, instructionPages.length - 1);
+    refreshTutorialInstructionRegion(
+      bindings.instructionRegion,
+      config,
+      requireInstructionPage(instructionPages, instructionPageIndex),
+      target === null,
+    );
+    refreshTutorialNavigation(
+      bindings,
+      config,
+      stepIndex,
+      total,
+      instructionPageIndex,
+      instructionPages.length,
     );
     drawTutorialSpotlight(
       spotlight,
@@ -169,22 +184,36 @@ export function createGuidedTutorialPage(
     if (completed) {
       return;
     }
+    if (instructionPageIndex < instructionPages.length - 1) {
+      instructionPageIndex += 1;
+      refresh("preserve");
+      return;
+    }
     if (stepIndex >= config.guided_tutorial.steps.length - 1) {
       completed = true;
       actions.onComplete();
       return;
     }
     stepIndex += 1;
-    refresh();
+    instructionPageIndex = 0;
+    refresh("first");
   };
 
   /** 返回上一步，第一步时保持原位。 */
   const previous = (): void => {
-    if (stepIndex === 0 || completed) {
+    if (completed) {
+      return;
+    }
+    if (instructionPageIndex > 0) {
+      instructionPageIndex -= 1;
+      refresh("preserve");
+      return;
+    }
+    if (stepIndex === 0) {
       return;
     }
     stepIndex -= 1;
-    refresh();
+    refresh("last");
   };
 
   nextAction = next;
@@ -194,6 +223,10 @@ export function createGuidedTutorialPage(
     root,
     /** 读取当前零起点步骤序号。 */
     currentStepIndex: (): number => stepIndex,
+    /** 读取当前步骤内的零起点通讯页码。 */
+    currentInstructionPageIndex: (): number => instructionPageIndex,
+    /** 读取当前步骤按真实字高拆出的通讯页数。 */
+    instructionPageCount: (): number => instructionPages.length,
     next,
     previous,
     refreshTarget: refresh,
@@ -354,10 +387,39 @@ function createTutorialInstructionRegion(
     fontSize: config.typography.caption_size,
     color: config.theme.warning,
   });
-  return { scroll, instruction, targetState };
+  return { scroll, instruction, targetState, viewportHeight: height };
 }
 
-/** 按当前步骤的真实换行高度更新正文和滚动上限。 */
+/** 使用 Laya 当前字体测量把长指令拆成无需滚动的通讯页。 */
+function paginateTutorialInstructionRegion(
+  region: TutorialInstructionRegion,
+  config: GameUiConfig,
+  instructionText: string,
+  showTargetState: boolean,
+): readonly string[] {
+  const gap = config.layout.page.option_gap;
+  const targetStateHeight = showTargetState
+    ? region.targetState.height + gap
+    : 0;
+  const maximumInstructionHeight = Math.max(
+    config.typography.body_line_height,
+    region.viewportHeight - targetStateHeight - gap,
+  );
+  return paginateTutorialInstruction(
+    instructionText,
+    maximumInstructionHeight,
+    config.guided_tutorial.minimum_page_fill_ratio,
+    (candidate): number => {
+      region.instruction.text = candidate;
+      return Math.max(
+        config.typography.body_line_height,
+        region.instruction.textHeight,
+      );
+    },
+  );
+}
+
+/** 按当前通讯页的真实换行高度更新正文，并确保滚动偏移为零。 */
 function refreshTutorialInstructionRegion(
   region: TutorialInstructionRegion,
   config: GameUiConfig,
@@ -376,7 +438,52 @@ function refreshTutorialInstructionRegion(
     ? region.targetState.y + region.targetState.height
     : region.instruction.height;
   region.scroll.setContentHeight(contentBottom + gap);
-  region.scroll.revealNode(region.instruction.name, 0, "start");
+  region.scroll.restoreOffset(0);
+}
+
+/** 更新步骤、页码及底部按钮文案，避免将翻页误解为跳步。 */
+function refreshTutorialNavigation(
+  bindings: TutorialDialogBindings,
+  config: GameUiConfig,
+  stepIndex: number,
+  stepCount: number,
+  pageIndex: number,
+  pageCount: number,
+): void {
+  const stepLabel = formatTemplate(config.guided_tutorial.step_format, {
+    current: stepIndex + 1,
+    total: stepCount,
+  });
+  const pageLabel = pageCount > 1
+    ? config.guided_tutorial.page_separator + formatTemplate(
+        config.guided_tutorial.page_format,
+        { current: pageIndex + 1, total: pageCount },
+      )
+    : "";
+  bindings.step.text = stepLabel + pageLabel;
+  bindings.nextLabel.text = pageIndex < pageCount - 1
+    ? config.guided_tutorial.next_page_label
+    : stepIndex === stepCount - 1
+      ? config.guided_tutorial.complete_label
+      : config.guided_tutorial.next_label;
+  bindings.previousLabel.text = pageIndex > 0
+    ? config.guided_tutorial.previous_page_label
+    : config.guided_tutorial.previous_label;
+  bindings.previousLabel.color = stepIndex === 0 && pageIndex === 0
+    ? config.theme.muted_text
+    : config.theme.text;
+}
+
+/** 读取已经通过分页算法生成的正文，越界时立即暴露界面状态错误。 */
+function requireInstructionPage(
+  pages: readonly string[],
+  index: number,
+): string {
+  const page = pages[index];
+  if (page === undefined) {
+    throw new Error(`教程通讯页越界：${String(index)}`);
+  }
+  return page;
 }
 
 /** 按当前断点计算右下或底部全宽通讯框。 */

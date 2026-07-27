@@ -33,11 +33,13 @@ export {
 export * from "./models/DemoSystemPresenters";
 export * from "./models/DemoSystemViewModels";
 export * from "./pages/DemoSystemsPages";
+export * from "./pages/SettlementNetworkPages";
 export type {
   ShelterMapActions,
   ShelterMapGeometry,
   ShelterRoomPlanningActions,
 } from "./pages/ShelterMapPage";
 export type * from "./ports/GameUiPort";
+export type * from "./ports/CoopUiPort";
 export type * from "./ports/UiSettingsPort";
 export type { LayaStageLike } from "./laya/LayaRuntime";

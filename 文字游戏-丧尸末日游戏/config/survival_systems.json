@@ -43,6 +43,8 @@
     "equipped_text": "已装备【{item_name}】。"
   },
   "research": {
+    "slot_count": 1,
+    "input_quantity": 1,
     "projects": [
       {
         "project_id": "field_logistics",
@@ -52,10 +54,12 @@
         "turns_consumed": 3,
         "costs": [
           {"target": "player.parts", "operation": "subtract", "amount": 8},
-          {"target": "shelter.books", "operation": "subtract", "amount": 1}
+          {"target": "player.coins", "operation": "subtract", "amount": 4}
         ],
         "unlock_recipe_ids": ["field_ration"],
-        "expedition_step_bonus": 2
+        "expedition_step_bonus": 2,
+        "research_input_item_id": "books",
+        "source_locations": [{"city_id": "city_a", "district_id": "city_a_district_c"}]
       },
       {
         "project_id": "trauma_response",
@@ -64,11 +68,13 @@
         "required_project_ids": ["field_logistics"],
         "turns_consumed": 4,
         "costs": [
-          {"target": "player.medical_supplies", "operation": "subtract", "amount": 6},
-          {"target": "shelter.magazines", "operation": "subtract", "amount": 1}
+          {"target": "player.parts", "operation": "subtract", "amount": 10},
+          {"target": "player.coins", "operation": "subtract", "amount": 8}
         ],
         "unlock_recipe_ids": ["trauma_kit", "reinforced_coat"],
-        "expedition_step_bonus": 1
+        "expedition_step_bonus": 1,
+        "research_input_item_id": "medical_supplies",
+        "source_locations": [{"city_id": "city_a", "district_id": "city_a_district_c"}]
       },
       {
         "project_id": "signal_navigation",
@@ -78,10 +84,12 @@
         "turns_consumed": 5,
         "costs": [
           {"target": "player.parts", "operation": "subtract", "amount": 12},
-          {"target": "shelter.newspapers", "operation": "subtract", "amount": 2}
+          {"target": "player.coins", "operation": "subtract", "amount": 10}
         ],
         "unlock_recipe_ids": ["signal_beacon", "route_map", "pipe_rifle"],
-        "expedition_step_bonus": 3
+        "expedition_step_bonus": 3,
+        "research_input_item_id": "newspapers",
+        "source_locations": [{"city_id": "city_a", "district_id": "city_a_district_e"}]
       },
       {
         "project_id": "transport_recovery",
@@ -91,11 +99,12 @@
         "turns_consumed": 6,
         "costs": [
           {"target": "player.parts", "operation": "subtract", "amount": 22},
-          {"target": "shelter.books", "operation": "subtract", "amount": 2},
-          {"target": "shelter.magazines", "operation": "subtract", "amount": 2}
+          {"target": "player.coins", "operation": "subtract", "amount": 18}
         ],
         "unlock_recipe_ids": ["armored_car", "motorboat"],
-        "expedition_step_bonus": 1
+        "expedition_step_bonus": 1,
+        "research_input_item_id": "magazines",
+        "source_locations": [{"city_id": "city_b", "district_id": "city_b_district_b"}]
       },
       {
         "project_id": "rotorcraft_recovery",
@@ -105,17 +114,24 @@
         "turns_consumed": 8,
         "costs": [
           {"target": "player.parts", "operation": "subtract", "amount": 36},
-          {"target": "shelter.books", "operation": "subtract", "amount": 3},
-          {"target": "shelter.magazines", "operation": "subtract", "amount": 3}
+          {"target": "player.coins", "operation": "subtract", "amount": 30}
         ],
         "unlock_recipe_ids": ["helicopter"],
-        "expedition_step_bonus": 2
+        "expedition_step_bonus": 2,
+        "research_input_item_id": "books",
+        "source_locations": [{"city_id": "city_h", "district_id": "city_h_district_c"}]
       }
     ],
     "completed_text": "研发完成：【{project_name}】。",
     "already_completed_text": "【{project_name}】已经完成，无需重复投入。",
     "locked_text": "前置研发尚未完成。",
     "insufficient_text": "研发材料不足。",
+    "empty_slot_text": "研究台方格还是空的，请先放入从城市找到的物品。",
+    "item_unavailable_text": "仓库中没有可放入研究台的【{item_name}】。",
+    "item_not_researchable_text": "【{item_name}】暂时无法在研究台分析。",
+    "slotted_text": "已将【{item_name}】放入研究台唯一方格。",
+    "slot_cleared_text": "已取回研究台中的物品。",
+    "slot_mismatch_text": "当前研究物与项目不匹配。",
     "unknown_text": "未知研发项目：{project_id}。"
   },
   "crafting": {
@@ -131,7 +147,8 @@
           {"target": "player.parts", "operation": "subtract", "amount": 1}
         ],
         "output_item_id": "field_ration",
-        "output_quantity": 1
+        "output_quantity": 1,
+        "blueprint_source_locations": [{"city_id": "city_a", "district_id": "city_a_district_c"}]
       },
       {
         "recipe_id": "trauma_kit",
@@ -144,7 +161,8 @@
           {"target": "player.antidotes", "operation": "subtract", "amount": 1}
         ],
         "output_item_id": "trauma_kit",
-        "output_quantity": 1
+        "output_quantity": 1,
+        "blueprint_source_locations": [{"city_id": "city_a", "district_id": "city_a_district_c"}]
       },
       {
         "recipe_id": "signal_beacon",
@@ -157,7 +175,8 @@
           {"target": "player.coins", "operation": "subtract", "amount": 6}
         ],
         "output_item_id": "signal_beacon",
-        "output_quantity": 1
+        "output_quantity": 1,
+        "blueprint_source_locations": [{"city_id": "city_a", "district_id": "city_a_district_e"}]
       },
       {
         "recipe_id": "route_map",
@@ -171,7 +190,8 @@
           {"target": "shelter.magazines", "operation": "subtract", "amount": 1}
         ],
         "output_item_id": "route_map",
-        "output_quantity": 1
+        "output_quantity": 1,
+        "blueprint_source_locations": [{"city_id": "city_a", "district_id": "city_a_district_e"}]
       },
       {
         "recipe_id": "armored_car",
@@ -184,7 +204,8 @@
           {"target": "player.coins", "operation": "subtract", "amount": 20}
         ],
         "output_item_id": "armored_car",
-        "output_quantity": 1
+        "output_quantity": 1,
+        "blueprint_source_locations": [{"city_id": "city_b", "district_id": "city_b_district_b"}]
       },
       {
         "recipe_id": "motorboat",
@@ -197,7 +218,8 @@
           {"target": "player.coins", "operation": "subtract", "amount": 16}
         ],
         "output_item_id": "motorboat",
-        "output_quantity": 1
+        "output_quantity": 1,
+        "blueprint_source_locations": [{"city_id": "city_b", "district_id": "city_b_district_b"}]
       },
       {
         "recipe_id": "helicopter",
@@ -211,7 +233,8 @@
           {"target": "player.medical_supplies", "operation": "subtract", "amount": 5}
         ],
         "output_item_id": "helicopter",
-        "output_quantity": 1
+        "output_quantity": 1,
+        "blueprint_source_locations": [{"city_id": "city_h", "district_id": "city_h_district_c"}]
       },
       {
         "recipe_id": "reinforced_coat",
@@ -224,7 +247,8 @@
           {"target": "player.medical_supplies", "operation": "subtract", "amount": 2}
         ],
         "output_item_id": "reinforced_coat",
-        "output_quantity": 1
+        "output_quantity": 1,
+        "blueprint_source_locations": [{"city_id": "city_a", "district_id": "city_a_district_c"}]
       },
       {
         "recipe_id": "pipe_rifle",
@@ -237,7 +261,8 @@
           {"target": "player.coins", "operation": "subtract", "amount": 10}
         ],
         "output_item_id": "pipe_rifle",
-        "output_quantity": 1
+        "output_quantity": 1,
+        "blueprint_source_locations": [{"city_id": "city_a", "district_id": "city_a_district_e"}]
       }
     ],
     "crafted_text": "制作完成：【{item_name}】×{quantity}。",
@@ -297,6 +322,8 @@
   "display": {
     "cost_item_format": "{item_name}×{quantity}",
     "cost_separator": "、",
-    "step_bonus_format": "远征协作 +{steps}"
+    "step_bonus_format": "远征协作 +{steps}",
+    "source_location_format": "{city_name}·{district_code}",
+    "source_separator": "、"
   }
 }

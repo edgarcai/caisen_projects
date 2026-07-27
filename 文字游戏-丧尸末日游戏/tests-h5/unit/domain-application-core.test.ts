@@ -119,7 +119,7 @@ describe("领域时钟与新游戏", () => {
     const report = application.performAction("use_food");
 
     expect(report.gameOver).toBe(true);
-    expect(state.ending?.ending_id).toBe("shelter_breached");
+    expect(state.ending?.ending_id).toBe("outer_wall_overrun");
     expect(state.battle).toBeNull();
     expect(state.pending_exploration).toBeNull();
   });
@@ -246,16 +246,20 @@ describe("避难所经营与基础物品", () => {
     const state = requireState(application);
     requirePlayer(state).parts = 100;
     requirePlayer(state).coins = 100;
+    const outerWallBefore = state.shelter.outer_wall_health;
 
     const report = application.performManagement("facility", "outer_wall");
 
     expect(report.stateChanged).toBe(true);
     expect(state.facility_levels.outer_wall).toBe(1);
     expect(state.turn_number).toBe(7);
-    expect(state.shelter.health).toBe(333);
+    expect(state.shelter.outer_wall_health).toBeGreaterThan(outerWallBefore);
+    expect(state.shelter.health).toBe(
+      state.shelter.inner_wall_health + state.shelter.outer_wall_health,
+    );
   });
 
-  it("工作结算随机产出与风险，安全交易不推进世界时间", () => {
+  it("工作结算随机产出与风险，周五安全交易推进配置的两天", () => {
     const application = buildApplication(new QueueRandomSource([90, 7, 100, 100]));
     application.startNewGame(["白菜"], "single");
     const state = requireState(application);
@@ -265,16 +269,19 @@ describe("避难所经营与基础物品", () => {
     expect(state.players[0]?.parts).toBe(19);
     expect(state.turn_number).toBe(2);
 
+    state.clock = { year: 2166, month: 1, day: 3, hour: 6 };
+    state.survival_days = 2;
     const beforeTradeTurn = state.turn_number;
     const trade = application.performManagement("trade_buy", "caravan_food");
     expect(trade.stateChanged).toBe(true);
     expect(state.players[0]?.food).toBe(22);
-    expect(state.turn_number).toBe(beforeTradeTurn);
+    expect(state.turn_number).toBe(beforeTradeTurn + 24);
+    expect(state.clock).toEqual({ year: 2166, month: 1, day: 5, hour: 6 });
   });
 
   it("招募只执行一次，并由配置效果增加人口", () => {
     const application = buildApplication();
-    application.startNewGame(["白菜"], "single");
+    application.startNewGame(["白菜"], "story");
     const state = requireState(application);
     state.facility_levels.hydroponic_greenhouse = 1;
     state.story.humanity = 1;

@@ -32,7 +32,8 @@ export interface ExpeditionDraft {
 export interface ExpeditionPrepareActions {
   readonly back: () => void;
   readonly toggleCompanion: (companionId: string) => void;
-  readonly cycleItem: (itemId: string) => void;
+  readonly increaseItem: (itemId: string) => void;
+  readonly decreaseItem: (itemId: string) => void;
   readonly begin: () => void;
 }
 
@@ -395,7 +396,7 @@ function renderCompanionSection(
   );
 }
 
-/** 绘制点击循环数量的携带物区域。 */
+/** 绘制带独立加减按钮的携带物区域。 */
 function renderCarryItemSection(
   factory: UiFactory,
   config: GameUiConfig,
@@ -414,30 +415,91 @@ function renderCarryItemSection(
     config.texts.expedition_item_title,
     startY,
   );
-  const labels = items.map((item) => {
+  return renderCarryItemGrid(
+    factory,
+    config,
+    layout,
+    page,
+    items,
+    draft,
+    actions,
+    titleBottom + layout.sectionGap,
+  );
+}
+
+/** 使用库存信息绘制可触控的携带物加减网格。 */
+function renderCarryItemGrid(
+  factory: UiFactory,
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  page: PageScaffold,
+  items: readonly UiExpeditionCarryItemView[],
+  draft: ExpeditionDraft,
+  actions: ExpeditionPrepareActions,
+  startY: number,
+): number {
+  const columns = Math.max(1, layout.optionColumns);
+  const gap = config.layout.page.option_gap;
+  const itemWidth = (page.contentWidth - gap * (columns - 1)) / columns;
+  const itemHeight = config.controls.button_height;
+  const controlWidth = itemHeight;
+  const labelWidth = itemWidth - controlWidth * 2 - gap * 2;
+
+  items.forEach((item, index) => {
     const quantity = draft.carriedItems[item.id] ?? 0;
-    return {
-      id: item.id,
-      label: formatUiTemplate(config.texts.expedition_item_format, {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const x = column * (itemWidth + gap);
+    const y = startY + row * (itemHeight + gap);
+    const panel = factory.panel(page.content, {
+      testId: `page-expedition-item-${item.id}`,
+      x,
+      y,
+      width: itemWidth,
+      height: itemHeight,
+      active: quantity > 0,
+    });
+    factory.text(panel, {
+      testId: `page-expedition-item-${item.id}-label`,
+      text: formatUiTemplate(config.texts.expedition_item_format, {
         name: item.name,
         quantity,
         available: item.availableQuantity,
         bonus: item.stepBonusPerUnit,
       }),
-      selected: quantity > 0,
-      disabled: item.availableQuantity <= 0,
-      onClick: (): void => { actions.cycleItem(item.id); },
-    };
+      x: 0,
+      y: 0,
+      width: labelWidth,
+      height: itemHeight,
+      fontSize: config.typography.caption_size,
+      valign: "middle",
+      wordWrap: true,
+    });
+    factory.button(panel, {
+      testId: `page-expedition-item-${item.id}-decrease`,
+      label: config.texts.expedition_item_decrease,
+      x: labelWidth + gap,
+      y: 0,
+      width: controlWidth,
+      height: itemHeight,
+      disabled: quantity <= 0,
+      onClick: (): void => { actions.decreaseItem(item.id); },
+    });
+    factory.button(panel, {
+      testId: `page-expedition-item-${item.id}-increase`,
+      label: config.texts.expedition_item_increase,
+      x: labelWidth + controlWidth + gap * 2,
+      y: 0,
+      width: controlWidth,
+      height: itemHeight,
+      tone: quantity > 0 ? "primary" : "default",
+      disabled: quantity >= item.availableQuantity,
+      onClick: (): void => { actions.increaseItem(item.id); },
+    });
   });
-  return renderSelectionGrid(
-    factory,
-    config,
-    layout,
-    page,
-    "page-expedition-item",
-    labels,
-    titleBottom + layout.sectionGap,
-  );
+
+  const rows = Math.ceil(items.length / columns);
+  return startY + rows * (itemHeight + gap) + layout.sectionGap;
 }
 
 /** 绘制一个配置字号的整备分区标题。 */
@@ -642,6 +704,7 @@ export function buildExpeditionFailureBody(
   failure: UiExpeditionFailureView,
 ): string {
   const separator = config.texts.option_intelligence_separator;
+  /** 按携带物或战利品来源格式化强制返程损失。 */
   const itemBody = (source: "carried" | "loot"): string => {
     const lines = failure.items
       .filter((item) => item.source === source)

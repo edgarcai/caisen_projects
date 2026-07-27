@@ -51,11 +51,33 @@ export interface EffectivePlayerAttributes {
   readonly agility: number;
 }
 
-/** 研发与制作允许使用的固定、正整数资源成本。 */
-export interface ResourceCostConfig {
+/** 从白名单状态目标扣除的固定正整数成本。 */
+export interface StateTargetCostConfig {
   readonly target: string;
   readonly operation: "subtract";
   readonly amount: number;
+}
+
+/** 从仓库资源或制作物库存扣除的以物易物成本。 */
+export interface WarehouseItemCostConfig {
+  readonly item_id: string;
+  readonly amount: number;
+}
+
+/** 研发与制作允许使用的状态资源或仓库物品成本。 */
+export type ResourceCostConfig = StateTargetCostConfig | WarehouseItemCostConfig;
+
+/** 判断成本是否应从仓库物品数量中扣除。 */
+export function isWarehouseItemCost(
+  cost: ResourceCostConfig,
+): cost is WarehouseItemCostConfig {
+  return "item_id" in cost;
+}
+
+/** 一个可能找到配方、蓝图或研究样本的城市区划。 */
+export interface DiscoverySourceLocationConfig {
+  readonly city_id: string;
+  readonly district_id: string;
 }
 
 /** 单项配置化研发项目。 */
@@ -68,6 +90,8 @@ export interface ResearchProjectConfig {
   readonly costs: readonly ResourceCostConfig[];
   readonly unlock_recipe_ids: readonly string[];
   readonly expedition_step_bonus: number;
+  readonly research_input_item_id: string;
+  readonly source_locations: readonly DiscoverySourceLocationConfig[];
 }
 
 /** 单项配置化制作配方。 */
@@ -75,11 +99,13 @@ export interface CraftingRecipeConfig {
   readonly recipe_id: string;
   readonly name: string;
   readonly description: string;
-  readonly required_project_id: string;
+  /** 空值表示基础配方无需研发；高级配方引用对应蓝图研究。 */
+  readonly required_project_id: string | null;
   readonly turns_consumed: number;
   readonly costs: readonly ResourceCostConfig[];
   readonly output_item_id: string;
   readonly output_quantity: number;
+  readonly blueprint_source_locations: readonly DiscoverySourceLocationConfig[];
 }
 
 /** 伙伴信任对应的远征步数阈值。 */
@@ -117,11 +143,19 @@ export interface SurvivalSystemsConfigDocument {
     readonly equipped_text: string;
   };
   readonly research: {
+    readonly slot_count: number;
+    readonly input_quantity: number;
     readonly projects: readonly ResearchProjectConfig[];
     readonly completed_text: string;
     readonly already_completed_text: string;
     readonly locked_text: string;
     readonly insufficient_text: string;
+    readonly empty_slot_text: string;
+    readonly item_unavailable_text: string;
+    readonly item_not_researchable_text: string;
+    readonly slotted_text: string;
+    readonly slot_cleared_text: string;
+    readonly slot_mismatch_text: string;
     readonly unknown_text: string;
   };
   readonly crafting: {
@@ -164,6 +198,8 @@ export interface SurvivalSystemsConfigDocument {
     readonly cost_item_format: string;
     readonly cost_separator: string;
     readonly step_bonus_format: string;
+    readonly source_location_format: string;
+    readonly source_separator: string;
   };
 }
 
@@ -209,6 +245,10 @@ export interface ResearchProjectView {
   readonly available: boolean;
   readonly costDescription: string;
   readonly expeditionStepBonus: number;
+  readonly requiredItemId: string;
+  readonly requiredItemName: string;
+  readonly sourceDescription: string;
+  readonly slotted: boolean;
 }
 
 /** 制作页面展示的一项实时配方。 */
@@ -221,6 +261,27 @@ export interface CraftingRecipeView {
   readonly costDescription: string;
   readonly outputItemId: string;
   readonly outputQuantity: number;
+  readonly blueprintSourceDescription: string;
+}
+
+/** 研究台物品候选项及其实时数量。 */
+export interface ResearchWorkbenchCandidateView {
+  readonly itemId: string;
+  readonly itemName: string;
+  readonly ownedQuantity: number;
+  readonly sourceDescription: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly researchCompleted: boolean;
+  readonly available: boolean;
+}
+
+/** 单槽研究台的可持久实时快照。 */
+export interface ResearchWorkbenchView {
+  readonly slotCount: number;
+  readonly slottedItemId: string | null;
+  readonly slottedItemName: string | null;
+  readonly candidates: readonly ResearchWorkbenchCandidateView[];
 }
 
 /** 出发准备页展示的一名可同行伙伴。 */
@@ -284,6 +345,7 @@ export interface CompanionEquipmentOptionView {
   readonly slot: CompanionEquipmentSlot;
   readonly description: string;
   readonly availableQuantity: number;
+  readonly ownedQuantity: number;
   readonly equipped: boolean;
   readonly available: boolean;
 }

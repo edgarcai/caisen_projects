@@ -35,8 +35,6 @@ export type GameScreenId =
   | "management_option_detail"
   | "companions"
   | "companion_detail"
-  | "companion_management"
-  | "companion_management_detail"
   | "companion_equipment"
   | "companion_interaction"
   | "shelter_map"
@@ -68,11 +66,22 @@ export type GameScreenId =
   | "expedition_prepare"
   | "expedition_status"
   | "expedition_failure"
+  | "settlement_network"
+  | "settlement_recon_city"
+  | "settlement_recon_companion"
+  | "outpost_build_city"
+  | "outpost_build_district"
+  | "outpost_build_type"
+  | "outpost_detail"
+  | "outpost_assign"
   | "communication_log"
   | "history"
   | "rollback_confirm"
   | "exit_confirm"
-  | "credits";
+  | "credits"
+  | "account_login"
+  | "store"
+  | "text_records";
 
 /**
  * 游戏支持的启动模式。
@@ -161,6 +170,12 @@ export interface UiCampaignOptionView {
   readonly id: string;
   readonly label: string;
   readonly description: string;
+  readonly incompatibleIds?: readonly string[];
+}
+
+/** 出生区划选项额外保留所属城市，供页面联动过滤。 */
+export interface UiCampaignDistrictOptionView extends UiCampaignOptionView {
+  readonly cityId: string;
 }
 
 /** 姓名之外独立保存的模式、难度、起源、特性与出生城市选择。 */
@@ -168,7 +183,10 @@ export interface UiCampaignProfileSelection {
   readonly difficultyId: string;
   readonly originId: string;
   readonly traitId: string;
+  readonly secondaryTraitId: string;
   readonly homeCityId: string;
+  readonly homeDistrictId: string;
+  readonly shelterTypeId: string;
 }
 
 /** 新游戏页面可使用的全部配置化开局选项。 */
@@ -177,6 +195,8 @@ export interface UiCampaignProfileOptionsView {
   readonly origins: readonly UiCampaignOptionView[];
   readonly traits: readonly UiCampaignOptionView[];
   readonly cities: readonly UiCampaignOptionView[];
+  readonly districts: readonly UiCampaignDistrictOptionView[];
+  readonly shelterTypes: readonly UiCampaignOptionView[];
   readonly defaultSelection: UiCampaignProfileSelection;
 }
 
@@ -186,8 +206,10 @@ export interface UiCampaignProfileView {
   readonly difficultyLabel: string;
   readonly originLabel: string;
   readonly traitLabel: string;
+  readonly secondaryTraitLabel: string;
   readonly homeCityLabel: string;
   readonly districtLabel: string;
+  readonly shelterTypeLabel: string;
 }
 
 /** 六栏存档页中的一栏摘要。 */
@@ -281,6 +303,85 @@ export interface UiCityView extends UiOptionView {
   readonly requirements: readonly UiRequirementView[];
 }
 
+/** 城市侦察与分避难所共用的经济和时间规则投影。 */
+export interface UiSettlementNetworkRulesView {
+  readonly reconDurationDays: number;
+  readonly maximumOutposts: number;
+  readonly outpostCoinCost: number;
+  readonly outpostPartCost: number;
+  readonly supplyIntervalDays: number;
+  readonly supplyFoodCost: number;
+  readonly supplyPartCost: number;
+  readonly supplyCoinCost: number;
+  readonly supplyMedicalSupplyCost: number;
+}
+
+/** 一座城市对侦察和建立分避难所的实时可用性。 */
+export interface UiSettlementCityView {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly districts: readonly UiCityDistrictView[];
+  readonly unlocked: boolean;
+  readonly canStartRecon: boolean;
+  readonly intelligenceCurrent: number;
+  readonly intelligenceRequired: number;
+  readonly transportNames: string;
+  readonly transportStatusLabel: string;
+  readonly statusLabel: string;
+  readonly disabledReason?: string;
+}
+
+/** 一项进行中或已可结算的跨城侦察任务。 */
+export interface UiCityReconMissionView {
+  readonly cityId: string;
+  readonly cityName: string;
+  readonly companionId: string;
+  readonly companionName: string;
+  readonly startedDay: number;
+  readonly completionDay: number;
+  readonly daysRemaining: number;
+  readonly ready: boolean;
+}
+
+/** 可用于建立分避难所的配置化类型。 */
+export interface UiOutpostShelterTypeView {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly bonuses: readonly string[];
+  readonly startingCapacity: number;
+}
+
+/** 已建立分避难所的位置、驻守人员和周物流状态。 */
+export interface UiOutpostView {
+  readonly outpostId: string;
+  readonly cityId: string;
+  readonly cityName: string;
+  readonly districtId: string;
+  readonly districtName: string;
+  readonly shelterTypeId: string;
+  readonly shelterTypeLabel: string;
+  readonly capacity: number;
+  readonly assignedCompanionIds: readonly string[];
+  readonly assignedCompanionNames: readonly string[];
+  readonly lastSuppliedDay: number;
+  readonly nextSupplyDay: number;
+  readonly supplyReady: boolean;
+  readonly operations: {
+    readonly population: number;
+    readonly hope: number;
+    readonly activity: number;
+    readonly innerWallHealth: number;
+    readonly outerWallHealth: number;
+    readonly food: number;
+    readonly parts: number;
+    readonly medicalSupplies: number;
+    readonly coins: number;
+    readonly facilityLevel: number;
+  };
+}
+
 /**
  * 当前首领战的只读展示模型。
  */
@@ -300,6 +401,8 @@ export interface UiBattleView {
 export interface UiManagementOptionView extends UiOptionView {
   readonly fields: readonly UiDetailFieldView[];
   readonly requirements: readonly UiRequirementView[];
+  /** 仅工作类项目提供的配置化循环次数；其他项目保持空数组。 */
+  readonly repetitionOptions: readonly number[];
 }
 
 /** 一项经营类别及其全部结构化项目。 */
@@ -308,7 +411,7 @@ export interface UiManagementCategoryView extends UiOptionView {
 }
 
 /**
- * 伙伴档案的展示模型。
+ * 角色档案的展示模型。
  */
 export interface UiCompanionView {
   readonly id: string;
@@ -350,6 +453,7 @@ export interface UiCompanionEquipmentOptionView {
   readonly slot: UiCompanionEquipmentSlot;
   readonly description: string;
   readonly availableQuantity: number;
+  readonly ownedQuantity: number;
   readonly equipped: boolean;
   readonly disabled: boolean;
   readonly disabledReason?: string;
@@ -403,6 +507,10 @@ export interface UiResearchProjectView {
   readonly available: boolean;
   readonly costDescription: string;
   readonly expeditionStepBonus: number;
+  readonly requiredItemId: string;
+  readonly requiredItemName: string;
+  readonly sourceDescription: string;
+  readonly slotted: boolean;
 }
 
 /**
@@ -417,6 +525,37 @@ export interface UiCraftingRecipeView {
   readonly costDescription: string;
   readonly outputItemId: string;
   readonly outputQuantity: number;
+  readonly blueprintSourceDescription: string;
+}
+
+/** 研究台中一件可放入单槽的仓库样本。 */
+export interface UiResearchWorkbenchCandidateView {
+  readonly id: string;
+  readonly name: string;
+  readonly ownedQuantity: number;
+  readonly sourceDescription: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly researchCompleted: boolean;
+  readonly available: boolean;
+}
+
+/** 单槽研究台的实时展示状态。 */
+export interface UiResearchWorkbenchView {
+  readonly slotCount: number;
+  readonly slottedItemId: string | null;
+  readonly slottedItemName: string | null;
+  readonly candidates: readonly UiResearchWorkbenchCandidateView[];
+}
+
+/** 避难所内墙、外墙及兼容总耐久的实时展示状态。 */
+export interface UiShelterWallView {
+  readonly innerHealth: number;
+  readonly innerMaximum: number;
+  readonly outerHealth: number;
+  readonly outerMaximum: number;
+  readonly totalHealth: number;
+  readonly totalMaximum: number;
 }
 
 /**
@@ -542,6 +681,7 @@ export interface GameUiSnapshot {
   readonly meters: readonly UiMeterView[];
   readonly resources: readonly UiStatView[];
   readonly shelterStats: readonly UiStatView[];
+  readonly shelterWalls: UiShelterWallView | null;
   readonly mission: UiMissionView | null;
   readonly logs: readonly string[];
   readonly actionGroups: readonly UiActionGroupView[];
@@ -567,12 +707,19 @@ export interface GameUiSnapshot {
   readonly returnIncident: UiReturnIncidentPageView | null;
   readonly warehouseItems: readonly UiWarehouseItemView[];
   readonly transportLoadoutOptions: readonly UiTransportLoadoutOptionView[];
+  readonly researchWorkbench: UiResearchWorkbenchView | null;
   readonly researchProjects: readonly UiResearchProjectView[];
   readonly craftingRecipes: readonly UiCraftingRecipeView[];
   readonly expeditionCompanions: readonly UiExpeditionCompanionView[];
   readonly expeditionCarryItems: readonly UiExpeditionCarryItemView[];
   readonly expeditionStatus: UiExpeditionStatusView | null;
   readonly expeditionFailure: UiExpeditionFailureView | null;
+  readonly settlementNetworkRules: UiSettlementNetworkRulesView;
+  readonly settlementCities: readonly UiSettlementCityView[];
+  readonly cityReconMissions: readonly UiCityReconMissionView[];
+  readonly outpostShelterTypes: readonly UiOutpostShelterTypeView[];
+  readonly outposts: readonly UiOutpostView[];
+  readonly settlementAvailableCompanions: readonly UiExpeditionCompanionView[];
   readonly weeklyArchives: readonly UiWeeklyArchiveView[];
   readonly tutorial: UiDocumentView | null;
   readonly ending: UiDocumentView | null;
@@ -593,6 +740,8 @@ export type GameUiCommand =
   | { readonly type: "load_game"; readonly slotId?: number }
   | { readonly type: "save_game"; readonly slotId?: number }
   | { readonly type: "rollback_checkpoint" }
+  | { readonly type: "research_slot"; readonly itemId: string }
+  | { readonly type: "research_clear" }
   | { readonly type: "research_complete"; readonly projectId: string }
   | { readonly type: "craft_item"; readonly recipeId: string }
   | { readonly type: "equip_item"; readonly itemId: string }
@@ -606,6 +755,25 @@ export type GameUiCommand =
     }
   | { readonly type: "expedition_continue" }
   | { readonly type: "expedition_safe_return" }
+  | {
+      readonly type: "city_recon_start";
+      readonly cityId: string;
+      readonly companionId: string;
+    }
+  | { readonly type: "city_recon_complete"; readonly cityId: string }
+  | {
+      readonly type: "outpost_establish";
+      readonly cityId: string;
+      readonly districtId: string;
+      readonly shelterTypeId: string;
+    }
+  | {
+      readonly type: "outpost_assign";
+      readonly outpostId: string;
+      readonly companionId: string;
+    }
+  | { readonly type: "outpost_recall"; readonly companionId: string }
+  | { readonly type: "outpost_supply"; readonly outpostId: string }
   | {
       readonly type: "companion_equip";
       readonly companionId: string;
@@ -646,6 +814,7 @@ export type GameUiCommand =
       readonly type: "management_action";
       readonly categoryId: string;
       readonly optionId: string;
+      readonly repetitions?: number;
     }
   | { readonly type: "supply_action"; readonly actionId: string }
   | { readonly type: "return_to_menu" };

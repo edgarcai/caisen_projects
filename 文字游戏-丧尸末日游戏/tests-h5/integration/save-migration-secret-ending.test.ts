@@ -26,10 +26,12 @@ function createV1Players(
   });
 }
 
-/** 从当前避难所状态移除 v6 希望值，避免用未来字段污染 v1 夹具。 */
+/** 从当前避难所状态移除 v6 与 v9 字段，避免用未来字段污染 v1 夹具。 */
 function createV1Shelter(shelter: unknown): Record<string, unknown> {
   const legacy = structuredClone(shelter) as Record<string, unknown>;
   Reflect.deleteProperty(legacy, "hope");
+  Reflect.deleteProperty(legacy, "inner_wall_health");
+  Reflect.deleteProperty(legacy, "outer_wall_health");
   return legacy;
 }
 
@@ -67,7 +69,7 @@ function prepareLinkedHiveSecretEnding(): ReturnType<typeof buildH5Harness> {
 }
 
 describe("H5 v1 存档迁移", () => {
-  it("通过适配器读取 v1 双人存档并经显式保存安全写回 v8", () => {
+  it("通过适配器读取 v1 双人存档并经显式保存安全写回 v9", () => {
     const source = buildH5Harness();
     source.application.startNewGame(["旧所长甲", "旧所长乙"], "multiplayer");
     const sourceState = requireState(source.application);
@@ -112,7 +114,7 @@ describe("H5 v1 存档迁移", () => {
       schema_version: number;
       game_state: Record<string, unknown>;
     };
-    expect(envelope.schema_version).toBe(8);
+    expect(envelope.schema_version).toBe(9);
     expect(envelope.game_state).toHaveProperty("story");
     expect(envelope.game_state).toHaveProperty("campaign");
     expect(envelope.game_state).not.toHaveProperty("ended");

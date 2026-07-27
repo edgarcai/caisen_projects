@@ -1,3 +1,5 @@
+import type { SettlementNetworkTextConfig } from "../config/types";
+
 /**
  * H5 配置中 UI 会使用的主题字段。
  */
@@ -100,7 +102,10 @@ export type NewGameSetupCategoryTokenId =
   | "difficulty"
   | "origin"
   | "trait"
+  | "secondary_trait"
   | "city"
+  | "district"
+  | "shelter"
   | "slot";
 
 /** UI 层允许的稳定游戏模式标识。 */
@@ -152,6 +157,7 @@ export interface NewGameSetupCopyTokens {
   readonly previous_step: string;
   readonly next_step: string;
   readonly selected_mark: string;
+  readonly incompatible_mark: string;
   readonly name_description: string;
   readonly unavailable_mode: string;
 }
@@ -181,8 +187,12 @@ export interface GuidedTutorialStepTokens {
 export interface GuidedTutorialTokens {
   readonly title: string;
   readonly step_format: string;
+  readonly page_format: string;
+  readonly page_separator: string;
   readonly previous_label: string;
+  readonly previous_page_label: string;
   readonly next_label: string;
+  readonly next_page_label: string;
   readonly complete_label: string;
   readonly skip_label: string;
   readonly missing_target_label: string;
@@ -194,6 +204,7 @@ export interface GuidedTutorialTokens {
   readonly desktop_dialog_width: number;
   readonly desktop_dialog_height: number;
   readonly mobile_dialog_height: number;
+  readonly minimum_page_fill_ratio: number;
   readonly fallback_target_width: number;
   readonly fallback_target_height: number;
   readonly steps: readonly GuidedTutorialStepTokens[];
@@ -239,6 +250,7 @@ export interface CoverMenuLayoutTokens {
   readonly changelog_button_bottom: number;
   readonly changelog_button_width: number;
   readonly changelog_button_height: number;
+  readonly utility_button_gap: number;
   readonly description_left: number;
   readonly description_top: number;
   readonly description_width: number;
@@ -450,7 +462,7 @@ export interface NavigationToken {
 /**
  * UI 使用的配置化文本。
  */
-export interface GameTextTokens {
+export interface GameTextTokens extends SettlementNetworkTextConfig {
   readonly loading: string;
   readonly load_failed: string;
   readonly connection_title: string;
@@ -465,6 +477,16 @@ export interface GameTextTokens {
   readonly start_multiplayer_description: string;
   readonly start_story_description: string;
   readonly credits_description: string;
+  readonly credits_body: string;
+  readonly account_login: string;
+  readonly account_unavailable_title: string;
+  readonly account_unavailable_body: string;
+  readonly store: string;
+  readonly store_title: string;
+  readonly store_empty_body: string;
+  readonly text_records: string;
+  readonly text_records_title: string;
+  readonly text_records_empty_body: string;
   readonly exit_description: string;
   readonly name_submit: string;
   readonly back: string;
@@ -523,6 +545,15 @@ export interface GameTextTokens {
   readonly transport_unavailable: string;
   readonly research_title: string;
   readonly research_body: string;
+  readonly research_slot_empty: string;
+  readonly research_slot_filled_format: string;
+  readonly research_slot_candidate_format: string;
+  readonly research_slot_candidate_detail_format: string;
+  readonly research_slot_clear: string;
+  readonly research_sample_format: string;
+  readonly research_source_format: string;
+  readonly research_sample_slotted: string;
+  readonly research_sample_not_slotted: string;
   readonly research_item_format: string;
   readonly research_detail_format: string;
   readonly research_complete: string;
@@ -568,6 +599,8 @@ export interface GameTextTokens {
   readonly expedition_city_format: string;
   readonly expedition_companion_format: string;
   readonly expedition_item_format: string;
+  readonly expedition_item_increase: string;
+  readonly expedition_item_decrease: string;
   readonly expedition_selected: string;
   readonly expedition_unselected: string;
   readonly expedition_unknown_item: string;
@@ -674,7 +707,12 @@ export interface GameTextTokens {
   readonly profile_difficulty_label: string;
   readonly profile_origin_label: string;
   readonly profile_trait_label: string;
+  readonly profile_secondary_trait_label: string;
   readonly profile_city_label: string;
+  readonly profile_district_label: string;
+  readonly profile_shelter_type_label: string;
+  readonly profile_shelter_detail_format: string;
+  readonly profile_shelter_bonus_separator: string;
   readonly profile_slot_label: string;
   readonly profile_field_format: string;
   readonly profile_field_separator: string;
@@ -694,17 +732,16 @@ export interface GameTextTokens {
   readonly companion_archive_title: string;
   readonly companion_archive_body: string;
   readonly companion_detail_title: string;
-  readonly companion_management: string;
-  readonly companion_management_title: string;
-  readonly companion_management_body: string;
   readonly companion_equipment: string;
   readonly companion_equipment_title: string;
   readonly companion_weapon: string;
   readonly companion_armor: string;
+  readonly companion_empty_slot: string;
   readonly companion_unequip: string;
+  readonly companion_equipment_quantity_format: string;
+  readonly companion_equipment_unowned: string;
   readonly companion_interaction: string;
   readonly companion_interaction_title: string;
-  readonly companion_locked_management: string;
   readonly companion_secret_locked: string;
   readonly companion_portrait_unavailable: string;
   readonly companion_portrait_signal_format: string;
@@ -714,6 +751,9 @@ export interface GameTextTokens {
   readonly management_detail_title: string;
   readonly management_detail_requirements_title: string;
   readonly management_detail_confirm: string;
+  readonly management_repetition_cycle_format: string;
+  readonly management_repetition_confirm_format: string;
+  readonly shelter_wall_summary_format: string;
   readonly communication_log_title: string;
   readonly communication_log_open: string;
   readonly communication_log_empty: string;

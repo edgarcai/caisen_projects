@@ -23,6 +23,17 @@ import { ExpeditionFoodActionPolicy } from "./ExpeditionFoodActionPolicy";
 import type { InventoryService } from "./InventoryService";
 import type { StateOperations } from "./StateOperations";
 
+/** 角色在侦察、驻守等其他任务中的统一可用性端口。 */
+export interface CharacterAvailabilityPolicy {
+  /** 判断一名已拥有角色当前是否可加入远征。 */
+  isAvailableForExpedition(state: GameState, companionId: string): boolean;
+}
+
+/** 未注入外部派遣系统时的默认可用性策略。 */
+const DEFAULT_CHARACTER_AVAILABILITY_POLICY: CharacterAvailabilityPolicy = {
+  isAvailableForExpedition: (): boolean => true,
+};
+
 /** 编排远征队伍、携带物、食物行动、战利品和强制返程惩罚。 */
 export class ExpeditionService {
   private readonly config: SurvivalSystemsConfigDocument;
@@ -32,6 +43,7 @@ export class ExpeditionService {
   private readonly actionPolicy: ExpeditionFoodActionPolicy;
   private readonly operations: StateOperations;
   private readonly random: RandomSource;
+  private readonly availabilityPolicy: CharacterAvailabilityPolicy;
 
   /** 注入内容、库存、城市通行、状态读写与随机源。 */
   public constructor(
@@ -41,6 +53,7 @@ export class ExpeditionService {
     cityAccess: CityAccessService,
     operations: StateOperations,
     random: RandomSource,
+    availabilityPolicy: CharacterAvailabilityPolicy = DEFAULT_CHARACTER_AVAILABILITY_POLICY,
   ) {
     this.config = config;
     this.content = content;
@@ -49,6 +62,7 @@ export class ExpeditionService {
     this.actionPolicy = new ExpeditionFoodActionPolicy(config);
     this.operations = operations;
     this.random = random;
+    this.availabilityPolicy = availabilityPolicy;
   }
 
   /** 返回全部城市当前的拓扑、情报、路径与载具通行判定。 */
@@ -58,11 +72,18 @@ export class ExpeditionService {
     );
   }
 
-  /** 返回当前可加入远征的伙伴及其配置化技能摘要。 */
+  /** 仅返回已拥有、存活且可加入远征的角色及技能摘要。 */
   public companionOptions(state: GameState): readonly ExpeditionCompanionView[] {
     return this.config.expedition.companion_step_bonuses.flatMap((bonus) => {
       const companion = findCompanion(state, bonus.companion_id);
-      if (companion === undefined || companion.status !== "active") {
+      if (
+        companion === undefined
+        || companion.status !== "active"
+        || !this.availabilityPolicy.isAvailableForExpedition(
+          state,
+          bonus.companion_id,
+        )
+      ) {
         return [];
       }
       const profile = this.content.story.companions.find(

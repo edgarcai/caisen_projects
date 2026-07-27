@@ -1,4 +1,5 @@
 import { resolveResponsiveLayout } from "../styles/ResponsiveLayout";
+import { coopDemoConfig } from "../config/coopDemoConfig";
 import type { ResponsiveLayout } from "../styles/ResponsiveLayout";
 import type {
   CoverThemeTokens,
@@ -6,6 +7,7 @@ import type {
   NavigationToken,
 } from "../styles/GameTheme";
 import { UiFactory } from "./components/UiFactory";
+import { formatUiTemplate } from "./formatting/formatUiTemplate";
 import type {
   LayaRuntimeLike,
   LayaSpriteLike,
@@ -43,13 +45,12 @@ import {
   resolveExpeditionEntryScreen,
   resolveExpeditionProgressScreen,
 } from "./navigation/ExpeditionNavigation";
+import { resolveStoryProgressScreen } from "./navigation/StoryNavigation";
 import { createChoicePage } from "./pages/ChoicePage";
 import {
   createCompanionDetailPage,
   createCompanionEquipmentPage,
   createCompanionInteractionPage,
-  createCompanionManagementDetailPage,
-  createCompanionManagementPage,
   createCompanionsPage,
 } from "./pages/CompanionsPage";
 import { ConnectionPage } from "./pages/ConnectionPage";
@@ -83,6 +84,17 @@ import {
 import { createGuidedTutorialPage } from "./pages/GuidedTutorialPage";
 import { createManagementOptionDetailPage } from "./pages/ManagementPages";
 import { createNewGameSetupPage } from "./pages/NewGameSetupPage";
+import {
+  createCityReconSelectionPage,
+  createOutpostAssignmentPage,
+  createOutpostCitySelectionPage,
+  createOutpostDetailPage,
+  createOutpostDistrictSelectionPage,
+  createOutpostTypeSelectionPage,
+  createReconCompanionSelectionPage,
+  createSettlementNetworkPage,
+} from "./pages/SettlementNetworkPages";
+import { createCoopAccountPage } from "./pages/CoopAccountPage";
 import type { PageTransientState, PageView } from "./pages/PageView";
 import { createPreGameNoticePage } from "./pages/PreGameNoticePage";
 import { createPublisherSplashPage } from "./pages/PublisherSplashPage";
@@ -100,6 +112,7 @@ import {
   createWarehousePage,
 } from "./pages/SystemFeaturePages";
 import {
+  createAccountLoginPage,
   createCreditsPage,
   createCoverThemeSelectorPage,
   createExitConfirmPage,
@@ -107,6 +120,8 @@ import {
   createReturnMenuConfirmPage,
   createRollbackConfirmPage,
   createSettingsPage,
+  createStorePage,
+  createTextRecordsPage,
 } from "./pages/SystemMenuPages";
 import type {
   GameMode,
@@ -122,6 +137,7 @@ import type {
   UiOptionView,
   UiPromptView,
 } from "./ports/GameUiPort";
+import type { CoopUiPort, CoopUiSnapshot } from "./ports/CoopUiPort";
 import type {
   UiPreferences,
   UiSettingsPort,
@@ -155,10 +171,13 @@ export class GameShell {
   private readonly settingsPort: UiSettingsPort;
   private readonly nativeTextInputPolicy: NativeTextInputPolicyPort;
   private readonly dashboardNavigationPolicy: DashboardNavigationPolicy;
+  private readonly coopPort: CoopUiPort | null;
   private snapshot: GameUiSnapshot | null;
+  private coopSnapshot: CoopUiSnapshot | null;
   private renderedPages: RenderedPage[];
   private preferences: UiPreferences;
   private unsubscribe: (() => void) | null;
+  private unsubscribeCoop: (() => void) | null;
   private canLoad: boolean;
   private mounted: boolean;
   private executing: boolean;
@@ -184,6 +203,7 @@ export class GameShell {
     nativeTextInputPolicy: NativeTextInputPolicyPort,
     dashboardNavigationPolicy: DashboardNavigationPolicy =
       DEFAULT_DASHBOARD_NAVIGATION_POLICY,
+    coopPort: CoopUiPort | null = null,
   ) {
     this.runtime = expectLayaRuntime(runtime);
     this.stage = expectLayaStage(stage);
@@ -192,6 +212,7 @@ export class GameShell {
     this.settingsPort = settingsPort;
     this.nativeTextInputPolicy = nativeTextInputPolicy;
     this.dashboardNavigationPolicy = dashboardNavigationPolicy;
+    this.coopPort = coopPort;
     this.factory = new UiFactory(
       this.runtime,
       config.theme,
@@ -201,12 +222,14 @@ export class GameShell {
     this.host = this.factory.container("game-ui-root");
     this.navigation = new PageStack({ screen: "publisher_splash" });
     this.snapshot = null;
+    this.coopSnapshot = coopPort?.getSnapshot() ?? null;
     this.renderedPages = [];
     this.preferences = settingsPort.load({
       reducedMotion: config.motion.reduced_motion,
       selectedCoverThemeId: config.assets.cover_themes.default_id,
     });
     this.unsubscribe = null;
+    this.unsubscribeCoop = null;
     this.canLoad = false;
     this.mounted = false;
     this.executing = false;
@@ -243,6 +266,8 @@ export class GameShell {
     this.installBrowserBackGuard();
     this.installViewportListeners();
     this.unsubscribe = this.port.subscribe(this.handleSnapshot);
+    this.unsubscribeCoop = this.coopPort?.subscribe(this.handleCoopSnapshot)
+      ?? null;
     const [snapshot, canLoad] = await Promise.all([
       Promise.resolve(this.port.getSnapshot()),
       Promise.resolve(this.port.canLoadGame()),
@@ -258,6 +283,8 @@ export class GameShell {
   public destroy(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.unsubscribeCoop?.();
+    this.unsubscribeCoop = null;
     this.stage.off(this.runtime.Event.RESIZE, this, this.handleResize);
     this.stage.off(this.runtime.Event.KEY_DOWN, this, this.handleKeyDown);
     this.removeBrowserBackGuard();
@@ -293,6 +320,12 @@ export class GameShell {
     if (this.mounted && !this.executing) {
       this.render(true);
     }
+  };
+
+  /** 接收本地联机会话变化，并仅刷新当前覆盖页。 */
+  private readonly handleCoopSnapshot = (snapshot: CoopUiSnapshot): void => {
+    this.coopSnapshot = snapshot;
+    if (this.mounted && !this.executing) this.render(true);
   };
 
   /**
@@ -501,10 +534,6 @@ export class GameShell {
         return this.createCompanions(layout, snapshot);
       case "companion_detail":
         return this.createCompanionDetail(route, layout, snapshot);
-      case "companion_management":
-        return this.createCompanionManagement(layout, snapshot);
-      case "companion_management_detail":
-        return this.createCompanionManagementDetail(route, layout, snapshot);
       case "companion_equipment":
         return this.createCompanionEquipment(route, layout, snapshot);
       case "companion_interaction":
@@ -553,6 +582,22 @@ export class GameShell {
         return this.createExpeditionStatus(layout, snapshot);
       case "expedition_failure":
         return this.createExpeditionFailure(layout, snapshot);
+      case "settlement_network":
+        return this.createSettlementNetwork(layout, snapshot);
+      case "settlement_recon_city":
+        return this.createSettlementReconCities(layout, snapshot);
+      case "settlement_recon_companion":
+        return this.createSettlementReconCompanions(route, layout, snapshot);
+      case "outpost_build_city":
+        return this.createOutpostBuildCities(layout, snapshot);
+      case "outpost_build_district":
+        return this.createOutpostBuildDistricts(route, layout, snapshot);
+      case "outpost_build_type":
+        return this.createOutpostBuildTypes(route, layout, snapshot);
+      case "outpost_detail":
+        return this.createOutpostDetail(route, layout, snapshot);
+      case "outpost_assign":
+        return this.createOutpostAssignment(route, layout, snapshot);
       case "communication_log":
         return this.createDocumentRoute(
           layout,
@@ -614,6 +659,94 @@ export class GameShell {
           layout,
           this.goBack,
         );
+      case "account_login":
+        return this.createAccountLogin(layout);
+      case "store":
+        return createStorePage(
+          this.runtime,
+          this.factory,
+          this.config,
+          layout,
+          this.goBack,
+        );
+      case "text_records":
+        return this.createTextRecords(layout, snapshot);
+    }
+  }
+
+  /** 创建真实账户、房间通讯与本地交易页，未注入端口时保留兼容提示。 */
+  private createAccountLogin(layout: ResponsiveLayout): PageView {
+    if (this.coopPort === null || this.coopSnapshot === null) {
+      return createAccountLoginPage(
+        this.runtime,
+        this.factory,
+        this.config,
+        layout,
+        this.goBack,
+      );
+    }
+    return createCoopAccountPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      coopDemoConfig,
+      layout,
+      this.coopSnapshot,
+      {
+        back: this.goBack,
+        prepareTextInput: (): void => { this.nativeTextInputPolicy.prepare(); },
+        textInputBlurred: this.handleTextEntryFocusOut,
+        login: (displayName): void => {
+          this.executeCoopAction((): void => { this.coopPort?.login(displayName); });
+        },
+        logout: (): void => {
+          this.executeCoopAction((): void => { this.coopPort?.logout(); });
+        },
+        joinRoom: (roomId, shelterName): void => {
+          this.executeCoopAction((): void => {
+            this.coopPort?.joinRoom(roomId, shelterName);
+          });
+        },
+        leaveRoom: (): void => {
+          this.executeCoopAction((): void => { this.coopPort?.leaveRoom(); });
+        },
+        sendCommunication: (message): void => {
+          this.executeCoopAction((): void => {
+            this.coopPort?.sendCommunication(message);
+          });
+        },
+        sendDemoTrade: (targetAccountId): void => {
+          this.executeCoopAction((): void => {
+            this.coopPort?.sendDemoTrade(targetAccountId);
+          });
+        },
+        replyTradeOffer: (offerEventId, accepted): void => {
+          this.executeCoopAction((): void => {
+            this.coopPort?.replyTradeOffer(offerEventId, accepted);
+          });
+        },
+      },
+    );
+  }
+
+  /** 执行联机意图并把输入校验或浏览器能力错误投影为覆盖消息页。 */
+  private executeCoopAction(action: () => void): void {
+    try {
+      action();
+      this.coopSnapshot = this.coopPort?.getSnapshot() ?? null;
+      this.render(true);
+    } catch (error) {
+      this.navigation.push({
+        screen: "message",
+        context: {
+          document: {
+            title: coopDemoConfig.texts.operationFailedTitle,
+            body: error instanceof Error ? error.message : String(error),
+            tone: "warning",
+          },
+        },
+      });
+      this.render();
     }
   }
 
@@ -642,6 +775,18 @@ export class GameShell {
         startStory: (): void => { this.openNameInput("story"); },
         showCredits: (): void => {
           this.navigation.push({ screen: "credits" });
+          this.render();
+        },
+        showAccountLogin: (): void => {
+          this.navigation.push({ screen: "account_login" });
+          this.render();
+        },
+        showStore: (): void => {
+          this.navigation.push({ screen: "store" });
+          this.render();
+        },
+        showTextRecords: (): void => {
+          this.navigation.push({ screen: "text_records" });
           this.render();
         },
         showUpdateLog: (): void => {
@@ -902,7 +1047,7 @@ export class GameShell {
     const prompt: UiPromptView = {
       id: categoryId,
       title: category?.label ?? this.navigationLabel("management"),
-      body: category?.description ?? "",
+      body: this.managementOverviewBody(category?.description ?? "", snapshot),
       options: category?.options ?? [],
     };
     return createChoicePage(
@@ -923,7 +1068,7 @@ export class GameShell {
     );
   }
 
-  /** 创建经营项目的需求与说明页，确认后才执行一次。 */
+  /** 创建经营项目的需求与说明页，工作可选择配置化循环次数。 */
   private createManagementOptionDetail(
     route: GameRoute,
     layout: ResponsiveLayout,
@@ -946,18 +1091,42 @@ export class GameShell {
       this.config,
       layout,
       option,
+      route.context?.repetitions,
       {
         back: this.goBack,
-        confirm: (): void => {
-          void this.performManagementAction(categoryId, option.id);
+        cycleRepetitions: (repetitions): void => {
+          this.navigation.replace({
+            screen: route.screen,
+            context: { ...route.context, repetitions },
+          });
+          this.render();
+        },
+        confirm: (repetitions): void => {
+          void this.performManagementAction(categoryId, option.id, repetitions);
         },
       },
     );
   }
 
-  /**
-   * 创建伙伴档案页面。
-   */
+  /** 在经营项目列表中追加分层墙体实时耐久，不复用旧总耐久镜像。 */
+  private managementOverviewBody(
+    description: string,
+    snapshot: GameUiSnapshot,
+  ): string {
+    const walls = snapshot.shelterWalls;
+    if (walls === null) return description;
+    const summary = formatUiTemplate(this.config.texts.shelter_wall_summary_format, {
+      inner: walls.innerHealth,
+      inner_maximum: walls.innerMaximum,
+      outer: walls.outerHealth,
+      outer_maximum: walls.outerMaximum,
+      total: walls.totalHealth,
+      total_maximum: walls.totalMaximum,
+    });
+    return [description, summary].filter((value) => value.length > 0).join("\n\n");
+  }
+
+  /** 创建仅展示已拥有角色的档案页面。 */
   private createCompanions(
     layout: ResponsiveLayout,
     snapshot: GameUiSnapshot,
@@ -971,7 +1140,6 @@ export class GameShell {
       {
         back: this.goBack,
         openCompanion: this.openCompanionDetail,
-        openManagement: this.openCompanionManagement,
       },
     );
   }
@@ -1053,6 +1221,38 @@ export class GameShell {
       this.config,
       layout,
       view,
+      {
+        back: this.goBack,
+        openCollection: this.openArchiveCollection,
+      },
+    );
+  }
+
+  /**
+   * 封面文本记录优先复用当前局或最近存档的文献目录，无进度时显示空状态。
+   */
+  private createTextRecords(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    if (snapshot.archiveStorage === null) {
+      return createTextRecordsPage(
+        this.runtime,
+        this.factory,
+        this.config,
+        layout,
+        this.goBack,
+      );
+    }
+    return createArchiveStoragePage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      {
+        ...snapshot.archiveStorage,
+        title: this.config.texts.text_records_title,
+      },
       {
         back: this.goBack,
         openCollection: this.openArchiveCollection,
@@ -1261,50 +1461,6 @@ export class GameShell {
       companion,
       {
         back: this.goBack,
-        manage: this.openCompanionManagementDetail,
-      },
-    );
-  }
-
-  /** 创建伙伴管理的成员选择页。 */
-  private createCompanionManagement(
-    layout: ResponsiveLayout,
-    snapshot: GameUiSnapshot,
-  ): PageView {
-    return createCompanionManagementPage(
-      this.runtime,
-      this.factory,
-      this.config,
-      layout,
-      snapshot.companions,
-      {
-        back: this.goBack,
-        openCompanion: this.openCompanionManagementDetail,
-      },
-    );
-  }
-
-  /** 创建单个伙伴的配装与互动分流页。 */
-  private createCompanionManagementDetail(
-    route: GameRoute,
-    layout: ResponsiveLayout,
-    snapshot: GameUiSnapshot,
-  ): PageView {
-    const companion = this.companion(snapshot, route.context?.companionId);
-    if (companion === null) {
-      return this.createMissingSelectionPage(
-        layout,
-        this.config.texts.companion_management_title,
-      );
-    }
-    return createCompanionManagementDetailPage(
-      this.runtime,
-      this.factory,
-      this.config,
-      layout,
-      companion,
-      {
-        back: this.goBack,
         openEquipment: this.openCompanionEquipment,
         openInteraction: this.openCompanionInteraction,
       },
@@ -1341,7 +1497,7 @@ export class GameShell {
     );
   }
 
-  /** 创建带冷却和条件的伙伴互动页。 */
+  /** 创建带冷却和条件的角色互动页。 */
   private createCompanionInteraction(
     route: GameRoute,
     layout: ResponsiveLayout,
@@ -1427,14 +1583,22 @@ export class GameShell {
     layout: ResponsiveLayout,
     snapshot: GameUiSnapshot,
   ): PageView {
+    if (snapshot.researchWorkbench === null) {
+      return this.createMissingSelectionPage(layout, this.config.texts.research_title);
+    }
     return createResearchPage(
       this.runtime,
       this.factory,
       this.config,
       layout,
       snapshot.researchProjects,
-      this.goBack,
-      (projectId): void => { void this.completeResearch(projectId); },
+      snapshot.researchWorkbench,
+      {
+        back: this.goBack,
+        slot: (itemId): void => { void this.slotResearchItem(itemId); },
+        clear: (): void => { void this.clearResearchSlot(); },
+        complete: (projectId): void => { void this.completeResearch(projectId); },
+      },
     );
   }
 
@@ -1470,7 +1634,8 @@ export class GameShell {
       {
         back: this.goBack,
         toggleCompanion: this.toggleExpeditionCompanion,
-        cycleItem: this.cycleExpeditionItem,
+        increaseItem: this.increaseExpeditionItem,
+        decreaseItem: this.decreaseExpeditionItem,
         begin: (): void => { void this.beginExpedition(); },
       },
     );
@@ -1637,9 +1802,10 @@ export class GameShell {
         chooseOption: (option): void => {
           if (option.terminal) {
             this.expeditionDraft = {
-              ...this.expeditionDraft,
               cityId: city.id,
               districtId: district.id,
+              companionIds: new Set<string>(),
+              carriedItems: {},
             };
             this.navigation.push({ screen: "expedition_prepare" });
           } else {
@@ -1751,6 +1917,314 @@ export class GameShell {
       { returnToDashboard: this.continueAfterExpeditionFailure },
     );
   }
+
+  /** 创建城市侦察、分避难所和周物流的统一总览页。 */
+  private createSettlementNetwork(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createSettlementNetworkPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.cityReconMissions,
+      snapshot.outposts,
+      snapshot.settlementNetworkRules,
+      {
+        back: this.goBack,
+        startRecon: (): void => {
+          this.navigation.push({ screen: "settlement_recon_city" });
+          this.render();
+        },
+        buildOutpost: (): void => {
+          this.navigation.push({ screen: "outpost_build_city" });
+          this.render();
+        },
+        completeRecon: (cityId): void => {
+          void this.execute(
+            { type: "city_recon_complete", cityId },
+            (): void => undefined,
+            true,
+          );
+        },
+        openOutpost: (outpostId): void => {
+          this.navigation.push({
+            screen: "outpost_detail",
+            context: { outpostId },
+          });
+          this.render();
+        },
+      },
+    );
+  }
+
+  /** 创建侦察城市选择页，将所有条件不足原因保留在灰态情报中。 */
+  private createSettlementReconCities(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createCityReconSelectionPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.settlementCities,
+      {
+        back: this.goBack,
+        selectCity: (cityId): void => {
+          this.navigation.push({
+            screen: "settlement_recon_companion",
+            context: { cityId },
+          });
+          this.render();
+        },
+      },
+    );
+  }
+
+  /** 创建侦察角色选择页，命令成功后回到分避难所总览。 */
+  private createSettlementReconCompanions(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const city = this.settlementCity(snapshot, route.context?.cityId);
+    if (city === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.settlement_recon_city_title,
+      );
+    }
+    return createReconCompanionSelectionPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      city,
+      snapshot.settlementAvailableCompanions,
+      {
+        back: this.goBack,
+        startRecon: (companionId): void => {
+          void this.execute(
+            { type: "city_recon_start", cityId: city.id, companionId },
+            this.returnToSettlementOverview,
+            true,
+          );
+        },
+      },
+    );
+  }
+
+  /** 创建只允许已解锁且仍有空闲区划的建设城市页。 */
+  private createOutpostBuildCities(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    return createOutpostCitySelectionPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.settlementCities,
+      snapshot.outposts,
+      {
+        back: this.goBack,
+        selectCity: (cityId): void => {
+          this.navigation.push({
+            screen: "outpost_build_district",
+            context: { cityId },
+          });
+          this.render();
+        },
+      },
+    );
+  }
+
+  /** 创建指定城市的分避难所区划选择页。 */
+  private createOutpostBuildDistricts(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const city = this.settlementCity(snapshot, route.context?.cityId);
+    if (city === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.outpost_build_city_title,
+      );
+    }
+    return createOutpostDistrictSelectionPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      city,
+      snapshot.outposts,
+      {
+        back: this.goBack,
+        selectDistrict: (districtId): void => {
+          this.navigation.push({
+            screen: "outpost_build_type",
+            context: { cityId: city.id, districtId },
+          });
+          this.render();
+        },
+      },
+    );
+  }
+
+  /** 创建含容量、加成与实时成本的分避难所类型页。 */
+  private createOutpostBuildTypes(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const city = this.settlementCity(snapshot, route.context?.cityId);
+    const district = city?.districts.find(
+      (candidate) => candidate.id === route.context?.districtId,
+    ) ?? null;
+    if (city === null || district === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.outpost_build_district_title,
+      );
+    }
+    return createOutpostTypeSelectionPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      city,
+      district,
+      snapshot.outpostShelterTypes,
+      snapshot.settlementNetworkRules,
+      {
+        back: this.goBack,
+        establish: (shelterTypeId): void => {
+          void this.execute(
+            {
+              type: "outpost_establish",
+              cityId: city.id,
+              districtId: district.id,
+              shelterTypeId,
+            },
+            this.returnToSettlementOverview,
+            true,
+          );
+        },
+      },
+    );
+  }
+
+  /** 创建单座分避难所的驻守、召回与周物流页。 */
+  private createOutpostDetail(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const outpost = this.outpost(snapshot, route.context?.outpostId);
+    if (outpost === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.outpost_detail_title,
+      );
+    }
+    return createOutpostDetailPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      outpost,
+      snapshot.settlementAvailableCompanions,
+      snapshot.settlementNetworkRules,
+      {
+        back: this.goBack,
+        assignCompanion: (): void => {
+          this.navigation.push({
+            screen: "outpost_assign",
+            context: { outpostId: outpost.outpostId },
+          });
+          this.render();
+        },
+        recallCompanion: (companionId): void => {
+          void this.execute(
+            { type: "outpost_recall", companionId },
+            (): void => undefined,
+            true,
+          );
+        },
+        supply: (): void => {
+          void this.execute(
+            { type: "outpost_supply", outpostId: outpost.outpostId },
+            (): void => undefined,
+            true,
+          );
+        },
+      },
+    );
+  }
+
+  /** 创建只展示当前未被占用角色的分避难所派驻页。 */
+  private createOutpostAssignment(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const outpost = this.outpost(snapshot, route.context?.outpostId);
+    if (outpost === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.outpost_assign_title,
+      );
+    }
+    return createOutpostAssignmentPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      outpost,
+      snapshot.settlementAvailableCompanions,
+      {
+        back: this.goBack,
+        assign: (companionId): void => {
+          void this.execute(
+            {
+              type: "outpost_assign",
+              outpostId: outpost.outpostId,
+              companionId,
+            },
+            (): void => { this.navigation.pop(); },
+            true,
+          );
+        },
+      },
+    );
+  }
+
+  /** 按路由中的城市 ID 返回分避难所网络城市，失效时不隐式切换。 */
+  private settlementCity(
+    snapshot: GameUiSnapshot,
+    cityId?: string,
+  ): GameUiSnapshot["settlementCities"][number] | null {
+    return snapshot.settlementCities.find((city) => city.id === cityId) ?? null;
+  }
+
+  /** 按路由中的分避难所 ID 返回实时快照，失效时返回空。 */
+  private outpost(
+    snapshot: GameUiSnapshot,
+    outpostId?: string,
+  ): GameUiSnapshot["outposts"][number] | null {
+    return snapshot.outposts.find(
+      (candidate) => candidate.outpostId === outpostId,
+    ) ?? null;
+  }
+
+  /** 重建“指挥台 → 分避难所总览”页面链，避免成功后残留旧建设上下文。 */
+  private readonly returnToSettlementOverview = (): void => {
+    this.navigation.reset({ screen: "dashboard" });
+    this.navigation.push({ screen: "settlement_network" });
+  };
 
   /** 创建按周封存的历史通讯页。 */
   private createHistory(
@@ -2019,9 +2493,16 @@ export class GameShell {
 
   /** 在经营项目执行前先压入需求详情页。 */
   private openManagementOptionDetail(categoryId: string, optionId: string): void {
+    const option = this.requireSnapshot().managementCategories
+      .find((category) => category.id === categoryId)
+      ?.options.find((candidate) => candidate.id === optionId);
     this.navigation.push({
       screen: "management_option_detail",
-      context: { categoryId, optionId },
+      context: {
+        categoryId,
+        optionId,
+        repetitions: option?.repetitionOptions[0],
+      },
     });
     this.render();
   }
@@ -2032,22 +2513,7 @@ export class GameShell {
     this.render();
   };
 
-  /** 从档案页进入伙伴管理的成员选择页。 */
-  private readonly openCompanionManagement = (): void => {
-    this.navigation.push({ screen: "companion_management" });
-    this.render();
-  };
-
-  /** 打开指定伙伴的配装与互动分流。 */
-  private readonly openCompanionManagementDetail = (companionId: string): void => {
-    this.navigation.push({
-      screen: "companion_management_detail",
-      context: { companionId },
-    });
-    this.render();
-  };
-
-  /** 打开指定伙伴的武器或防具实时仓库列表。 */
+  /** 从角色档案直接打开武器或防具实时仓库列表。 */
   private readonly openCompanionEquipment = (
     companionId: string,
     equipmentSlot: UiCompanionEquipmentSlot,
@@ -2059,7 +2525,7 @@ export class GameShell {
     this.render();
   };
 
-  /** 打开指定伙伴的可用互动列表。 */
+  /** 从角色档案直接打开配置化互动列表。 */
   private readonly openCompanionInteraction = (companionId: string): void => {
     this.navigation.push({
       screen: "companion_interaction",
@@ -2490,12 +2956,11 @@ export class GameShell {
       { type: "story_choice", choiceId },
       (): void => {
         const snapshot = this.requireSnapshot();
-        if (snapshot.battle !== null) {
-          this.navigation.replace({ screen: "battle" });
-        } else if (snapshot.ending !== null || snapshot.ended) {
-          this.navigation.replace({ screen: "ending" });
-        } else {
+        const nextScreen = resolveStoryProgressScreen(snapshot);
+        if (nextScreen === "dashboard") {
           this.navigation.reset({ screen: "dashboard" });
+        } else {
+          this.navigation.replace({ screen: nextScreen });
         }
       },
       true,
@@ -2542,6 +3007,24 @@ export class GameShell {
   private async completeResearch(projectId: string): Promise<void> {
     await this.execute(
       { type: "research_complete", projectId },
+      (): void => undefined,
+      true,
+    );
+  }
+
+  /** 将仓库样本放入研究台单槽，并保留研究台作为底层页面。 */
+  private async slotResearchItem(itemId: string): Promise<void> {
+    await this.execute(
+      { type: "research_slot", itemId },
+      (): void => undefined,
+      true,
+    );
+  }
+
+  /** 取回研究台样本，并保留研究台作为底层页面。 */
+  private async clearResearchSlot(): Promise<void> {
+    await this.execute(
+      { type: "research_clear" },
       (): void => undefined,
       true,
     );
@@ -2708,24 +3191,41 @@ export class GameShell {
     this.render(true);
   };
 
-  /** 在零到可用库存之间循环远征携带数量。 */
-  private readonly cycleExpeditionItem = (itemId: string): void => {
+  /** 将一份可用库存加入远征携带草稿。 */
+  private readonly increaseExpeditionItem = (itemId: string): void => {
+    this.adjustExpeditionItemQuantity(itemId, 1);
+  };
+
+  /** 从远征携带草稿中减少一份物资。 */
+  private readonly decreaseExpeditionItem = (itemId: string): void => {
+    this.adjustExpeditionItemQuantity(itemId, -1);
+  };
+
+  /** 在零和可用库存之间夹取远征携带数量。 */
+  private adjustExpeditionItemQuantity(itemId: string, delta: -1 | 1): void {
     const item = this.requireSnapshot().expeditionCarryItems.find(
       (candidate) => candidate.id === itemId,
     );
-    if (item === undefined || item.availableQuantity <= 0) {
+    if (item === undefined) {
       return;
     }
     const currentItems = this.expeditionDraft.carriedItems;
-    const nextQuantity = (currentItems[itemId] ?? 0) + 1;
-    const carriedItems = nextQuantity > item.availableQuantity
+    const currentQuantity = currentItems[itemId] ?? 0;
+    const nextQuantity = Math.max(
+      0,
+      Math.min(item.availableQuantity, currentQuantity + delta),
+    );
+    if (nextQuantity === currentQuantity) {
+      return;
+    }
+    const carriedItems = nextQuantity === 0
       ? Object.fromEntries(
           Object.entries(currentItems).filter(([candidateId]) => candidateId !== itemId),
         )
       : { ...currentItems, [itemId]: nextQuantity };
     this.expeditionDraft = { ...this.expeditionDraft, carriedItems };
     this.render(true);
-  };
+  }
 
   /** 提交整备草稿并进入已锁定的首个远征事件。 */
   private async beginExpedition(): Promise<void> {
@@ -2823,9 +3323,10 @@ export class GameShell {
   private async performManagementAction(
     categoryId: string,
     optionId: string,
+    repetitions = 1,
   ): Promise<void> {
     await this.execute(
-      { type: "management_action", categoryId, optionId },
+      { type: "management_action", categoryId, optionId, repetitions },
       (): void => undefined,
       true,
     );

@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import gameDocument from "../../config/game_config.json";
 import v7ToV8MigrationDocument from "../../config/save_migrations/v7_to_v8.json";
+import v8ToV9MigrationDocument from "../../config/save_migrations/v8_to_v9.json";
 import shelterLayoutDocument from "../../config/shelter_layout.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import { demoSystemsConfig } from "../../src/config/demoSystemsConfig";
+import { mergeCampaignProfileExpansion } from "../../src/config/campaignProfileExpansionAdapter";
+import { contentExpansionCatalog } from "../../src/config/contentExpansion";
 import { validateSurvivalSystemsConfig } from "../../src/config/survivalSystemsValidator";
 import type {
   GameConfigDocument,
   StoryConfigDocument,
   V7ToV8SaveMigrationConfig,
+  V8ToV9SaveMigrationConfig,
 } from "../../src/domain/content";
 import type { EncounterBattleState } from "../../src/domain/demo-systems";
 import type { GameState } from "../../src/domain/game-state";
@@ -19,6 +23,7 @@ import {
   MemoryStorage,
   SaveStateValidator,
   V7ToV8SaveMigrator,
+  V8ToV9SaveMigrator,
 } from "../../src/infrastructure";
 import {
   ArchiveStorageService,
@@ -27,9 +32,13 @@ import {
 } from "../../src/services";
 import { buildH5Harness, requireState } from "../helpers/H5TestHarness";
 
-const game = gameDocument as unknown as GameConfigDocument;
+const game = mergeCampaignProfileExpansion(
+  gameDocument as unknown as GameConfigDocument,
+  contentExpansionCatalog,
+);
 const story = storyDocument as unknown as StoryConfigDocument;
 const migration: V7ToV8SaveMigrationConfig = v7ToV8MigrationDocument;
+const v9Migration: V8ToV9SaveMigrationConfig = v8ToV9MigrationDocument;
 const STORAGE_KEY = "v8-migration-test";
 const shelterLayout = new ShelterLayoutService(
   parseShelterLayoutConfig(shelterLayoutDocument),
@@ -73,18 +82,18 @@ function createRepository(
   return new LocalStorageSaveRepository({
     storage,
     storageKey: STORAGE_KEY,
-    schemaVersion: 8,
+    schemaVersion: 9,
     slotCount,
     backupSlots: 0,
     validator: createValidator(),
-    migrators: [createMigrator()],
+    migrators: [createMigrator(), new V8ToV9SaveMigrator(v9Migration)],
   });
 }
 
 /** 将完整 v8 状态包装为可直接写入本地存储的文档。 */
 function createSaveDocument(state: GameState): string {
   return JSON.stringify({
-    schema_version: 8,
+    schema_version: 9,
     saved_at: "2166-01-10T06:00:00.000Z",
     game_state: state,
   });
@@ -150,6 +159,11 @@ function createV8StateWithCheckpoint(): GameState {
 
 /** 从可恢复状态移除 v8 新字段，构造字段集合精确的 v7 状态。 */
 function downgradeRestorableState(rawState: Record<string, unknown>): void {
+  const shelter = rawState.shelter as Record<string, unknown>;
+  delete shelter.inner_wall_health;
+  delete shelter.outer_wall_health;
+  const research = rawState.research as Record<string, unknown>;
+  delete research.slotted_item_id;
   delete rawState.archive_collection_totals;
   delete rawState.shelter_room_assignments;
   delete rawState.encounter_battle;
@@ -204,7 +218,7 @@ describe("v7 到 v8 存档迁移", () => {
     expect(snapshot.pending_return_incident_id).toBeNull();
     expect(snapshot.archive_collection_totals).toEqual({ newspapers: 0, books: 0 });
     expect(state.shelter_room_assignments).not.toBe(snapshot.shelter_room_assignments);
-    expect(() => validator.parse(state)).not.toThrow();
+    expect(() => validator.validateRawV8(state)).not.toThrow();
   });
 
   it("通过存档仓库执行 v7 结构校验、单步迁移和 v8 领域解析", () => {
@@ -259,7 +273,7 @@ describe("v7 到 v8 存档迁移", () => {
   });
 });
 
-describe("v8 存档新字段校验", () => {
+describe("v9 对 v8 字段的延续校验", () => {
   it("接受合法房间规划、归来事项与完整手动遭遇战", () => {
     const state = createV8StateWithCheckpoint();
     state.shelter_room_assignments = {
@@ -277,8 +291,8 @@ describe("v8 存档新字段校验", () => {
       createV8StateWithCheckpoint(),
     ) as unknown as Record<string, unknown>;
     delete missingCurrentField.pending_return_incident_id;
-    expect(() => createValidator().validateRawV8(missingCurrentField)).toThrow(
-      "v8 game_state 字段集合不匹配",
+    expect(() => createValidator().validateRawV9(missingCurrentField)).toThrow(
+      "v9 game_state 字段集合不匹配",
     );
 
     const missingCheckpointField = createV8StateWithCheckpoint();
@@ -287,8 +301,8 @@ describe("v8 存档新字段校验", () => {
       unknown
     >;
     delete snapshot.encounter_battle;
-    expect(() => createValidator().validateRawV8(missingCheckpointField)).toThrow(
-      "v8 checkpoint.snapshot 字段集合不匹配",
+    expect(() => createValidator().validateRawV9(missingCheckpointField)).toThrow(
+      "v9 checkpoint.snapshot 字段集合不匹配",
     );
   });
 
@@ -304,7 +318,7 @@ describe("v8 存档新字段校验", () => {
 
     const emptyIncident = createV8StateWithCheckpoint();
     emptyIncident.pending_return_incident_id = "   ";
-    expect(() => createValidator().validateRawV8(emptyIncident)).toThrow(
+    expect(() => createValidator().validateRawV9(emptyIncident)).toThrow(
       "pending_return_incident_id 必须是非空字符串",
     );
 
@@ -313,7 +327,7 @@ describe("v8 存档新字段校验", () => {
     const firstPartyMember = battle.party[0] as unknown as Record<string, unknown>;
     firstPartyMember.debug_flag = true;
     extraBattleField.encounter_battle = battle;
-    expect(() => createValidator().validateRawV8(extraBattleField)).toThrow(
+    expect(() => createValidator().validateRawV9(extraBattleField)).toThrow(
       "encounter_battle.party[0] 字段集合不匹配",
     );
   });

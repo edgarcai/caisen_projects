@@ -19,6 +19,12 @@ import type {
 export type NumericAmount = number | readonly [number, number];
 export type NumericOperation = "add" | "subtract" | "set";
 export type ComparisonOperator = "gte" | "lte" | "gt" | "lt" | "eq" | "neq";
+export type ModeCapabilityId = "narrative" | "boss_combat" | "endless_survival";
+
+/** 可按游戏模式能力从目录和命令端同时隔离的内容。 */
+export interface ModeRestrictedContentConfig {
+  readonly required_mode_capability?: ModeCapabilityId;
+}
 
 export interface NumericEffectConfig {
   target: string;
@@ -92,8 +98,11 @@ export interface GameRuleConfig {
   limits: {
     player_max_health: number;
     shelter_max_health: number;
+    inner_wall_max_health: number;
+    outer_wall_max_health: number;
     shelter_max_hope: number;
     hope_min_game_over: number;
+    infection_pressure_game_over: number;
     player_hunger_game_over: number;
     group_hunger_game_over: number;
     activity_min_game_over: number;
@@ -109,7 +118,12 @@ export interface GameRuleConfig {
   };
   failure_endings: Record<
     string,
-    { ending_id: string; text_key: string; mode_text_keys?: Record<string, string> }
+    {
+      ending_id: string;
+      text_key: string;
+      priority: number;
+      mode_text_keys?: Record<string, string>;
+    }
   >;
   items: {
     medical_supplies: { cost: number; heal_min: number; heal_max: number };
@@ -119,12 +133,19 @@ export interface GameRuleConfig {
   };
 }
 
-/** 可在新游戏中选择的难度及其生存损耗倍率。 */
+/** 可在新游戏中选择的难度及其全系统倍率。 */
 export interface CampaignDifficultyConfig {
   id: string;
   label: string;
   description: string;
   survival_cost_percent: number;
+  enemy_health_percent: number;
+  enemy_damage_percent: number;
+  common_loot_percent: number;
+  text_loot_percent: number;
+  research_cost_percent: number;
+  trade_price_percent: number;
+  hope_loss_percent: number;
   starting_effects: readonly NumericEffectConfig[];
 }
 
@@ -143,6 +164,42 @@ export interface CampaignTraitConfig {
   description: string;
   expedition_step_bonus: number;
   starting_effects: readonly NumericEffectConfig[];
+  incompatible_trait_ids: readonly string[];
+}
+
+/** 主避难所在开局时可选择的建筑原型。 */
+export interface CampaignShelterTypeConfig {
+  id: string;
+  label: string;
+  description: string;
+  bonuses: readonly string[];
+  starting_capacity: number;
+  initial_facility_slots: number;
+  inner_wall_health: number;
+  outer_wall_health: number;
+  starting_effects: readonly NumericEffectConfig[];
+}
+
+/** 新建战役额外选项在 story.flags 中使用的配置化命名空间。 */
+export interface CampaignMetadataFlagConfig {
+  secondary_trait_prefix: string;
+  home_district_prefix: string;
+  shelter_type_prefix: string;
+  shelter_capacity_prefix: string;
+  shelter_facility_slots_prefix: string;
+}
+
+/** 不扩大存档 campaign 结构时使用的新游戏附加默认值。 */
+export interface CampaignAdditionalDefaultsConfig {
+  secondary_trait_id: string;
+  shelter_type_id: string;
+}
+
+/** 双特性选择的配置化数量约束。 */
+export interface CampaignTraitSelectionRulesConfig {
+  minimum_selections: number;
+  maximum_selections: number;
+  require_unique: boolean;
 }
 
 /** 配置化开局档案选项集合。 */
@@ -150,6 +207,10 @@ export interface CampaignProfilesConfig {
   difficulties: readonly CampaignDifficultyConfig[];
   origins: readonly CampaignOriginConfig[];
   traits: readonly CampaignTraitConfig[];
+  shelter_types: readonly CampaignShelterTypeConfig[];
+  trait_selection_rules: CampaignTraitSelectionRulesConfig;
+  metadata_flags: CampaignMetadataFlagConfig;
+  additional_defaults: CampaignAdditionalDefaultsConfig;
   migration_default: CampaignProfileState;
 }
 
@@ -212,7 +273,7 @@ export interface GameConfigDocument {
     last_expedition_failure: ExpeditionFailureState | null;
   };
   campaign_profiles: CampaignProfilesConfig;
-  mode_capabilities: Record<GameMode, readonly string[]>;
+  mode_capabilities: Record<GameMode, readonly ModeCapabilityId[]>;
   rules: GameRuleConfig;
   cities: readonly CityConfig[];
   actions: readonly { id: string; label: string; style: string; icon: string }[];
@@ -364,7 +425,7 @@ export interface FacilityLevelConfig {
   effects?: readonly NumericEffectConfig[];
 }
 
-export interface FacilityConfig {
+export interface FacilityConfig extends ModeRestrictedContentConfig {
   facility_id: string;
   name: string;
   description: string;
@@ -375,13 +436,37 @@ export interface FacilityConfig {
   levels: readonly FacilityLevelConfig[];
 }
 
+/** 一项由已建设设施提供的主动使用能力。 */
+export interface FacilityActionConfig extends ModeRestrictedContentConfig {
+  action_id: string;
+  facility_id: string;
+  name: string;
+  description: string;
+  minimum_level: number;
+  duration_hours: number;
+  costs?: readonly NumericEffectConfig[];
+  rewards?: readonly NumericEffectConfig[];
+  result_text: string;
+}
+
 /** 避难所设施总等级容量与扩建效果的配置。 */
 export interface FacilityManagementConfig {
   initial_total_level_limit: number;
   capacity_modifier_target: string;
+  effect_target_names: Readonly<Record<string, string>>;
+  effect_add_format: string;
+  effect_subtract_format: string;
+  effect_set_format: string;
+  effect_separator: string;
 }
 
-export interface JobConfig {
+/** 工作循环的全局可选次数与安全上限。 */
+export interface WorkManagementConfig {
+  repetition_options: readonly number[];
+  maximum_repetitions: number;
+}
+
+export interface JobConfig extends ModeRestrictedContentConfig {
   job_id: string;
   name: string;
   description: string;
@@ -397,7 +482,7 @@ export interface JobConfig {
 }
 
 /** 避难所中可由所长组织的群体活动。 */
-export interface ShelterActivityConfig {
+export interface ShelterActivityConfig extends ModeRestrictedContentConfig {
   activity_id: string;
   name: string;
   description: string;
@@ -408,7 +493,7 @@ export interface ShelterActivityConfig {
   result_text: string;
 }
 
-export interface TradeConfig {
+export interface TradeConfig extends ModeRestrictedContentConfig {
   trade_id: string;
   vendor_id: string;
   vendor_name: string;
@@ -445,6 +530,9 @@ export interface TradeCycleConfig {
   usage_key: string;
   days: number;
   maximum_transactions: number;
+  allowed_weekdays: readonly number[];
+  weekday_labels: Readonly<Record<string, string>>;
+  duration_days: number;
 }
 
 /** 交易途中可能触发的配置化事件。 */
@@ -466,7 +554,7 @@ export interface TradeManagementConfig {
   ambush: TradeAmbushConfig;
 }
 
-export interface RecruitConfig {
+export interface RecruitConfig extends ModeRestrictedContentConfig {
   recruit_id: string;
   name: string;
   role: string;
@@ -515,6 +603,8 @@ export interface StoryConfigDocument {
   discoveries: readonly DiscoveryConfig[];
   facility_management: FacilityManagementConfig;
   facilities: readonly FacilityConfig[];
+  facility_actions: readonly FacilityActionConfig[];
+  work: WorkManagementConfig;
   jobs: readonly JobConfig[];
   activities: readonly ShelterActivityConfig[];
   trade: TradeManagementConfig;
@@ -652,6 +742,19 @@ export interface V7ToV8SaveMigrationConfig {
     shelter_room_assignments: Readonly<Record<string, readonly string[]>>;
     encounter_battle: null;
     pending_return_incident_id: null;
+  };
+}
+
+/** v8 → v9 存档拆分墙体耐久并增加研究槽时使用的迁移配置。 */
+export interface V8ToV9SaveMigrationConfig {
+  schema_version: number;
+  from_version: number;
+  to_version: number;
+  state_defaults: {
+    research_slotted_item_id: null;
+  };
+  wall_distribution: {
+    inner_wall_percent: number;
   };
 }
 

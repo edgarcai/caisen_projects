@@ -20,6 +20,7 @@ import type {
   RuleModifierProvider,
 } from "../domain/ports";
 import type { CombatAction, CombatReport } from "../domain/reports";
+import type { CampaignDifficultyRules } from "./CampaignDifficultyRules";
 import type { GameContent } from "./GameContent";
 import type { StateOperations } from "./StateOperations";
 
@@ -30,21 +31,24 @@ export class CombatService {
   private readonly random: RandomSource;
   private readonly modifiers: RuleModifierProvider;
   private readonly attributes: PlayerAttributeProvider;
+  private readonly difficultyRules: CampaignDifficultyRules;
   private readonly actionById: ReadonlyMap<string, CombatActionConfig>;
 
-  /** 注入剧情战斗配置、随机源与被动修正提供者。 */
+  /** 注入剧情战斗配置、随机源、被动修正与难度投影器。 */
   public constructor(
     content: GameContent,
     operations: StateOperations,
     random: RandomSource,
     modifiers: RuleModifierProvider,
     attributes: PlayerAttributeProvider,
+    difficultyRules: CampaignDifficultyRules,
   ) {
     this.content = content;
     this.operations = operations;
     this.random = random;
     this.modifiers = modifiers;
     this.attributes = attributes;
+    this.difficultyRules = difficultyRules;
     this.actionById = new Map(
       content.story.combat.actions.map((action) => [action.action_id, action]),
     );
@@ -70,9 +74,10 @@ export class CombatService {
     }
     const boss = this.content.boss(bossId);
     const working = cloneGameState(state);
+    const maximumHealth = this.difficultyRules.enemyHealth(boss.max_health, working);
     const configuredHealth = Math.max(
       1,
-      Math.floor((boss.max_health * startingHealthPercent) / 100),
+      Math.floor((maximumHealth * startingHealthPercent) / 100),
     );
     const existing = working.battle;
     if (existing !== null) {
@@ -86,14 +91,14 @@ export class CombatService {
       existing.victory = false;
       existing.retreated = false;
       existing.guarding = false;
-      existing.max_health = Math.max(boss.max_health, configuredHealth);
+      existing.max_health = Math.max(maximumHealth, configuredHealth);
       existing.health = Math.min(existing.health, configuredHealth);
     } else {
       working.battle = {
         boss_id: bossId,
         boss_name: boss.name,
         health: configuredHealth,
-        max_health: Math.max(boss.max_health, configuredHealth),
+        max_health: Math.max(maximumHealth, configuredHealth),
         round_number: 1,
         guarding: false,
         focused: false,
@@ -342,6 +347,7 @@ export class CombatService {
       Math.floor((rawDamage * this.random.randint(variance[0], variance[1])) / 100),
     );
     rawDamage = Math.max(minimum, Math.floor((rawDamage * damageMultiplier) / 100));
+    rawDamage = this.difficultyRules.enemyDamage(rawDamage, state);
     let damage = rawDamage;
     const messages: string[] = [];
     if (battle.guarding) {

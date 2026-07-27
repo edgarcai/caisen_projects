@@ -185,6 +185,7 @@ interface BrowserGameDebugHandle {
       readonly travelStepCost: number;
       readonly districts: readonly {
         readonly id: string;
+        readonly code: string;
         readonly name: string;
         readonly description: string;
         readonly eventStepCost: number;
@@ -236,6 +237,7 @@ interface DebugCampaignOption {
   readonly description: string;
 }
 
+type DebugGameSnapshot = ReturnType<BrowserGameDebugHandle["getSnapshot"]>;
 type GameLayoutKind = "mobile" | "compact" | "desktop";
 type TestGameMode = "single" | "story";
 
@@ -258,7 +260,7 @@ async function readGameLayout(page: Page): Promise<GameLayoutKind> {
 /** 读取页面组合根暴露的只读诊断接口。 */
 async function readDebugSnapshot(
   page: Page,
-): Promise<ReturnType<BrowserGameDebugHandle["getSnapshot"]>> {
+): Promise<DebugGameSnapshot> {
   return page.evaluate(() => {
     const debug = window.__SHELTER_GAME__;
     if (debug === undefined) {
@@ -329,18 +331,14 @@ async function readCssNodeBounds(
   }, nodeName);
 }
 
-/** 判断普通目标是否完整可见，超高目标则判断可点击中心是否可见。 */
+/** 以真实点击中心是否进入滚动视口判断目标可操作性。 */
 function isScrollableTargetReady(
   target: CssNodeBounds,
   viewport: CssNodeBounds,
 ): boolean {
   const viewportBottom = viewport.y + viewport.height;
-  if (target.height > viewport.height) {
-    const targetCenter = target.y + target.height / 2;
-    return targetCenter >= viewport.y && targetCenter <= viewportBottom;
-  }
-  const targetBottom = target.y + target.height;
-  return target.y >= viewport.y && targetBottom <= viewportBottom;
+  const targetCenter = target.y + target.height / 2;
+  return targetCenter >= viewport.y && targetCenter <= viewportBottom;
 }
 
 /** 按设备能力在 Canvas 上执行鼠标或原生 TouchEvent 拖动。 */
@@ -463,6 +461,18 @@ async function clickScrollableLayaNode(
   await clickLayaNode(page, nodeName);
 }
 
+/** 依次调整内外两层滚动视口，避免手机横屏底栏遮挡中央选项。 */
+async function clickNestedScrollableLayaNode(
+  page: Page,
+  nodeName: string,
+  innerScrollViewportName: string,
+  outerScrollViewportName: string,
+): Promise<void> {
+  await scrollLayaNodeIntoView(page, nodeName, innerScrollViewportName);
+  await scrollLayaNodeIntoView(page, nodeName, outerScrollViewportName);
+  await clickLayaNode(page, nodeName);
+}
+
 /** 按配置编码生成指定深度的第一个区划探索节点 ID。 */
 function buildFirstDistrictExplorationNodeId(
   cityId: string,
@@ -488,7 +498,7 @@ async function followFirstDistrictExplorationBranch(
   page: Page,
   cityId: string,
   districtId: string,
-): Promise<void> {
+): Promise<number> {
   const depthPolicy = districtTreeConfigDocument.depth_policy;
   await waitForScreen(page, "district_exploration_tree");
   for (let depth = 1; depth <= depthPolicy.maximum_depth; depth += 1) {
@@ -519,7 +529,7 @@ async function followFirstDistrictExplorationBranch(
     const screen = await page.evaluate(() => document.body.dataset.gameScreen ?? null);
     if (screen === "expedition_prepare") {
       expect(depth).toBeGreaterThanOrEqual(depthPolicy.minimum_depth);
-      return;
+      return depth;
     }
     if (screen !== "district_exploration_tree") {
       throw new Error(`区划探索树进入了意外页面：${String(screen)}`);
@@ -538,10 +548,72 @@ async function carryExpeditionFood(page: Page, quantity: number): Promise<void> 
       page,
       `page-expedition-item-${
         survivalSystemsConfigDocument.expedition.action_food_item_id
-      }`,
+      }-increase`,
       "page-expedition-prepare-scroll",
     );
   }
+}
+
+/** 等待区划探索树完成同 screen 重建，并以配置化节点路径确认目标层级。 */
+async function waitForDistrictExplorationLayer(
+  page: Page,
+  cityId: string,
+  districtId: string,
+  depth: number,
+): Promise<void> {
+  const nodeId = buildFirstDistrictExplorationNodeId(cityId, districtId, depth);
+  const optionNode = `page-district-exploration-tree-option-${nodeId}`;
+  await expect.poll(async () => {
+    const screen = await page.evaluate(() => (
+      document.body.dataset.gameScreen ?? null
+    ));
+    if (screen !== "district_exploration_tree") return false;
+    const option = await readLayaNodeBounds(page, optionNode);
+    return option !== null;
+  }).toBe(true);
+  await waitForDistrictExplorationBack(page);
+}
+
+/** 等待当前区划探索树完成渲染并注册栈顶可见返回节点。 */
+async function waitForDistrictExplorationBack(page: Page): Promise<void> {
+  await expect.poll(async () => {
+    const screen = await page.evaluate(() => (
+      document.body.dataset.gameScreen ?? null
+    ));
+    if (screen !== "district_exploration_tree") return null;
+    return readLayaNodeBounds(page, "page-district-exploration-tree-back");
+  }).not.toBeNull();
+}
+
+/** 从远征整备按已选择路径逐层返回区划详情，验证草稿生命周期。 */
+async function returnFromExpeditionPrepareToDistrictDetail(
+  page: Page,
+  cityId: string,
+  districtId: string,
+  selectedDepth: number,
+): Promise<void> {
+  await clickLayaNode(page, "page-expedition-prepare-back");
+  await waitForScreen(page, "district_exploration_tree");
+  await waitForDistrictExplorationLayer(
+    page,
+    cityId,
+    districtId,
+    selectedDepth,
+  );
+  for (let depth = selectedDepth; depth >= 1; depth -= 1) {
+    await clickLayaNode(page, "page-district-exploration-tree-back");
+    if (depth === 1) {
+      await waitForScreen(page, "expedition_district_detail");
+      return;
+    }
+    await waitForDistrictExplorationLayer(
+      page,
+      cityId,
+      districtId,
+      depth - 1,
+    );
+  }
+  throw new Error("区划探索树未能沿配置化路径返回区划详情。");
 }
 
 /** 按当前页面状态尝试可用事件选项，条件失效时关闭通讯并继续下一项。 */
@@ -608,7 +680,15 @@ async function closeAutomaticUpdateLog(page: Page): Promise<void> {
   expect(await readLayaNodeBounds(page, "page-update-log")).not.toBeNull();
   expect(await readLayaNodeBounds(page, "page-update-log-content")).not.toBeNull();
   expect(await readLayaNodeBounds(page, "page-menu")).not.toBeNull();
+  await expect.poll(async () =>
+    readLayaNodeBounds(page, "page-update-log-close"),
+  ).not.toBeNull();
+  await page.waitForTimeout(qualityConfig.scroll_settle_ms);
   await clickLayaNode(page, "page-update-log-close");
+  await page.waitForTimeout(qualityConfig.scroll_settle_ms);
+  if (await page.evaluate(() => document.body.dataset.gameScreen) === "update_log") {
+    await clickLayaNode(page, "page-update-log-close");
+  }
   await waitForScreen(page, "menu");
 }
 
@@ -701,6 +781,26 @@ function nextCampaignOption(
   return next;
 }
 
+/** 验证城市与区划分别保存，且区划属于配置快照中的所选城市。 */
+function expectSeparatedCampaignLocation(
+  snapshot: DebugGameSnapshot,
+  expectedCity: DebugCampaignOption,
+): void {
+  const profile = snapshot.campaignProfile;
+  if (profile === null) {
+    throw new Error("开局后缺少所长档案位置。");
+  }
+  const city = snapshot.cities.find((candidate) => candidate.id === expectedCity.id);
+  if (city === undefined) {
+    throw new Error(`城市目录缺少已选择城市：${expectedCity.id}`);
+  }
+  const districtLabels = city.districts.map((district) => district.code);
+  expect(profile.homeCityLabel).toBe(expectedCity.label);
+  expect(profile.districtLabel.length).toBeGreaterThan(0);
+  expect(districtLabels).toContain(profile.districtLabel);
+  expect(profile.homeCityLabel).not.toContain(profile.districtLabel);
+}
+
 /** 验证配置化数量的全部存档槽都已渲染。 */
 async function expectAllSaveSlots(page: Page): Promise<void> {
   for (
@@ -714,6 +814,72 @@ async function expectAllSaveSlots(page: Page): Promise<void> {
   }
 }
 
+/** 按手机分步建档的真实顺序前进，并在指定阶段选择配置化选项。 */
+async function selectMobileCampaignProfile(
+  page: Page,
+  selections: Readonly<Record<"difficulty" | "origin" | "trait" | "city", string>>,
+): Promise<void> {
+  const orderedStages = [
+    "mode",
+    "difficulty",
+    "origin",
+    "trait",
+    "secondary_trait",
+    "city",
+    "district",
+    "shelter",
+    "slot",
+  ] as const;
+  for (const stage of orderedStages) {
+    await clickScrollableLayaNode(
+      page,
+      "profile-setup-next-step",
+      "page-new-game-setup-scroll",
+    );
+    await expect.poll(async () =>
+      readLayaNodeBounds(page, `profile-${stage}-preview-title`),
+    ).not.toBeNull();
+    if (stage in selections) {
+      const optionId = selections[stage as keyof typeof selections];
+      await clickNestedScrollableLayaNode(
+        page,
+        `profile-${stage}-option-${optionId}`,
+        "profile-setup-options-scroll",
+        "page-new-game-setup-scroll",
+      );
+    }
+  }
+}
+
+/** 允许发布者闪屏被点击或按配置自动结束，并稳定停在更新日志页。 */
+async function advancePublisherSplash(page: Page): Promise<void> {
+  await expect.poll(async () => {
+    const screen = await page.evaluate(() => (
+      document.body.dataset.gameScreen ?? null
+    ));
+    if (screen === "update_log") return screen;
+    if (screen !== "publisher_splash") return "pending";
+    const title = await readLayaNodeBounds(page, "publisher-splash-title");
+    const splash = await readLayaNodeBounds(page, "page-publisher-splash");
+    return title !== null && splash !== null ? screen : "pending";
+  }).toMatch(/^(publisher_splash|update_log)$/);
+
+  const screen = await page.evaluate(() => (
+    document.body.dataset.gameScreen ?? null
+  ));
+  if (screen === "publisher_splash") {
+    try {
+      await clickLayaNode(page, "page-publisher-splash");
+    } catch (error) {
+      const currentScreen = await page.evaluate(() => (
+        document.body.dataset.gameScreen ?? null
+      ));
+      if (currentScreen !== "update_log") throw error;
+    }
+  }
+  await waitForScreen(page, "update_log");
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
@@ -721,10 +887,7 @@ test.beforeEach(async ({ page }) => {
   });
   await page.reload();
   await expect(page.locator("#boot-status")).toBeHidden();
-  await waitForScreen(page, "publisher_splash");
-  expect(await readLayaNodeBounds(page, "publisher-splash-title")).not.toBeNull();
-  await clickLayaNode(page, "page-publisher-splash");
-  await waitForScreen(page, "update_log");
+  await advancePublisherSplash(page);
 });
 
 test("完整新游戏档案页循环配置后进入普通模式", async ({ page }) => {
@@ -770,18 +933,27 @@ test("完整新游戏档案页循环配置后进入普通模式", async ({ page 
     options.defaultSelection.homeCityId,
   );
   await fillCommanderName(page, "档案所长");
-  for (const nodeName of [
-    "profile-difficulty",
-    "profile-origin",
-    "profile-trait",
-    "profile-city",
-    "profile-slot",
-  ]) {
-    await clickScrollableLayaNode(
-      page,
-      nodeName,
-      "page-new-game-setup-scroll",
-    );
+  if (await readGameLayout(page) === "mobile") {
+    await selectMobileCampaignProfile(page, {
+      difficulty: expectedDifficulty.id,
+      origin: expectedOrigin.id,
+      trait: expectedTrait.id,
+      city: expectedCity.id,
+    });
+  } else {
+    for (const nodeName of [
+      "profile-difficulty",
+      "profile-origin",
+      "profile-trait",
+      "profile-city",
+      "profile-slot",
+    ]) {
+      await clickScrollableLayaNode(
+        page,
+        nodeName,
+        "page-new-game-setup-scroll",
+      );
+    }
   }
   await clickLayaNode(page, "player-name-submit");
   await continuePreGameNotice(page);
@@ -796,15 +968,12 @@ test("完整新游戏档案页循环配置后进入普通模式", async ({ page 
     originLabel: expectedOrigin.label,
     traitLabel: expectedTrait.label,
   });
-  expect(snapshot.campaignProfile?.homeCityLabel).toBe(expectedCity.label);
-  expect(expectedCity.label).toContain(
-    snapshot.campaignProfile?.districtLabel ?? "",
-  );
+  expectSeparatedCampaignLocation(snapshot, expectedCity);
   expect(await readLayaNodeBounds(page, "dashboard-campaign-profile")).not.toBeNull();
   expect(await readLayaNodeBounds(page, "dashboard-mission")).toBeNull();
 });
 
-test("开局提示可进入逐步战术引导并聚焦全部真实目标", async ({ page }) => {
+test("开局提示可进入无滚动分页战术引导并聚焦真实目标", async ({ page }) => {
   await closeAutomaticUpdateLog(page);
   await openNewGameSetup(page, "single");
   await fillCommanderName(page, "引导所长");
@@ -816,18 +985,8 @@ test("开局提示可进入逐步战术引导并聚焦全部真实目标", async
   expect(await readLayaNodeBounds(page, "page-dashboard")).not.toBeNull();
   expect(await readLayaNodeBounds(page, "page-guided-tutorial")).not.toBeNull();
 
-  for (
-    let index = 0;
-    index < webConfigDocument.guided_tutorial.steps.length;
-    index += 1
-  ) {
-    const step = webConfigDocument.guided_tutorial.steps[index];
-    if (step === undefined) {
-      throw new Error(`缺少教程步骤 ${String(index + 1)}。`);
-    }
-    await expect.poll(async () =>
-      readLayaNodeBounds(page, step.target_test_id),
-    ).not.toBeNull();
+  let navigationCount = 0;
+  while (await page.evaluate(() => document.body.dataset.gameScreen) === "tutorial") {
     expect(
       await readLayaNodeBounds(page, "guided-tutorial-target-state"),
     ).toBeNull();
@@ -840,7 +999,14 @@ test("开局提示可进入逐步战术引导并聚焦全部真实目标", async
       expect(focus.y + focus.height).toBeLessThanOrEqual(focus.stageHeight);
     }
     await clickLayaNode(page, "guided-tutorial-next");
+    navigationCount += 1;
+    if (navigationCount > webConfigDocument.guided_tutorial.steps.length * 8) {
+      throw new Error("教程分页导航未在配置上限内完成。");
+    }
   }
+  expect(navigationCount).toBeGreaterThanOrEqual(
+    webConfigDocument.guided_tutorial.steps.length,
+  );
   await waitForScreen(page, "dashboard");
 });
 
@@ -977,7 +1143,13 @@ test("启动更新日志关闭后展示五个主入口且不再提供封面退�
   for (const nodeName of menuNodes) {
     expect(await readLayaNodeBounds(page, nodeName)).not.toBeNull();
   }
-  for (const utilityNode of ["menu-settings", "menu-update-log"]) {
+  for (const utilityNode of [
+    "menu-settings",
+    "menu-account-login",
+    "menu-store",
+    "menu-update-log",
+    "menu-text-records",
+  ]) {
     expect(await readLayaNodeBounds(page, utilityNode)).not.toBeNull();
   }
   expect(await readLayaNodeBounds(page, "menu-exit")).toBeNull();
@@ -999,6 +1171,30 @@ test("启动更新日志关闭后展示五个主入口且不再提供封面退�
   await clickLayaNode(page, "menu-update-log");
   await waitForScreen(page, "update_log");
   await clickLayaNode(page, "page-update-log-close");
+  await waitForScreen(page, "menu");
+  await clickLayaNode(page, "menu-account-login");
+  await waitForScreen(page, "account_login");
+  for (const accountNode of [
+    "page-account-login",
+    "coop-local-demo-notice",
+    "coop-login-warning",
+    "coop-login-submit",
+  ]) {
+    await expect.poll(async () =>
+      readLayaNodeBounds(page, accountNode),
+    ).not.toBeNull();
+  }
+  await clickLayaNode(page, "page-account-login-back");
+  await waitForScreen(page, "menu");
+  await clickLayaNode(page, "menu-store");
+  await waitForScreen(page, "store");
+  expect(await readLayaNodeBounds(page, "page-store-content")).not.toBeNull();
+  await clickLayaNode(page, "page-store-close");
+  await waitForScreen(page, "menu");
+  await clickLayaNode(page, "menu-text-records");
+  await waitForScreen(page, "text_records");
+  expect(await readLayaNodeBounds(page, "page-text-records-content")).not.toBeNull();
+  await clickLayaNode(page, "page-text-records-close");
   await waitForScreen(page, "menu");
   await clickLayaNode(page, "menu-credits");
   await waitForScreen(page, "credits");
@@ -1163,11 +1359,35 @@ test("远征从整备、事件、安全返程到归来事项完成闭环", async
   );
   await waitForScreen(page, "expedition_district_detail");
   await clickLayaNode(page, "page-expedition-district-detail-confirm");
+  const selectedDepth = await followFirstDistrictExplorationBranch(
+    page,
+    city.id,
+    district.id,
+  );
+  await carryExpeditionFood(page, 1);
+  await returnFromExpeditionPrepareToDistrictDetail(
+    page,
+    city.id,
+    district.id,
+    selectedDepth,
+  );
+  await clickLayaNode(page, "page-expedition-district-detail-confirm");
   await followFirstDistrictExplorationBranch(page, city.id, district.id);
   const requiredFood = (
     city.travelStepCost + district.eventStepCost + 1
   ) * survivalSystemsConfigDocument.expedition.food_units_per_action;
   await carryExpeditionFood(page, requiredFood);
+  const foodItemId = survivalSystemsConfigDocument.expedition.action_food_item_id;
+  await clickScrollableLayaNode(
+    page,
+    `page-expedition-item-${foodItemId}-increase`,
+    "page-expedition-prepare-scroll",
+  );
+  await clickScrollableLayaNode(
+    page,
+    `page-expedition-item-${foodItemId}-decrease`,
+    "page-expedition-prepare-scroll",
+  );
   await clickLayaNode(page, "page-expedition-prepare-begin");
   await waitForScreen(page, "exploration_event");
   const expeditionSnapshot = await readDebugSnapshot(page);
@@ -1184,6 +1404,9 @@ test("远征从整备、事件、安全返程到归来事项完成闭环", async
   if (status === null) {
     throw new Error("远征状态未进入调试快照。");
   }
+  expect(status.maximumSteps).toBe(
+    requiredFood / survivalSystemsConfigDocument.expedition.food_units_per_action,
+  );
   expect(
     status.maximumSteps - status.travelStepCost - status.remainingSteps,
   ).toBe(district.eventStepCost);
@@ -1340,6 +1563,35 @@ test("避难所活动先显示需求且确认一次只结算一次", async ({ pa
   await waitForScreen(page, "message");
 
   expect((await readDebugSnapshot(page)).clock?.turnLabel).toBe("第 2 回合");
+});
+
+test("工作详情按配置循环次数并一次提交三轮工作", async ({ page }) => {
+  await closeAutomaticUpdateLog(page);
+  await startSingleGame(page, "轮班所长");
+  await clickLayaNode(page, managementEntryNode(await readGameLayout(page)));
+  await waitForScreen(page, "management_categories");
+  await clickScrollableLayaNode(
+    page,
+    "page-management-categories-option-work",
+    "page-management-categories-scroll",
+  );
+  await waitForScreen(page, "management_options");
+  await clickScrollableLayaNode(
+    page,
+    "page-management-options-option-job::sort_salvage",
+    "page-management-options-scroll",
+  );
+  await waitForScreen(page, "management_option_detail");
+  expect(
+    await readLayaNodeBounds(page, "page-management-option-detail-repetitions"),
+  ).not.toBeNull();
+
+  await clickLayaNode(page, "page-management-option-detail-repetitions");
+  await clickLayaNode(page, "page-management-option-detail-repetitions");
+  await clickLayaNode(page, "page-management-option-detail-confirm");
+  await waitForScreen(page, "message");
+
+  expect((await readDebugSnapshot(page)).clock?.turnLabel).toBe("第 6 回合");
 });
 
 test("锁定城市可进入详情查看需求但不能继续", async ({ page }) => {

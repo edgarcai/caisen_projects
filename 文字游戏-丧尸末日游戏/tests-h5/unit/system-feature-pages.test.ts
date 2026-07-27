@@ -191,8 +191,26 @@ describe("仓库、研发、制作与历史的真实展示模型", () => {
         available: true,
         costDescription: "零件×10",
         expeditionStepBonus: 2,
+        requiredItemId: "old_newspaper",
+        requiredItemName: "旧报纸",
+        sourceDescription: "A市·C区",
+        slotted: true,
       },
-    ]);
+    ], {
+      slotCount: 1,
+      slottedItemId: "old_newspaper",
+      slottedItemName: "旧报纸",
+      candidates: [{
+        id: "old_newspaper",
+        name: "旧报纸",
+        ownedQuantity: 1,
+        sourceDescription: "A市·C区",
+        projectId: "radio",
+        projectName: "无线电增幅",
+        researchCompleted: false,
+        available: true,
+      }],
+    });
     const crafting = buildCraftingPrompt(webConfig, [
       {
         id: "ration",
@@ -203,12 +221,41 @@ describe("仓库、研发、制作与历史的真实展示模型", () => {
         costDescription: "食物×5",
         outputItemId: "field_ration",
         outputQuantity: 1,
+        blueprintSourceDescription: "A市·C区",
       },
     ]);
 
-    expect(research.options[0]).toMatchObject({ disabled: false, tone: "primary" });
-    expect(research.options[0]?.description).not.toContain("步数");
+    expect(research.body).toContain("已放入：旧报纸");
+    expect(research.options[0]).toMatchObject({ disabled: true });
+    expect(research.options.at(-1)).toMatchObject({ disabled: false, tone: "primary" });
+    expect(research.options.at(-1)?.description).toContain("研究样本：旧报纸｜已放入");
+    expect(research.options.at(-1)?.description).toContain("可能出处：A市·C区");
     expect(crafting.options[0]).toMatchObject({ disabled: true });
+    expect(crafting.options[0]?.description).toContain("蓝图出处：A市·C区");
+  });
+
+  it("空研究槽展示可放入候选物，候选出处来自实时投影", () => {
+    const prompt = buildResearchPrompt(webConfig, [], {
+      slotCount: 1,
+      slottedItemId: null,
+      slottedItemName: null,
+      candidates: [{
+        id: "technical_manual",
+        name: "旧技术手册",
+        ownedQuantity: 2,
+        sourceDescription: "B市·E区",
+        projectId: "field_generator",
+        projectName: "便携发电机",
+        researchCompleted: false,
+        available: true,
+      }],
+    });
+
+    expect(prompt.body).toContain("□ 空研究槽");
+    expect(prompt.options).toHaveLength(1);
+    expect(prompt.options[0]).toMatchObject({ disabled: false, tone: "primary" });
+    expect(prompt.options[0]?.label).toContain("旧技术手册 ×2");
+    expect(prompt.options[0]?.description).toContain("B市·E区");
   });
 
   it("载具设置区分已装备、可装备和未制作状态", () => {

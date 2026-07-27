@@ -13,27 +13,14 @@ import type {
 import { createChoicePage } from "./ChoicePage";
 import { PageScaffold, type PageView } from "./PageView";
 
-/** 伙伴档案列表的纯导航意图。 */
+/** 角色档案列表的纯导航意图。 */
 export interface CompanionArchiveActions {
   readonly back: () => void;
   readonly openCompanion: (companionId: string) => void;
-  readonly openManagement: () => void;
 }
 
-/** 伙伴详情页的纯导航意图。 */
+/** 角色详情页的配装与互动导航意图。 */
 export interface CompanionDetailActions {
-  readonly back: () => void;
-  readonly manage: (companionId: string) => void;
-}
-
-/** 伙伴管理列表的纯导航意图。 */
-export interface CompanionManagementActions {
-  readonly back: () => void;
-  readonly openCompanion: (companionId: string) => void;
-}
-
-/** 单个伙伴管理页的纯导航意图。 */
-export interface CompanionManagementDetailActions {
   readonly back: () => void;
   readonly openEquipment: (
     companionId: string,
@@ -42,7 +29,7 @@ export interface CompanionManagementDetailActions {
   readonly openInteraction: (companionId: string) => void;
 }
 
-/** 伙伴配装页可提交的领域意图。 */
+/** 角色配装页可提交的领域意图。 */
 export interface CompanionEquipmentActions {
   readonly back: () => void;
   readonly equip: (
@@ -52,13 +39,13 @@ export interface CompanionEquipmentActions {
   ) => void;
 }
 
-/** 伙伴互动页可提交的领域意图。 */
+/** 角色互动页可提交的领域意图。 */
 export interface CompanionInteractionActions {
   readonly back: () => void;
   readonly interact: (companionId: string, interactionId: string) => void;
 }
 
-/** 将伙伴档案投影为全部可点击的公开列表。 */
+/** 将已拥有且可行动的角色投影为档案列表。 */
 export function buildCompanionArchivePrompt(
   config: GameUiConfig,
   companions: readonly UiCompanionView[],
@@ -67,79 +54,9 @@ export function buildCompanionArchivePrompt(
     id: "companion-archive",
     title: config.texts.companion_archive_title,
     body: config.texts.companion_archive_body,
-    options: companions.map((companion) => companionListOption(config, companion, false)),
-  };
-}
-
-/** 将伙伴档案投影为只允许管理在队成员的列表。 */
-export function buildCompanionManagementPrompt(
-  config: GameUiConfig,
-  companions: readonly UiCompanionView[],
-): UiPromptView {
-  return {
-    id: "companion-management",
-    title: config.texts.companion_management_title,
-    body: config.texts.companion_management_body,
-    options: companions.map((companion) => companionListOption(config, companion, true)),
-  };
-}
-
-/** 构建单个伙伴的配装、卸下与互动入口。 */
-export function buildCompanionManagementDetailPrompt(
-  config: GameUiConfig,
-  companion: UiCompanionView,
-): UiPromptView {
-  const equipmentName = (
-    slot: UiCompanionEquipmentSlot,
-  ): string => slot === "weapon"
-    ? companion.equippedWeapon?.name ?? config.texts.companion_unequip
-    : companion.equippedArmor?.name ?? config.texts.companion_unequip;
-  const disabled = !companion.canManage;
-  const disabledReason = disabled
-    ? config.texts.companion_locked_management
-    : undefined;
-  return {
-    id: `companion-management-${companion.id}`,
-    title: `${companion.name} · ${config.texts.companion_management}`,
-    body: formatUiTemplate(config.texts.companion_interaction_cooldown_format, {
-      turns: companion.interactionCooldownTurns,
-      count: companion.interactionCount,
-    }),
-    options: [
-      {
-        id: "weapon",
-        label: config.texts.companion_weapon,
-        description: formatUiTemplate(config.texts.companion_equipment_format, {
-          slot: config.texts.companion_weapon,
-          item: equipmentName("weapon"),
-        }),
-        disabled,
-        disabledReason,
-        tone: "primary",
-      },
-      {
-        id: "armor",
-        label: config.texts.companion_armor,
-        description: formatUiTemplate(config.texts.companion_equipment_format, {
-          slot: config.texts.companion_armor,
-          item: equipmentName("armor"),
-        }),
-        disabled,
-        disabledReason,
-        tone: "primary",
-      },
-      {
-        id: "interaction",
-        label: config.texts.companion_interaction,
-        description: formatUiTemplate(config.texts.companion_interaction_cooldown_format, {
-          turns: companion.interactionCooldownTurns,
-          count: companion.interactionCount,
-        }),
-        disabled,
-        disabledReason,
-        tone: "success",
-      },
-    ],
+    options: companions
+      .filter((companion) => companion.canManage)
+      .map((companion) => companionListOption(config, companion)),
   };
 }
 
@@ -166,7 +83,7 @@ export function buildCompanionEquipmentPrompt(
     }),
     body: formatUiTemplate(config.texts.companion_equipment_format, {
       slot: slotLabel,
-      item: equipped?.name ?? config.texts.companion_unequip,
+      item: equipped?.name ?? config.texts.companion_empty_slot,
     }),
     options: [unequipOption(config, equipped !== null), ...options.map(
       (option) => equipmentOption(config, option),
@@ -174,7 +91,7 @@ export function buildCompanionEquipmentPrompt(
   };
 }
 
-/** 构建带冷却条件的伙伴互动列表。 */
+/** 构建带冷却条件的角色互动列表。 */
 export function buildCompanionInteractionPrompt(
   config: GameUiConfig,
   companion: UiCompanionView,
@@ -192,7 +109,7 @@ export function buildCompanionInteractionPrompt(
   };
 }
 
-/** 创建可点击进入单人档案、并可转入管理的伙伴列表页。 */
+/** 创建可点击进入单人详情的角色档案页。 */
 export function createCompanionsPage(
   runtime: LayaRuntimeLike,
   factory: UiFactory,
@@ -206,26 +123,11 @@ export function createCompanionsPage(
     title: config.texts.companion_archive_title,
     prompt: buildCompanionArchivePrompt(config, companions),
     onBack: actions.back,
-    footerActions: [
-      {
-        id: "back",
-        testId: "page-companions-back",
-        label: config.texts.back,
-        onClick: actions.back,
-      },
-      {
-        id: "management",
-        testId: "page-companions-management",
-        label: config.texts.companion_management,
-        tone: "primary",
-        onClick: actions.openManagement,
-      },
-    ],
     onSelect: (option): void => { actions.openCompanion(option.id); },
   });
 }
 
-/** 创建同时展示立绘信号、身份、状态、信任与完整档案的详情页。 */
+/** 创建同时展示立绘、档案、配装与互动入口的角色详情页。 */
 export function createCompanionDetailPage(
   runtime: LayaRuntimeLike,
   factory: UiFactory,
@@ -250,12 +152,28 @@ export function createCompanionDetailPage(
         onClick: actions.back,
       },
       {
-        id: "manage",
-        testId: "page-companion-detail-manage",
-        label: config.texts.companion_management,
+        id: "weapon",
+        testId: "page-companion-detail-weapon",
+        label: config.texts.companion_weapon,
         tone: "primary",
         disabled: !companion.canManage,
-        onClick: (): void => { actions.manage(companion.id); },
+        onClick: (): void => { actions.openEquipment(companion.id, "weapon"); },
+      },
+      {
+        id: "armor",
+        testId: "page-companion-detail-armor",
+        label: config.texts.companion_armor,
+        tone: "primary",
+        disabled: !companion.canManage,
+        onClick: (): void => { actions.openEquipment(companion.id, "armor"); },
+      },
+      {
+        id: "interaction",
+        testId: "page-companion-detail-interaction",
+        label: config.texts.companion_interaction,
+        tone: "success",
+        disabled: !companion.canManage,
+        onClick: (): void => { actions.openInteraction(companion.id); },
       },
     ],
   );
@@ -272,49 +190,7 @@ export function createCompanionDetailPage(
   return page;
 }
 
-/** 创建伙伴管理的首层成员选择页。 */
-export function createCompanionManagementPage(
-  runtime: LayaRuntimeLike,
-  factory: UiFactory,
-  config: GameUiConfig,
-  layout: ResponsiveLayout,
-  companions: readonly UiCompanionView[],
-  actions: CompanionManagementActions,
-): PageView {
-  return createChoicePage(runtime, factory, config, layout, {
-    testId: "page-companion-management",
-    title: config.texts.companion_management_title,
-    prompt: buildCompanionManagementPrompt(config, companions),
-    onBack: actions.back,
-    onSelect: (option): void => { actions.openCompanion(option.id); },
-  });
-}
-
-/** 创建单个伙伴的配装与互动分流页。 */
-export function createCompanionManagementDetailPage(
-  runtime: LayaRuntimeLike,
-  factory: UiFactory,
-  config: GameUiConfig,
-  layout: ResponsiveLayout,
-  companion: UiCompanionView,
-  actions: CompanionManagementDetailActions,
-): PageView {
-  return createChoicePage(runtime, factory, config, layout, {
-    testId: "page-companion-management-detail",
-    title: config.texts.companion_management_title,
-    prompt: buildCompanionManagementDetailPrompt(config, companion),
-    onBack: actions.back,
-    onSelect: (option): void => {
-      if (option.id === "interaction") {
-        actions.openInteraction(companion.id);
-      } else {
-        actions.openEquipment(companion.id, option.id as UiCompanionEquipmentSlot);
-      }
-    },
-  });
-}
-
-/** 创建使用现有仓库目录的伙伴配装页。 */
+/** 创建使用现有仓库目录的角色配装页。 */
 export function createCompanionEquipmentPage(
   runtime: LayaRuntimeLike,
   factory: UiFactory,
@@ -335,7 +211,7 @@ export function createCompanionEquipmentPage(
   });
 }
 
-/** 创建带需求和冷却灰态的伙伴互动页。 */
+/** 创建带需求和冷却灰态的角色互动页。 */
 export function createCompanionInteractionPage(
   runtime: LayaRuntimeLike,
   factory: UiFactory,
@@ -365,6 +241,14 @@ export function buildCompanionDetailBody(
       role: companion.role,
       status: companion.statusLabel,
       trust: companion.trustLabel,
+    }),
+    formatUiTemplate(config.texts.companion_equipment_format, {
+      slot: config.texts.companion_weapon,
+      item: companion.equippedWeapon?.name ?? config.texts.companion_empty_slot,
+    }),
+    formatUiTemplate(config.texts.companion_equipment_format, {
+      slot: config.texts.companion_armor,
+      item: companion.equippedArmor?.name ?? config.texts.companion_empty_slot,
     }),
     companion.biography,
   ].filter((text) => text.trim().length > 0).join(
@@ -448,13 +332,11 @@ function renderMissingPortraitSignal(
   });
 }
 
-/** 把一名伙伴转换为档案或管理列表项。 */
+/** 把一名已拥有角色转换为档案列表项。 */
 function companionListOption(
   config: GameUiConfig,
   companion: UiCompanionView,
-  managementOnly: boolean,
 ): UiOptionView {
-  const disabled = managementOnly && !companion.canManage;
   return {
     id: companion.id,
     label: formatUiTemplate(config.texts.companion_status_format, {
@@ -465,8 +347,6 @@ function companionListOption(
     }),
     description: companion.introduction,
     disabled: false,
-    disabledReason: disabled ? config.texts.companion_locked_management : undefined,
-    lockedAppearance: disabled,
     tone: companion.tone,
   };
 }
@@ -492,7 +372,10 @@ function equipmentOption(
 ): UiOptionView {
   return {
     id: option.id,
-    label: option.name,
+    label: formatUiTemplate(config.texts.companion_equipment_quantity_format, {
+      name: option.name,
+      quantity: option.ownedQuantity,
+    }),
     description: formatUiTemplate(config.texts.warehouse_detail_format, {
       category: option.slot === "weapon"
         ? config.texts.companion_weapon

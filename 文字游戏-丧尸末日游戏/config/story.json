@@ -90,17 +90,24 @@
     "target_names": {
       "player.health": "生命",
       "player.food": "食物",
+      "player.hunger": "饥饿值",
       "player.intelligence": "智力",
       "player.coins": "金币",
       "player.parts": "零件",
       "player.medical_supplies": "医疗用品",
+      "player.negative_status": "负面状态",
       "player.attack": "攻击",
       "player.agility": "敏捷",
       "player.antidotes": "解毒剂",
       "shelter.population": "避难所人数",
-      "shelter.health": "避难所耐久",
+      "shelter.health": "避难所总耐久",
+      "shelter.inner_wall_health": "内墙耐久",
+      "shelter.outer_wall_health": "外墙耐久",
       "shelter.activity": "避难所活跃度",
       "shelter.hope": "希望值",
+      "shelter.group_hunger": "群体饥饿值",
+      "shelter.defense_damage": "防御设施伤害",
+      "shelter.newspapers": "报纸情报",
       "shelter.books": "书本",
       "shelter.magazines": "杂志",
       "shelter.toys": "玩具",
@@ -1397,7 +1404,7 @@
       "focus": "你屏住呼吸观察弱点，下一次攻击将获得专注加成。",
       "medicine": "你消耗{cost}份医疗用品，恢复{healed}点生命。",
       "medicine_failed": "医疗用品不足，需要至少{cost}份。",
-      "medicine_not_needed": "当前所长生命值已满，无需消耗医疗用品。",
+      "medicine_not_needed": "当前生命值已满，无需消耗医疗用品。",
       "boss_attack": "{boss_name}发动攻击，你受到{damage}点伤害。",
       "boss_special": "{special_text}你受到{damage}点伤害。",
       "guard_reduced": "防御生效，本次伤害由{raw_damage}降低至{damage}。",
@@ -1698,7 +1705,29 @@
   ],
   "facility_management": {
     "initial_total_level_limit": 10,
-    "capacity_modifier_target": "rules.facility_total_level_capacity"
+    "capacity_modifier_target": "rules.facility_total_level_capacity",
+    "effect_target_names": {
+      "shelter.defense_damage": "防御设施伤害",
+      "shelter.outer_wall_health": "外墙耐久",
+      "rules.player_food_hunger_reduction": "个人进食恢复",
+      "rules.shelter_food_hunger_reduction": "集体供餐恢复",
+      "rules.food_cost_percent": "食物消耗比例",
+      "rules.repair_health_restore": "内墙维护量",
+      "rules.boss_tool_damage_percent": "工具对首领伤害",
+      "rules.medicine_heal_percent": "医疗恢复比例",
+      "rules.negative_status_health_loss_percent": "负面状态损伤",
+      "rules.discovery_weight_percent": "稀有发现权重",
+      "rules.trade_buy_price_percent": "购买价格",
+      "rules.story_evidence_job_bonus": "工作证据产出",
+      "rules.daily_food_production": "每日食物产出",
+      "rules.group_hunger_gain_percent": "群体饥饿增长",
+      "rules.shelter_turn_damage_percent": "墙体每回合损伤",
+      "rules.facility_total_level_capacity": "设施总等级容量"
+    },
+    "effect_add_format": "{effect_name} +{amount}",
+    "effect_subtract_format": "{effect_name} -{amount}",
+    "effect_set_format": "{effect_name} 设为 {amount}",
+    "effect_separator": "；"
   },
   "facilities": [
     {
@@ -1778,12 +1807,10 @@
     {
       "facility_id": "infirmary",
       "name": "避难所医务室",
-      "description": "治疗伤势、压制负面状态并研究回声菌株。",
+      "description": "治疗伤势、压制负面状态并储备常用药物。",
       "max_level": 3,
       "counts_toward_total_level_limit": true,
-      "unlock_requirements": [
-        {"type": "flag", "flag_id": "linlan_joined"}
-      ],
+      "unlock_requirements": [],
       "levels": [
         {
           "level": 1,
@@ -1846,7 +1873,7 @@
           "coins_cost": 70,
           "build_hours": 12,
           "effects": [
-            {"target": "rules.story_evidence_job_bonus", "operation": "add", "amount": 1}
+            {"target": "rules.discovery_weight_percent", "operation": "add", "amount": 10}
           ]
         }
       ]
@@ -1904,7 +1931,7 @@
           "coins_cost": 15,
           "build_hours": 7,
           "effects": [
-            {"target": "shelter.health", "operation": "add", "amount": 80},
+            {"target": "shelter.outer_wall_health", "operation": "add", "amount": 80},
             {"target": "shelter.defense_damage", "operation": "add", "amount": 5}
           ]
         },
@@ -1914,7 +1941,7 @@
           "coins_cost": 45,
           "build_hours": 11,
           "effects": [
-            {"target": "shelter.health", "operation": "add", "amount": 120},
+            {"target": "shelter.outer_wall_health", "operation": "add", "amount": 120},
             {"target": "shelter.defense_damage", "operation": "add", "amount": 8}
           ]
         },
@@ -2045,6 +2072,145 @@
       ]
     }
   ],
+  "facility_actions": [
+    {
+      "action_id": "field_kitchen_meal",
+      "facility_id": "field_kitchen",
+      "name": "烹制热食",
+      "description": "把少量储备加工成能稳定情绪的热餐，优先缓解当前所长的饥饿。",
+      "minimum_level": 1,
+      "duration_hours": 2,
+      "costs": [
+        {"target": "player.food", "operation": "subtract", "amount": 4}
+      ],
+      "rewards": [
+        {"target": "player.hunger", "operation": "subtract", "amount": 35, "limit_to_available": true},
+        {"target": "shelter.hope", "operation": "add", "amount": 2}
+      ],
+      "result_text": "厨房升起久违的热气。当前所长的饥饿得到缓解，避难所也安静了一会儿。"
+    },
+    {
+      "action_id": "machine_workshop_recycle",
+      "facility_id": "machine_workshop",
+      "name": "回收废旧构件",
+      "description": "支付少量流通费用，从报废构件中筛出仍可使用的零件。",
+      "minimum_level": 1,
+      "duration_hours": 4,
+      "costs": [
+        {"target": "player.coins", "operation": "subtract", "amount": 6}
+      ],
+      "rewards": [
+        {"target": "player.parts", "operation": "add", "amount": [3, 7]}
+      ],
+      "result_text": "机修台完成一轮拆解，几枚尚可使用的零件被重新编号入库。"
+    },
+    {
+      "action_id": "infirmary_treatment",
+      "facility_id": "infirmary",
+      "name": "安排集中治疗",
+      "description": "消耗医疗用品处理伤势，并清理一层持续恶化的负面状态。",
+      "minimum_level": 1,
+      "duration_hours": 4,
+      "costs": [
+        {"target": "player.medical_supplies", "operation": "subtract", "amount": 3}
+      ],
+      "rewards": [
+        {"target": "player.health", "operation": "add", "amount": 30},
+        {"target": "player.negative_status", "operation": "subtract", "amount": 1, "limit_to_available": true}
+      ],
+      "result_text": "医务室完成治疗与观察，当前所长的伤口重新包扎，异常症状得到压制。"
+    },
+    {
+      "action_id": "radio_room_scan",
+      "facility_id": "radio_room",
+      "name": "扫描旧城频段",
+      "description": "维持一轮宽频监听，从求救、车队与旧广播中整理可用情报。",
+      "minimum_level": 1,
+      "duration_hours": 3,
+      "costs": [
+        {"target": "player.coins", "operation": "subtract", "amount": 5}
+      ],
+      "rewards": [
+        {"target": "shelter.newspapers", "operation": "add", "amount": [1, 3]}
+      ],
+      "result_text": "无线电室截获数段残缺播报，值班员将路线与时间写进新的情报简报。"
+    },
+    {
+      "action_id": "hydroponic_greenhouse_harvest",
+      "facility_id": "hydroponic_greenhouse",
+      "name": "收获水培作物",
+      "description": "收割本轮成熟作物；更高等级会通过被动产出继续提高长期供给。",
+      "minimum_level": 1,
+      "duration_hours": 3,
+      "rewards": [
+        {"target": "player.food", "operation": "add", "amount": [4, 8]}
+      ],
+      "result_text": "温室的营养液循环声停了片刻，新鲜作物被装入食物仓。"
+    },
+    {
+      "action_id": "outer_wall_patrol",
+      "facility_id": "outer_wall",
+      "name": "组织外墙巡逻",
+      "description": "巡逻队更换松动板材并封堵尸群留下的撞击缺口，只修复外墙。",
+      "minimum_level": 1,
+      "duration_hours": 4,
+      "costs": [
+        {"target": "player.parts", "operation": "subtract", "amount": 6}
+      ],
+      "rewards": [
+        {"target": "shelter.outer_wall_health", "operation": "add", "amount": 45}
+      ],
+      "result_text": "外墙巡逻完成，松动的板材与缺口已被重新固定。"
+    },
+    {
+      "action_id": "shelter_expansion_inspection",
+      "facility_id": "shelter_expansion",
+      "name": "检查扩建舱段",
+      "description": "带领居民检查新舱段与承重节点，提升对扩建区域的信任。",
+      "minimum_level": 1,
+      "duration_hours": 3,
+      "costs": [
+        {"target": "player.food", "operation": "subtract", "amount": 2}
+      ],
+      "rewards": [
+        {"target": "shelter.activity", "operation": "add", "amount": 8},
+        {"target": "shelter.hope", "operation": "add", "amount": 3}
+      ],
+      "result_text": "扩建区第一次对所有人开放。亲眼看到新空间后，流言终于少了许多。"
+    },
+    {
+      "action_id": "water_purification_distribution",
+      "facility_id": "water_purification",
+      "name": "发放净化饮水",
+      "description": "启动集中净化与发放，降低整个避难所的群体饥饿压力。",
+      "minimum_level": 1,
+      "duration_hours": 2,
+      "rewards": [
+        {"target": "shelter.group_hunger", "operation": "subtract", "amount": 24, "limit_to_available": true}
+      ],
+      "result_text": "净水被分到每个居住区，排队的人群逐渐恢复秩序。"
+    },
+    {
+      "action_id": "energy_center_emergency_power",
+      "facility_id": "energy_center",
+      "name": "切换应急供电",
+      "description": "消耗零件启动应急阵列，为内墙维修设备与防御节点临时供电。",
+      "minimum_level": 1,
+      "duration_hours": 4,
+      "costs": [
+        {"target": "player.parts", "operation": "subtract", "amount": 5}
+      ],
+      "rewards": [
+        {"target": "shelter.inner_wall_health", "operation": "add", "amount": 35},
+        {"target": "shelter.defense_damage", "operation": "add", "amount": 2}
+      ],
+      "result_text": "应急灯逐级亮起，内墙维修设备重新运转，防御节点完成校准。"
+    }
+  ],
+  "work": {
+    "repetition_options": [1, 2, 3, 5, 10],
+    "maximum_repetitions": 10
+  },
   "jobs": [
     {
       "job_id": "sort_salvage",
@@ -2091,6 +2257,7 @@
     },
     {
       "job_id": "radio_watch",
+      "required_mode_capability": "narrative",
       "name": "监听城市频段",
       "description": "搜索求救、商人和隐藏地点的信号。",
       "duration_hours": 2,
@@ -2113,6 +2280,7 @@
     },
     {
       "job_id": "medical_research",
+      "required_mode_capability": "narrative",
       "name": "回声样本研究",
       "description": "协助林岚分析菌株，积累主线证据并尝试制作解毒剂。",
       "duration_hours": 4,
@@ -2145,7 +2313,7 @@
         {"target": "player.health", "operation": "subtract", "amount": [0, 5]}
       ],
       "rewards": [
-        {"target": "shelter.health", "operation": "add", "amount": [8, 18]},
+        {"target": "shelter.outer_wall_health", "operation": "add", "amount": [8, 18]},
         {"target": "shelter.activity", "operation": "add", "amount": 4}
       ],
       "risk": {
@@ -2288,7 +2456,18 @@
     "cycle": {
       "usage_key": "weekly_trade",
       "days": 7,
-      "maximum_transactions": 1
+      "maximum_transactions": 1,
+      "allowed_weekdays": [5, 6],
+      "weekday_labels": {
+        "0": "周日",
+        "1": "周一",
+        "2": "周二",
+        "3": "周三",
+        "4": "周四",
+        "5": "周五",
+        "6": "周六"
+      },
+      "duration_days": 2
     },
     "ambush": {
       "chance_percent": 30,
@@ -2464,6 +2643,7 @@
     },
     {
       "trade_id": "lighthouse_bulk_food",
+      "required_mode_capability": "narrative",
       "vendor_id": "lighthouse_market",
       "vendor_name": "灯塔黑市",
       "item_id": "trade_food_bulk",
@@ -2479,6 +2659,7 @@
     },
     {
       "trade_id": "lighthouse_weapon_parts",
+      "required_mode_capability": "narrative",
       "vendor_id": "lighthouse_market",
       "vendor_name": "灯塔黑市",
       "item_id": "trade_weapon_parts",
@@ -2494,6 +2675,7 @@
     },
     {
       "trade_id": "lighthouse_antidote",
+      "required_mode_capability": "narrative",
       "vendor_id": "lighthouse_market",
       "vendor_name": "灯塔黑市",
       "item_id": "trade_antidote",
@@ -2509,6 +2691,7 @@
     },
     {
       "trade_id": "station_food",
+      "required_mode_capability": "narrative",
       "vendor_id": "old_station_collective",
       "vendor_name": "旧车站互助会",
       "item_id": "trade_food",
@@ -2523,6 +2706,7 @@
     },
     {
       "trade_id": "station_parts",
+      "required_mode_capability": "narrative",
       "vendor_id": "old_station_collective",
       "vendor_name": "旧车站互助会",
       "item_id": "trade_parts",
@@ -2537,6 +2721,7 @@
     },
     {
       "trade_id": "station_toys",
+      "required_mode_capability": "narrative",
       "vendor_id": "old_station_collective",
       "vendor_name": "旧车站互助会",
       "item_id": "trade_toys",
@@ -2553,6 +2738,7 @@
   "recruits": [
     {
       "recruit_id": "qiao_mu",
+      "required_mode_capability": "narrative",
       "name": "乔木",
       "role": "前消防员",
       "description": "陆沉曾经的队员，擅长外墙防守和重型工具。",
@@ -2571,6 +2757,7 @@
     },
     {
       "recruit_id": "su_yao",
+      "required_mode_capability": "narrative",
       "name": "苏遥",
       "role": "水培技师",
       "description": "能让营养液里长出真正的菜，而不是豪菜定义中的菜。",
@@ -2589,6 +2776,7 @@
     },
     {
       "recruit_id": "luo_sheng",
+      "required_mode_capability": "narrative",
       "name": "罗声",
       "role": "旧电台主持人",
       "description": "声音温和，擅长从混乱频段中辨认谎言和求救。",
@@ -2608,6 +2796,7 @@
     },
     {
       "recruit_id": "chen_zhi",
+      "required_mode_capability": "narrative",
       "name": "陈枝",
       "role": "轻度感染者",
       "description": "仍保持完整意识，却会在信号增强时听见群巢。接纳她将考验避难所的底线。",

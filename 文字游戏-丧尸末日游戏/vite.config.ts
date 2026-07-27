@@ -1,4 +1,14 @@
 import { defineConfig } from "vitest/config";
+import coopDocument from "./config/coop.json";
+
+const coopProxyTarget = process.env.SHELTER_COOP_UPSTREAM
+  ?? coopDocument.transport.relay_upstream;
+const coopProxy = {
+  [coopDocument.transport.websocket_path]: {
+    target: coopProxyTarget,
+    ws: true,
+  },
+};
 
 export default defineConfig({
   base: "./",
@@ -13,11 +23,13 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     strictPort: true,
+    proxy: coopProxy,
   },
   preview: {
     host: "0.0.0.0",
     port: 4173,
     strictPort: true,
+    proxy: coopProxy,
   },
   test: {
     environment: "node",

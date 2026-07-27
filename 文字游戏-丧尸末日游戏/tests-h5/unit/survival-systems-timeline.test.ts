@@ -27,6 +27,38 @@ function defaultDistrictId(application: GameApplication, cityId: string): string
   return application.content.city(cityId).default_district_id;
 }
 
+/** 按公开侦察流程和城市配置解锁远城，并在完成后卸下载具。 */
+function unlockRemoteCityForExpedition(
+  application: GameApplication,
+  cityId: string,
+): void {
+  const state = requireState(application);
+  const city = application.content.city(cityId);
+  state.shelter.newspapers = Math.max(
+    state.shelter.newspapers,
+    city.intelligence_newspapers_required,
+  );
+  const transportIds = city.transport_match === "all"
+    ? city.transport_item_ids
+    : city.transport_item_ids.slice(0, 1);
+  for (const transportId of transportIds) {
+    state.inventory.crafted_items[transportId] = 1;
+    expect(application.toggleTransport(transportId).stateChanged).toBe(true);
+  }
+  const scout = state.companions.find((companion) => companion.status === "active");
+  if (scout === undefined) throw new Error("远城解锁测试缺少可侦察角色。");
+  expect(application.startCityRecon(cityId, scout.companion_id).stateChanged).toBe(true);
+  const mission = application.cityReconMissions().find(
+    (candidate) => candidate.cityId === cityId,
+  );
+  if (mission === undefined) throw new Error(`未创建远城侦察任务：${cityId}`);
+  state.survival_days = mission.completionDay;
+  expect(application.completeCityRecon(cityId).stateChanged).toBe(true);
+  for (const transportId of transportIds) {
+    expect(application.toggleTransport(transportId).stateChanged).toBe(true);
+  }
+}
+
 /** 使用当前事件中无前置需求的选项完成待决探索。 */
 function resolvePendingExploration(
   application: GameApplication,
@@ -66,6 +98,8 @@ function asV2State(state: GameState): Record<string, unknown> {
   }
   const shelter = structuredClone(state.shelter) as unknown as Record<string, unknown>;
   delete shelter.hope;
+  delete shelter.inner_wall_health;
+  delete shelter.outer_wall_health;
   const companions = structuredClone(state.companions) as unknown as Record<string, unknown>[];
   for (const companion of companions) {
     delete companion.equipped_weapon_id;
@@ -102,10 +136,14 @@ function completeTimelineDay(
 describe("研发、制作与仓库不变量", () => {
   it("研发和制作在资源不足时保持聚合原子，成功后才扣料并推进配置回合", () => {
     const application = startedApplication();
-    const state = requireState(application);
+    let state = requireState(application);
+    state.shelter.books = 1;
+    state.archive_collection_totals.books = 1;
+    application.slotResearchItem("books");
+    state = requireState(application);
     const player = requirePlayer(state);
     player.parts = 7;
-    state.shelter.books = 1;
+    player.coins = 4;
     const beforeResearch = structuredClone(state);
 
     const rejectedResearch = application.completeResearch("field_logistics");
@@ -284,6 +322,7 @@ describe("研发、制作与仓库不变量", () => {
 describe("配置化远征", () => {
   it("只有携带食物提供行动，城市与区划成本在首事件前扣除", () => {
     const application = startedApplication();
+    unlockRemoteCityForExpedition(application, "city_d");
     const state = requireState(application);
     state.research.completed_project_ids.push("field_logistics");
     state.inventory.crafted_items.field_ration = 2;
@@ -321,6 +360,7 @@ describe("配置化远征", () => {
     const safeDistrictId = defaultDistrictId(safe, "city_a");
     safe.prepareExpedition("city_a", safeDistrictId, [], { food: 9 });
     const dangerous = startedApplication();
+    unlockRemoteCityForExpedition(dangerous, "city_g");
     const dangerousState = requireState(dangerous);
     dangerousState.shelter.newspapers = 10;
     dangerousState.inventory.crafted_items.route_map = 1;
@@ -381,7 +421,7 @@ describe("配置化远征", () => {
   });
 
   it("多人轮换后仍由出发所长接收远征战利品", () => {
-    const random = new ScriptedRandomSource([90, 90, 50, 60], [0, 0]);
+    const random = new ScriptedRandomSource([90, 90, 10, 12], [0, 0]);
     const application = buildH5Harness({ random }).application;
     application.startNewGame(["白菜", "豪菜"], "multiplayer");
     const state = requireState(application);
@@ -399,7 +439,7 @@ describe("配置化远征", () => {
     application.resolveExploration(firstEvent.event_id);
 
     expect(state.active_player_index).toBe(1);
-    expect(application.expeditionStatus()?.loot).toEqual({ coins: 50 });
+    expect(application.expeditionStatus()?.loot).toEqual({ coins: 10 });
     expect(requirePlayer(state, 0).coins).toBe(40);
     expect(requirePlayer(state, 1).coins).toBe(40);
 
@@ -407,9 +447,11 @@ describe("配置化远征", () => {
     const secondEvent = state.pending_exploration;
     if (secondEvent === null) throw new Error("继续远征没有生成事件。");
     application.resolveExploration(secondEvent.event_id);
+    const totalExpeditionCoins = application.expeditionStatus()?.loot.coins ?? 0;
     application.returnExpeditionSafely();
 
-    expect(requirePlayer(state, 0).coins).toBe(150);
+    expect(totalExpeditionCoins).toBeGreaterThan(0);
+    expect(requirePlayer(state, 0).coins).toBe(40 + totalExpeditionCoins);
     expect(requirePlayer(state, 1).coins).toBe(40);
   });
 
@@ -659,7 +701,10 @@ describe("v3 时间线与迁移", () => {
       equipped_armor_id: null,
       equipped_transport_ids: [],
     });
-    expect(migrated.research).toEqual({ completed_project_ids: [] });
+    expect(migrated.research).toEqual({
+      completed_project_ids: [],
+      slotted_item_id: null,
+    });
     expect(migrated.management_cycle_usage).toEqual({});
     expect(migrated.expedition).toBeNull();
     expect(migrated.turn_number).toBe(23);

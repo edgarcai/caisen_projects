@@ -22,6 +22,9 @@ export interface CoverPageActions {
   readonly startMultiplayer: () => void;
   readonly startStory: () => void;
   readonly showCredits: () => void;
+  readonly showAccountLogin: () => void;
+  readonly showStore: () => void;
+  readonly showTextRecords: () => void;
   readonly showUpdateLog?: () => void;
   readonly openSettings: () => void;
   readonly onDescriptionChange?: (
@@ -54,6 +57,9 @@ export interface CoverSettingsGeometry {
 
 /** 封面右下更新日志键的纯布局结果。 */
 export type CoverUtilityGeometry = CoverSettingsGeometry;
+
+/** 封面右下工具行的稳定按钮数量。 */
+const COVER_BOTTOM_UTILITY_COUNT = 3;
 
 /** 桌面封面悬停简介面板的纯几何结果。 */
 export interface CoverDescriptionGeometry {
@@ -161,6 +167,54 @@ export function resolveCoverSettingsGeometry(
   layout: ResponsiveLayout,
 ): CoverSettingsGeometry {
   const menuLayout = resolveCoverMenuLayout(config, layout);
+  return resolveCoverTopUtilityGeometry(
+    config,
+    layout,
+    menuLayout.settings_button_anchor,
+    menuLayout.settings_button_anchor === "right" ? 1 : 0,
+  );
+}
+
+/** 计算固定在右上角的账户登录入口。 */
+export function resolveCoverAccountGeometry(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+): CoverSettingsGeometry {
+  return resolveCoverTopUtilityGeometry(config, layout, "right", 0);
+}
+
+/** 根据当前断点计算工具行中的更新日志入口。 */
+export function resolveCoverChangelogGeometry(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+): CoverUtilityGeometry {
+  return resolveCoverBottomUtilityGeometry(config, layout, 1);
+}
+
+/** 计算右下角商店入口，作为工具行的最右项。 */
+export function resolveCoverStoreGeometry(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+): CoverUtilityGeometry {
+  return resolveCoverBottomUtilityGeometry(config, layout, 0);
+}
+
+/** 计算工具行中的文本记录入口。 */
+export function resolveCoverTextRecordsGeometry(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+): CoverUtilityGeometry {
+  return resolveCoverBottomUtilityGeometry(config, layout, 2);
+}
+
+/** 使用共享尺寸和安全区计算封面顶部工具按钮。 */
+function resolveCoverTopUtilityGeometry(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  anchor: "left" | "right",
+  slotIndex: number,
+): CoverSettingsGeometry {
+  const menuLayout = resolveCoverMenuLayout(config, layout);
   const availableWidth = Math.max(
     config.controls.minimum_touch_size,
     layout.stageWidth - layout.safeArea.left - layout.safeArea.right,
@@ -171,12 +225,14 @@ export function resolveCoverSettingsGeometry(
   );
   const width = Math.min(menuLayout.settings_button_width, availableWidth);
   const height = Math.min(menuLayout.settings_button_height, availableHeight);
-  const requestedX = menuLayout.settings_button_anchor === "left"
-    ? layout.safeArea.left + menuLayout.settings_button_offset
-    : layout.stageWidth -
-      layout.safeArea.right -
-      menuLayout.settings_button_offset -
-      width;
+  const slotOffset = slotIndex * (width + menuLayout.utility_button_gap);
+  const requestedX = anchor === "left"
+    ? layout.safeArea.left + menuLayout.settings_button_offset + slotOffset
+    : layout.stageWidth
+      - layout.safeArea.right
+      - menuLayout.settings_button_offset
+      - width
+      - slotOffset;
   const maximumX = layout.stageWidth - layout.safeArea.right - width;
   return {
     x: Math.min(maximumX, Math.max(layout.safeArea.left, requestedX)),
@@ -189,28 +245,35 @@ export function resolveCoverSettingsGeometry(
   };
 }
 
-/** 根据当前断点计算右下角更新日志入口并钳制在安全区内。 */
-export function resolveCoverChangelogGeometry(
+/** 使用配置间距将三个工具按钮自右向左排列并自适应窄安全区。 */
+function resolveCoverBottomUtilityGeometry(
   config: GameUiConfig,
   layout: ResponsiveLayout,
+  slotIndexFromRight: number,
 ): CoverUtilityGeometry {
   const menuLayout = resolveCoverMenuLayout(config, layout);
+  const safeWidth = layout.stageWidth
+    - layout.safeArea.left
+    - layout.safeArea.right
+    - menuLayout.changelog_button_right;
+  const maximumSharedWidth = (
+    safeWidth
+    - menuLayout.utility_button_gap * (COVER_BOTTOM_UTILITY_COUNT - 1)
+  ) / COVER_BOTTOM_UTILITY_COUNT;
   const width = Math.min(
     menuLayout.changelog_button_width,
-    layout.stageWidth - layout.safeArea.left - layout.safeArea.right,
+    Math.max(config.controls.minimum_touch_size, maximumSharedWidth),
   );
   const height = Math.min(
     menuLayout.changelog_button_height,
     layout.stageHeight - layout.safeArea.top - layout.safeArea.bottom,
   );
   return {
-    x: Math.max(
-      layout.safeArea.left,
-      layout.stageWidth
-        - layout.safeArea.right
-        - menuLayout.changelog_button_right
-        - width,
-    ),
+    x: layout.stageWidth
+      - layout.safeArea.right
+      - menuLayout.changelog_button_right
+      - width
+      - slotIndexFromRight * (width + menuLayout.utility_button_gap),
     y: Math.max(
       layout.safeArea.top,
       layout.stageHeight

@@ -7,6 +7,7 @@ import v4ToV5MigrationDocument from "../../config/save_migrations/v4_to_v5.json"
 import v5ToV6MigrationDocument from "../../config/save_migrations/v5_to_v6.json";
 import v6ToV7MigrationDocument from "../../config/save_migrations/v6_to_v7.json";
 import v7ToV8MigrationDocument from "../../config/save_migrations/v7_to_v8.json";
+import v8ToV9MigrationDocument from "../../config/save_migrations/v8_to_v9.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import shelterLayoutDocument from "../../config/shelter_layout.json";
@@ -14,6 +15,22 @@ import webDocument from "../../config/web_config.json";
 import { demoSystemsConfig } from "../config/demoSystemsConfig";
 import { districtExplorationTreeConfig } from "../config/districtExplorationTreeConfig";
 import { createKeyItemWarehouseCatalog } from "../config/keyItemCatalog";
+import {
+  createManufacturingDiscoveryItems,
+  manufacturingDiscoveryConfig,
+} from "../config/manufacturingDiscoveryConfig";
+import { mergeCampaignProfileExpansion } from "../config/campaignProfileExpansionAdapter";
+import {
+  createProfileTriggeredBonusSources,
+  profileTriggeredBonusConfig,
+} from "../config/profileTriggeredBonusConfig";
+import {
+  contentExpansionCatalog,
+  manufacturingCatalog,
+  mergeManufacturingCatalogIntoSurvivalSystems,
+  shelterTypes,
+} from "../config/contentExpansion";
+import { createSettlementNetworkConfig } from "../config/settlementNetworkConfig";
 import { validateSurvivalSystemsConfig } from "../config/survivalSystemsValidator";
 import { validateWorldMapConfig } from "../config/worldMapValidator";
 import { parseShelterLayoutConfig } from "../domain/shelter-layout";
@@ -28,6 +45,7 @@ import type {
   V5ToV6SaveMigrationConfig,
   V6ToV7SaveMigrationConfig,
   V7ToV8SaveMigrationConfig,
+  V8ToV9SaveMigrationConfig,
 } from "../domain/content";
 import type { SurvivalSystemsConfigDocument } from "../domain/survival-systems";
 import type {
@@ -47,12 +65,14 @@ import {
   V5ToV6SaveMigrator,
   V6ToV7SaveMigrator,
   V7ToV8SaveMigrator,
+  V8ToV9SaveMigrator,
 } from "../infrastructure";
 import { V3ToV4SaveMigrator } from "../infrastructure/V3ToV4SaveMigrator";
 import { V4ToV5SaveMigrator } from "../infrastructure/V4ToV5SaveMigrator";
 import {
   AchievementService,
   ArchiveStorageService,
+  CampaignDifficultyRules,
   CampaignProfileService,
   CompanionManagementService,
   ChronicleService,
@@ -68,16 +88,20 @@ import {
   GameModeCapabilityPolicy,
   GameRules,
   InventoryService,
+  ManufacturingDiscoveryService,
+  ProfileTriggeredBonusService,
   ResearchCraftingService,
   ReturnIncidentService,
   ShelterService,
   ShelterLayoutService,
   ShelterLayoutStateProjector,
+  SettlementNetworkService,
   StateOperations,
   StoryService,
   TradeAmbushService,
   TransportLoadoutService,
 } from "../services";
+import type { CampaignDifficultyLootTargets } from "../services/CampaignDifficultyRules";
 import { GameApplication } from "./GameApplication";
 
 interface StorageDocument {
@@ -104,7 +128,10 @@ export interface CreateGameApplicationOptions {
 export function createGameApplication(
   options: CreateGameApplicationOptions = {},
 ): GameApplication {
-  const game = gameDocument as unknown as GameConfigDocument;
+  const game = mergeCampaignProfileExpansion(
+    gameDocument as unknown as GameConfigDocument,
+    contentExpansionCatalog,
+  );
   const story = storyDocument as unknown as StoryConfigDocument;
   const events = eventsDocument as unknown as EventsConfigDocument;
   const v1ToV2Migration = v1ToV2MigrationDocument as unknown as SaveMigrationConfig;
@@ -114,8 +141,15 @@ export function createGameApplication(
   const v5ToV6Migration: V5ToV6SaveMigrationConfig = v5ToV6MigrationDocument;
   const v6ToV7Migration: V6ToV7SaveMigrationConfig = v6ToV7MigrationDocument;
   const v7ToV8Migration: V7ToV8SaveMigrationConfig = v7ToV8MigrationDocument;
+  const v8ToV9Migration: V8ToV9SaveMigrationConfig = v8ToV9MigrationDocument;
   const storageConfig = webDocument.storage as unknown as StorageDocument;
-  const survivalSystems = validateSurvivalSystemsConfig(survivalSystemsDocument);
+  const baseSurvivalSystems = validateSurvivalSystemsConfig(survivalSystemsDocument);
+  const survivalSystems = validateSurvivalSystemsConfig(
+    mergeManufacturingCatalogIntoSurvivalSystems(
+      baseSurvivalSystems,
+      manufacturingCatalog,
+    ),
+  );
   const shelterLayoutConfig = parseShelterLayoutConfig(shelterLayoutDocument);
   validateWorldMapConfig(game, events);
   const content = new GameContent(game, story, events);
@@ -125,9 +159,22 @@ export function createGameApplication(
     demoSystemsConfig.archive_storage,
   );
   const operations = new StateOperations(random, [archiveStorage]);
+  const difficultyRules = new CampaignDifficultyRules(
+    content,
+    createDifficultyLootTargets(survivalSystems),
+  );
   const campaignProfiles = new CampaignProfileService(content, operations);
   const modeCapabilities = new GameModeCapabilityPolicy(content);
-  const cityAccess = new CityAccessService(content, survivalSystems);
+  const settlementNetwork = new SettlementNetworkService(
+    createSettlementNetworkConfig(shelterTypes),
+    content,
+  );
+  const cityAccess = new CityAccessService(content, survivalSystems, {
+    isUnlocked: (state, cityId): boolean =>
+      settlementNetwork.cityUnlocked(state, cityId),
+    lockedReason: (cityId): string =>
+      settlementNetwork.cityAccessLockedReason(cityId),
+  });
   const equipment = new EquipmentService(survivalSystems);
   const storyService = new StoryService(content, operations, equipment);
   const tradeAmbush = new TradeAmbushService(content, operations, random);
@@ -137,6 +184,7 @@ export function createGameApplication(
     storyService,
     random,
     tradeAmbush,
+    difficultyRules,
   );
   const shelterLayout = new ShelterLayoutService(shelterLayoutConfig);
   const shelterLayoutState = new ShelterLayoutStateProjector(
@@ -165,8 +213,29 @@ export function createGameApplication(
     content,
   );
   const chronicle = new ChronicleService(content);
-  const rules = new GameRules(content, shelter, chronicle, campaignProfiles);
-  const exploration = new ExplorationService(content, operations, random);
+  const rules = new GameRules(content, shelter, chronicle, difficultyRules);
+  const exploration = new ExplorationService(
+    content,
+    operations,
+    random,
+    difficultyRules,
+  );
+  const manufacturingDiscovery = new ManufacturingDiscoveryService(
+    manufacturingDiscoveryConfig,
+    createManufacturingDiscoveryItems(manufacturingCatalog),
+    random,
+    {
+      cityName: (cityId): string => content.city(cityId).name,
+      districtCode: (cityId, districtId): string =>
+        content.district(cityId, districtId).code,
+    },
+  );
+  const profileTriggeredBonuses = new ProfileTriggeredBonusService(
+    profileTriggeredBonusConfig,
+    createProfileTriggeredBonusSources(),
+    operations,
+    random,
+  );
   const inventory = new InventoryService(
     survivalSystems,
     operations,
@@ -178,7 +247,12 @@ export function createGameApplication(
     operations,
     storyService,
   );
-  const researchCrafting = new ResearchCraftingService(survivalSystems, operations);
+  const researchCrafting = new ResearchCraftingService(
+    survivalSystems,
+    operations,
+    content,
+    difficultyRules,
+  );
   const transportLoadout = new TransportLoadoutService(survivalSystems);
   const expedition = new ExpeditionService(
     survivalSystems,
@@ -187,8 +261,19 @@ export function createGameApplication(
     cityAccess,
     operations,
     random,
+    {
+      isAvailableForExpedition: (state, companionId): boolean =>
+        !settlementNetwork.companionAssigned(state, companionId),
+    },
   );
-  const combat = new CombatService(content, operations, random, shelter, equipment);
+  const combat = new CombatService(
+    content,
+    operations,
+    random,
+    shelter,
+    equipment,
+    difficultyRules,
+  );
   const achievementRepository = options.achievementRepository
     ?? new LocalStorageAchievementRepository(
       storage,
@@ -209,6 +294,7 @@ export function createGameApplication(
     v5ToV6Migration,
     v6ToV7Migration,
     v7ToV8Migration,
+    v8ToV9Migration,
     shelterLayoutState,
     archiveStorage,
   );
@@ -216,6 +302,8 @@ export function createGameApplication(
     content,
     achievements,
     exploration,
+    manufacturingDiscovery,
+    profileTriggeredBonuses,
     storyService,
     combat,
     shelter,
@@ -229,6 +317,7 @@ export function createGameApplication(
     researchCrafting,
     transportLoadout,
     expedition,
+    settlementNetwork,
     districtExplorationTree,
     campaignProfiles,
     modeCapabilities,
@@ -236,6 +325,19 @@ export function createGameApplication(
     repository,
     random,
   );
+}
+
+/** 依仓库物品类别生成难度掉落目标，资源字段变更时无需修改规则服务。 */
+function createDifficultyLootTargets(
+  survivalSystems: SurvivalSystemsConfigDocument,
+): CampaignDifficultyLootTargets {
+  const text = survivalSystems.warehouse.resource_items
+    .filter((item) => item.category === "archive")
+    .map((item) => item.state_target);
+  const common = survivalSystems.warehouse.resource_items
+    .filter((item) => item.category !== "archive")
+    .map((item) => item.state_target);
+  return { common, text };
 }
 
 /** 按 Web 配置创建带迁移、验证和滚动备份的存档仓库。 */
@@ -252,6 +354,7 @@ function createRepository(
   v5ToV6Migration: V5ToV6SaveMigrationConfig,
   v6ToV7Migration: V6ToV7SaveMigrationConfig,
   v7ToV8Migration: V7ToV8SaveMigrationConfig,
+  v8ToV9Migration: V8ToV9SaveMigrationConfig,
   shelterLayoutState: ShelterLayoutStateProjector,
   archiveStorage: ArchiveStorageService,
 ): SaveRepository {
@@ -273,6 +376,7 @@ function createRepository(
     slotCount: options.slotCount ?? storageConfig.save_slot_count,
     backupSlots: options.backupSlots ?? storageConfig.backup_slots,
     validator,
+    campaignMetadataFlags: game.campaign_profiles.metadata_flags,
     migrators: [
       new V1ToV2SaveMigrator(v1ToV2Migration),
       new V2ToV3SaveMigrator(v2ToV3Migration),
@@ -288,6 +392,7 @@ function createRepository(
         v7ToV8Migration,
         demoSystemsConfig.archive_storage.collections,
       ),
+      new V8ToV9SaveMigrator(v8ToV9Migration),
     ],
     now: options.now,
   });

@@ -3,6 +3,8 @@ import v4ToV5MigrationDocument from "../../config/save_migrations/v4_to_v5.json"
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import { createGameApplication } from "../../src/application";
+import { mergeCampaignProfileExpansion } from "../../src/config/campaignProfileExpansionAdapter";
+import { contentExpansionCatalog } from "../../src/config/contentExpansion";
 import { validateSurvivalSystemsConfig } from "../../src/config/survivalSystemsValidator";
 import type {
   GameConfigDocument,
@@ -24,7 +26,10 @@ import {
 } from "../../src/infrastructure";
 import { describe, expect, it } from "vitest";
 
-const game = gameDocument as unknown as GameConfigDocument;
+const game = mergeCampaignProfileExpansion(
+  gameDocument as unknown as GameConfigDocument,
+  contentExpansionCatalog,
+);
 const story = storyDocument as unknown as StoryConfigDocument;
 const migrationConfig: V4ToV5SaveMigrationConfig = v4ToV5MigrationDocument;
 
@@ -138,11 +143,15 @@ function deletePostV5Fields(state: Record<string, unknown>): void {
   delete state.pending_return_incident_id;
   delete asObject(state.inventory).equipped_transport_ids;
   delete state.last_expedition_failure;
+  delete asObject(state.research).slotted_item_id;
   for (const player of state.players as Record<string, unknown>[]) {
     delete player.age;
     delete player.lifespan;
   }
-  delete asObject(state.shelter).hope;
+  const shelter = asObject(state.shelter);
+  delete shelter.hope;
+  delete shelter.inner_wall_health;
+  delete shelter.outer_wall_health;
   for (const companion of state.companions as Record<string, unknown>[]) {
     delete companion.equipped_weapon_id;
     delete companion.equipped_armor_id;
