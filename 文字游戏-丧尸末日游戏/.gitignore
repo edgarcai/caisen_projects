@@ -1,14 +1,4 @@
-__pycache__/
-*.py[cod]
 .DS_Store
-.venv/
-venv/
-.ruff_cache/
-.pytest_cache/
-.mypy_cache/
-.coverage
-coverage.xml
-htmlcov/
 build/
 dist/
 dist-h5/
@@ -19,6 +9,4 @@ coverage/
 artifacts/qa/
 public/assets/
 public/config/
-*.egg-info/
 *.log
-saves/

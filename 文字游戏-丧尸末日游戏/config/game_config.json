@@ -1,205 +1,16 @@
 {
   "schema_version": 1,
   "save_schema_version": 6,
-  "runtime": {
-    "minimum_tk_version": 8.6,
-    "desktop_save_schema_version": 2
-  },
   "game": {
-    "title": "避难所：余烬纪元",
-    "story": "2166年，行动敏捷、成群出没的感染者令世界各地接连沦陷。人类重新启用废弃防空洞，才保住最后的火种。你是B-17避难所的所长：粮食即将耗尽，一段来自凌晨三点十七分的广播却警告你‘粮食会咬人’。从最后一锅粥到白塔顶端，你将与伙伴穿越四章、十三个连续场景，面对三名首领，并决定幸存者、感染者与整座晦城的未来。",
     "tutorial_survival": "欢迎来到B-17避难所，所长。普通求生模式专注于资源、人员与远征经营，不包含主线剧情任务。\n\n【生存与时间】探索、设施建设、工作和修复等高消耗行动会增加饥饿；交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【城市与远征】所长出生城市出发消耗1步，邻近城市消耗2步。远处城市必须先从旧报纸中收集足够情报，再持有路线图或符合地貌的车辆、船只、直升机。伙伴词条、特性、研发成果和携带物会提高最大步数；步数不足会被尸群强制逼退，只保住20%物资，所长生命降至7至45。\n\n【避难所与人物档案】人物档案和避难所信息在所有模式保留。供餐、修复、设施、工作、交易、招募、仓库、研发、制作与历史记录都可从指挥台进入。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录。系统每十个生存日建立检查点并自动保存；ESC功能菜单可以选择六个栏位存档、设置、回档、返回主菜单或退出。",
     "tutorial": "欢迎来到B-17避难所，所长。活下去只是基础；你选择怎样活下去，才会决定所有人的结局。\n\n【生存与时间】只有探索、战斗、设施建设、工作和修复等高消耗行动会增加饥饿；剧情阅读、交易、招募、研发、制作与个人整备不会凭空增加饥饿。个人饥饿达到150、群体饥饿达到260、避难所耐久或活跃度归零都会失败；活跃度达到300也会令秩序失控。\n\n【远征步数】探索前依次查看城市需求、选择区划，再确认同行伙伴与携带物。伙伴词条、信任、研发成果和特定物资会提高最大步数；每次事件消耗全局基础步数与区划附加步数。尚有步数时可继续深入或安全返程；步数不足会被尸群强制逼退，只保住20%本次战利品，所长生命会降到7至45。\n\n【仓库、研发与制作】仓库统一显示资源和制作物，已装备的武器、防具不计入可用库存。研究台消耗资料与材料解锁技术，制作工坊据此生产远征物资、武器和防具。失败的研发或制作不会扣除任何材料。\n\n【四章主线】点击‘剧情任务’推进十三个连续场景。选择可能要求属性、资源、设施、伙伴状态或关键物品；锁定选择不会扣资源或消耗回合。主线包含《饥饿会说话》《尸群在唱谁的名字》《人比末日更会撒谎》《余烬之后是什么》四章。\n\n【三场Boss】铁轨屠夫、鸣钟母体与无冕王都有多条处理路线。战斗可执行攻击、防御、专注、使用医疗用品和撤退。单个战斗回合不会推进世界时间；整场胜利结算或成功撤退才消耗一次世界行动。\n\n【避难所管理】供餐、修复、设施、工作、交易和招募统一收在避难所管理中。设施提供即时效果或长期增益；工作产生收益与风险；交易不推进时间；资源不足时不会偷偷消耗回合。\n\n【伙伴、线索与结局】豪菜、阳关、林岚和小满拥有独立信任与状态。隐藏账本、病历、频率、名单和维护密钥会开启非暴力路线。最终结果会综合人性、证据、信任、线索、避难所状态及三场Boss的处理方式。\n\n【通讯、历史与存档】当前通讯每七个生存日形成周总结并封存到历史记录，随后清空开始新一周。系统每十个生存日建立检查点并自动保存一次；ESC功能菜单仍可随时手动存档、设置、回档或退出。已经抽取的探索事件不能通过保存或读取免费重抽，旧 v1 至 v4 存档会安全迁移为 v5 区划状态。"
   },
-  "paths": {
-    "events": "config/events.json",
-    "story": "config/story.json",
-    "save_migration_v1_to_v2": "config/save_migrations/v1_to_v2.json",
-    "save_migration_v2_to_v3": "config/save_migrations/v2_to_v3.json",
-    "save_migration_v3_to_v4": "config/save_migrations/v3_to_v4.json",
-    "save_migration_v4_to_v5": "config/save_migrations/v4_to_v5.json",
-    "save_migration_v5_to_v6": "config/save_migrations/v5_to_v6.json",
-    "save": "saves/savegame.json",
-    "concept_art": "assets/menu_concept_2k.png",
-    "cover_art": "assets/cover_art_2k.png"
-  },
-  "window": {
-    "width": 1280,
-    "height": 760,
-    "minimum_width": 1080,
-    "minimum_height": 760,
-    "image_width": 2048,
-    "image_height": 1152,
-    "dialog_width": 760,
-    "dialog_height": 620,
-    "dialog_wrap_length": 680
-  },
-  "theme": {
-    "background": "#0b1014",
-    "panel": "#121b20",
-    "panel_alt": "#18252b",
-    "primary": "#d57a36",
-    "primary_hover": "#ef9850",
-    "secondary": "#3e5960",
-    "secondary_hover": "#54737b",
-    "danger": "#b8493f",
-    "text": "#edf2e8",
-    "muted_text": "#a6b2aa",
-    "accent": "#dfc36f",
-    "health": "#80b86b",
-    "hunger": "#cf8d54",
-    "border": "#304148",
-    "overlay": "#10181d"
-  },
-  "button_styles": {
-    "primary": {
-      "background": "#d8873f",
-      "hover": "#efa05b",
-      "pressed": "#b9652c",
-      "foreground": "#080c0e",
-      "muted_foreground": "#293337",
-      "border": "#f0aa63",
-      "focus": "#ffd783",
-      "accent": "#10171a"
-    },
-    "secondary": {
-      "background": "#20343c",
-      "hover": "#2d4c56",
-      "pressed": "#17282e",
-      "foreground": "#f1d890",
-      "muted_foreground": "#aebbb4",
-      "border": "#45616a",
-      "focus": "#dfc36f",
-      "accent": "#d57a36"
-    },
-    "danger": {
-      "background": "#5f2929",
-      "hover": "#7a3533",
-      "pressed": "#462020",
-      "foreground": "#ffd9ce",
-      "muted_foreground": "#c7968f",
-      "border": "#a34b44",
-      "focus": "#ef8d75",
-      "accent": "#ef725e"
-    },
-    "disabled": {
-      "background": "#1b2429",
-      "hover": "#1b2429",
-      "pressed": "#1b2429",
-      "foreground": "#667277",
-      "muted_foreground": "#596369",
-      "border": "#2b383e",
-      "focus": "#39464c",
-      "accent": "#4b575b"
-    }
-  },
   "interface": {
-    "layout": {
-      "stats_width": 238,
-      "action_width": 382,
-      "content_padding": 16,
-      "panel_inner_padding": 14,
-      "header_horizontal_padding": 24,
-      "header_vertical_padding": 13,
-      "section_gap": 10,
-      "group_gap": 9,
-      "button_gap": 6,
-      "meter_gap": 8,
-      "stat_row_gap": 1,
-      "log_horizontal_padding": 18,
-      "log_vertical_padding": 16,
-      "mission_horizontal_padding": 14,
-      "mission_vertical_padding": 10,
-      "mission_accent_width": 5
-    },
-    "buttons": {
-      "border_width": 1,
-      "accent_width": 5,
-      "icon_center_x": 20,
-      "text_without_icon_x": 15,
-      "text_with_icon_x": 40,
-      "parallelogram_text_x": 38,
-      "subtitle_offset": 10,
-      "prompt_right_padding": 12,
-      "prompt_symbol": "›",
-      "parallelogram_slant": 20,
-      "sizes": {
-        "menu": {"width": 310, "height": 60, "font_size": 20},
-        "dialog": {"width": 220, "height": 50},
-        "choice": {"width": 320, "height": 48},
-        "action": {"width": 168, "height": 58},
-        "system": {"width": 108, "height": 46}
-      }
-    },
     "cover": {
       "title": "避难所",
-      "subtitle": "余烬纪元",
-      "art_x": 0,
-      "art_y": 0,
-      "art_anchor": "nw",
-      "fallback_background": "#0b1014",
-      "title_x": 72,
-      "title_y": 92,
-      "title_anchor": "w",
-      "title_color": "#edf2e8",
-      "title_size": 48,
-      "subtitle_x": 72,
-      "subtitle_y": 150,
-      "subtitle_anchor": "w",
-      "subtitle_color": "#dfc36f",
-      "subtitle_size": 32,
-      "menu_start_x": 72,
-      "menu_start_y": 245,
-      "menu_step_x": 30,
-      "menu_step_y": 74,
-      "menu_anchor": "nw",
-      "menu_button_shape": "parallelogram",
-      "resize_debounce_ms": 120,
-      "fallback_text_x": 72,
-      "fallback_text_y": 205,
-      "fallback_text_anchor": "w",
-      "fallback_text_color": "#ef725e",
-      "fallback_text_size": 14,
-      "fallback_wrap_length": 560,
-      "overlay_color": "#071014",
-      "overlay_start_x": 0,
-      "overlay_end_x": 720,
-      "overlay_start_opacity": 220,
-      "overlay_end_opacity": 0
+      "subtitle": "余烬纪元"
     },
     "pages": {
-      "content_width": 880,
-      "content_height": 620,
-      "horizontal_padding": 48,
-      "vertical_padding": 36,
-      "header_height": 64,
-      "title_x": 48,
-      "title_y": 38,
-      "back_x": 832,
-      "back_y": 38,
-      "body_padding": 18,
-      "section_gap": 14,
-      "option_gap": 10,
-      "option_columns": 2,
-      "option_max_visible_rows": 3,
-      "input_width": 36,
-      "notice_accent_width": 5,
-      "background": "#0b1014",
-      "panel": "#121b20",
-      "body_background": "#18252b",
-      "title_color": "#dfc36f",
-      "text_color": "#edf2e8",
-      "muted_text_color": "#a6b2aa",
-      "border_color": "#304148",
-      "error_color": "#ef725e",
-      "success_color": "#80b86b",
-      "back_label": "返回",
-      "continue_label": "继续",
-      "cancel_label": "取消",
-      "confirm_label": "确定",
-      "close_label": "关闭",
-      "option_details_block_format": "{body}\n\n【选项情报】\n{details}",
-      "option_detail_format": "• {label}：{description}",
       "management_categories": [
         {"id": "support", "label": "生存保障", "action_ids": ["feed_shelter", "repair_shelter"]},
         {"id": "facility", "label": "设施升级"},
@@ -209,46 +20,7 @@
         {"id": "recruit", "label": "人员招募"}
       ]
     },
-    "action_groups": [
-      {
-        "group_id": "core_actions",
-        "label": "◆ 核心行动",
-        "columns": 2,
-        "button_size": "action",
-        "action_ids": ["story", "explore", "shelter_management", "companions"]
-      },
-      {
-        "group_id": "shelter_support",
-        "label": "▰ 基地保障",
-        "columns": 2,
-        "button_size": "action",
-        "action_ids": ["use_food", "use_medicine", "feed_shelter", "repair_shelter"]
-      },
-      {
-        "group_id": "system_commands",
-        "label": "⌁ 系统指令",
-        "columns": 3,
-        "button_size": "system",
-        "action_ids": ["tutorial", "save", "return_menu"]
-      }
-    ],
     "dashboard": {
-      "command_status": "B-17 指挥链路 // 在线",
-      "online_status": "●  通讯在线",
-      "action_hint": "每次行动都可能改变资源、信任与最终结局",
-      "log_hint": "门外太安静了——安静通常不是好消息。",
-      "campaign_status_format": "回合 {turn}  ·  证据 {evidence}  ·  人性 {humanity}  ·  感染压力 {infection_pressure}",
-      "meter_height": 8,
-      "meter_value_format": "{value}/{maximum}",
-      "meter_palette": {
-        "surface": "#121b20",
-        "track": "#26343a",
-        "label": "#a6b2aa",
-        "value": "#edf2e8",
-        "normal": "#80b86b",
-        "warning": "#dfc36f",
-        "danger": "#b8493f"
-      },
       "meters": [
         {
           "scope": "player",
@@ -294,17 +66,13 @@
     },
     "h5": {
       "log_limit": 12,
-      "max_player_name_characters": 18,
       "date_format": "{year}年{month}月{day}日",
       "time_format": "{hour}:00",
       "turn_format": "第 {turn} 回合",
       "story_body_format": "{body}\n\n【当前目标】{objective}",
       "story_title_format": "{chapter} · {title}",
-      "exploration_log_format": "发现【{title}】：{intro}",
       "companion_biography_format": "{introduction}\n\n未公开档案：{secret}",
       "trust_format": "信任：{trust}",
-      "locked_secret_trust": 2,
-      "locked_secret_text": "信任达到 2 后，或许会听见对方不愿提起的过去。",
       "battle_default_phase": "正面交锋",
       "message_separator": "\n\n",
       "companion_status_labels": {
@@ -316,34 +84,7 @@
       }
     }
   },
-  "fonts": {
-    "family": "PingFang SC",
-    "section_size": 18,
-    "body_size": 12,
-    "button_size": 14,
-    "small_size": 10
-  },
-  "menu": {
-    "new_game": "新的游戏",
-    "load_game": "游玩存档",
-    "multiplayer": "多人游戏"
-  },
   "dialogs": {
-    "new_game_title": "新的游戏",
-    "player_name_prompt": "请输入所长姓名：",
-    "default_player_name": "白菜",
-    "multiplayer_title": "多人游戏",
-    "multiplayer_prompt": "请输入两位所长的姓名，用中文逗号或英文逗号分隔：",
-    "default_multiplayer_names": "白菜,豪菜",
-    "city_title": "选择城市",
-    "city_prompt": "这次要探索哪座城市？",
-    "event_choice_title": "做出选择",
-    "story_title": "剧情任务",
-    "story_choice_title": "命运岔路",
-    "battle_title": "首领战",
-    "shelter_management_title": "避难所管理",
-    "companion_title": "伙伴档案",
-    "confirm_return_title": "返回主菜单",
     "confirm_return_message": "返回主菜单不会额外保存。请确认已经手动存档，或已抵达最近一次十日检查点。",
     "error_title": "无法继续",
     "info_title": "避难所通讯",

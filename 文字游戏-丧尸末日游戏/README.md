@@ -1,6 +1,6 @@
 # 避难所：余烬纪元
 
-《避难所：余烬纪元》是对 2023 年猿编程作品的完整重制。正式版本采用 **LayaAir 3.4.0 + TypeScript + Vite** 构建为移动优先 H5 游戏，可直接在桌面或手机浏览器游玩；原 Python/Tkinter 版本保留为迁移行为基线。源码变量和存档字段使用英文，界面、剧情与反馈文案使用中文。
+《避难所：余烬纪元》是对 2023 年猿编程作品的完整重制。项目已收敛为 **LayaAir 3.4.0 + TypeScript + Vite** 的移动优先 H5 游戏，可直接在桌面或手机浏览器游玩。源码变量和存档字段使用英文，界面、剧情与反馈文案使用中文。
 
 玩家将管理 B-17 避难所，在生存压力下探索 A～H 市、发展设施、招募幸存者，并沿 13 个连续场景揭开“回声菌株”与尸群首领的真相。选择不仅改变资源，也会影响伙伴信任、人性、证据、隐藏线索与最终结局。
 
@@ -22,16 +22,7 @@ npm run preview
 
 生产预览地址为 `http://127.0.0.1:4173/`。`npm run build` 会先同步权威配置与封面素材，再执行严格类型检查和 Vite 构建；官方 LayaAir 3.4.0 运行库已固定在 `public/vendor/layaair/3.4.0/`，构建时不会重复下载。
 
-### Python 行为基线
-
-需要比对旧版行为或运行 Python 回归测试时，可使用 Python 3.9 或更高版本：
-
-```bash
-python -m pip install -r requirements.txt
-python -m apocalypse_game --check
-```
-
-Tkinter 界面不再是正式交付入口；只有在需要人工比对旧桌面界面时才需 Tk 8.6 与 Pillow。H5 领域层延续 Python 版已验证的规则，并使用浏览器 `localStorage` 提供版本化存档、滚动备份与 v1 → v2 → v3 → v4 → v5 → v6 迁移。
+游戏使用浏览器 `localStorage` 提供版本化存档、滚动备份与 v1 → v2 → v3 → v4 → v5 → v6 迁移，不需要安装桌面运行时或额外图形库。
 
 ## 封面入口
 
@@ -183,7 +174,7 @@ v6 在原有玩家、避难所、时间与回合数据之外，完整保存：
 
 | 路径 | 职责 |
 | --- | --- |
-| `config/game_config.json` | 窗口、主题、自绘按钮、行动分组、状态条、初始状态、生存阈值、行动成本和中文界面文案 |
+| `config/game_config.json` | 展示文案、状态条、初始状态、生存阈值、行动成本、城市与模式能力 |
 | `config/web_config.json` | LayaAir 版本、舞台缩放、移动断点、安全区、H5 主题、触控尺寸、页面布局、存档键名和 QA 视口 |
 | `config/story.json` | 四章主线、伙伴、Boss、战斗、线索、设施、工作、交易、招募与五结局 |
 | `config/events.json` | 城市探索事件、选择、权重、随机范围、条件与效果 |
@@ -198,7 +189,7 @@ v6 在原有玩家、避难所、时间与回合数据之外，完整保存：
 | `assets/cover_art_2k.png` | 游戏运行时使用的 2048×1152 正式封面 |
 | `assets/ui/menu_button_*.png` | 桌面封面平行四边形的默认、悬停与按压状态皮肤 |
 
-调整数值、文案、尺寸和断点时优先编辑 JSON，避免把产品规则散落到 TypeScript 或 Python。`npm run sync:assets` 按 `web-assets.json` 把权威配置复制到 Vite 公共目录，避免维护两份剧情数据。Web 配置加载器和领域服务会在启动或首次装配时校验版本、类型、路径和引用；存档再经过独立严格验证器与迁移链。
+调整数值、文案、尺寸和断点时优先编辑 JSON，避免把产品规则散落到 TypeScript。`npm run sync:assets` 按 `web-assets.json` 把权威配置复制到 Vite 公共目录，避免维护两份剧情数据。Web 配置加载器和领域服务会在启动或首次装配时校验版本、类型、路径和引用；存档再经过独立严格验证器与迁移链。
 
 ## 架构分层
 
@@ -244,15 +235,9 @@ npm run check
 npm run test:e2e
 ```
 
-`npm run check` 串行执行 ESLint、Vitest 和生产构建；`npm run test:e2e` 自动遍历 `config/web_config.json` 中的桌面、多个手机、横屏、平板、窄桌面、矮桌面与超宽屏视口，验证真实浏览器流程。Python 行为基线使用：
+`npm run check` 串行执行 ESLint、Vitest 和生产构建；`npm run test:e2e` 自动遍历 `config/web_config.json` 中的桌面、多个手机、横屏、平板、窄桌面、矮桌面与超宽屏视口，验证真实浏览器流程。
 
-```bash
-python -m compileall -q .
-python -m unittest discover -s tests -v
-python -m apocalypse_game --check
-```
-
-测试覆盖时间边界、单/双人轮换、物品与经营原子结算、装备战斗加成、区划事件池、防重抽、13 个剧情场景、三场 Boss、周档案、十日检查点、远征强制返程、v1 → v6 全迁移链、坏档与备份恢复、展示适配器契约、叠加页面导航、响应式和控制台健康。Python 基线继续保留更大规模的剧情、GUI 条件测试和平衡模拟，便于迁移期间交叉比对。
+测试覆盖时间边界、单/双人轮换、物品与经营原子结算、装备战斗加成、区划事件池、防重抽、13 个剧情场景、三场 Boss、周档案、十日检查点、远征强制返程、v1 → v6 全迁移链、坏档与备份恢复、展示适配器契约、叠加页面导航、响应式和控制台健康。
 
 ## 长期演进建议
 

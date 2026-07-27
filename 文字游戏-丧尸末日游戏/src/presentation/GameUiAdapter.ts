@@ -73,11 +73,8 @@ interface H5Presentation {
   readonly turn_format: string;
   readonly story_body_format: string;
   readonly story_title_format: string;
-  readonly exploration_log_format: string;
   readonly companion_biography_format: string;
   readonly trust_format: string;
-  readonly locked_secret_trust: number;
-  readonly locked_secret_text: string;
   readonly battle_default_phase: string;
   readonly message_separator: string;
   readonly companion_status_labels: Readonly<Record<string, string>>;
@@ -90,7 +87,6 @@ interface GamePresentationConfig {
       readonly management_categories: readonly ManagementCategoryPresentation[];
     };
     readonly dashboard: {
-      readonly log_hint: string;
       readonly meters: readonly DashboardMeterPresentation[];
     };
     readonly h5: H5Presentation;
@@ -1411,7 +1407,7 @@ export class GameUiAdapter implements GameUiPort {
     return this.actionPresentations().find((action) => action.id === actionId)?.label ?? "";
   }
 
-  /** 合并共享领域动作与 H5 专属页面入口，不污染旧 Python 界面配置。 */
+  /** 合并领域动作与 H5 专属页面入口，形成统一展示清单。 */
   private actionPresentations(): readonly GameActionPresentation[] {
     return [...this.presentation.actions, ...this.webConfig.actions];
   }

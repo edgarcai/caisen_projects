@@ -165,7 +165,7 @@ export interface CityDistrictConfig {
 export interface CityConfig {
   id: string;
   name: string;
-  /** 供旧界面与 Python 版兼容使用；H5 新功能读取 districts。 */
+  /** 城市列表和存档摘要使用的区划概览名称。 */
   district: string;
   description: string;
   terrain: CityTerrain;
@@ -175,7 +175,7 @@ export interface CityConfig {
   transport_item_ids: readonly string[];
   default_district_id: string;
   districts: readonly CityDistrictConfig[];
-  /** 供旧探索流程与 Python 版兼容使用；H5 新事件池逐步按区划读取。 */
+  /** 城市事件全集，用于验证各区划事件引用的完整性。 */
   event_ids: readonly string[];
 }
 
@@ -183,12 +183,9 @@ export interface GameConfigDocument {
   schema_version: number;
   save_schema_version: number;
   game: {
-    title: string;
-    story: string;
     tutorial: string;
     tutorial_survival: string;
   };
-  menu: Record<string, string>;
   mode_labels: Record<string, string>;
   defaults: {
     player: Omit<PlayerState, "name">;
@@ -559,7 +556,7 @@ export interface V5ToV6SaveMigrationConfig {
   };
 }
 
-/** 格式化 JSON 中与 Python ``str.format`` 兼容的简单占位符。 */
+/** 格式化 JSON 文案中的简单花括号占位符。 */
 export function formatTemplate(
   template: string,
   values: Readonly<Record<string, string | number>> = {},
