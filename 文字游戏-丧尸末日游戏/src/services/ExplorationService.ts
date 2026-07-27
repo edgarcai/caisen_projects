@@ -206,5 +206,6 @@ export class ExplorationService {
     target.players = source.players;
     target.active_player_index = source.active_player_index;
     target.shelter = source.shelter;
+    target.archive_collection_totals = source.archive_collection_totals;
   }
 }

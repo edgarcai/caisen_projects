@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import gameConfigDocument from "../../config/game_config.json";
 import webConfigDocument from "../../config/web_config.json";
 import {
   parseWebGameConfig,
@@ -26,6 +27,7 @@ interface MutableWebConfigDocument {
   };
   guided_tutorial: {
     header_step_width_ratio: number;
+    dialog_target_gap: number;
     steps: Array<{ id: string; target_test_id: string }>;
   };
   publisher_splash: {
@@ -64,6 +66,7 @@ interface MutableWebConfigDocument {
     key: string;
     settings_key: string;
     achievement_key: string;
+    schema_version: number;
   };
   texts: {
     return_menu_confirm_title: string;
@@ -81,6 +84,12 @@ function cloneWebConfig(): MutableWebConfigDocument {
 }
 
 describe("局内导航配置完整性", () => {
+  it("网页存档版本与领域存档版本始终一致", () => {
+    expect(webConfigDocument.storage.schema_version).toBe(
+      gameConfigDocument.save_schema_version,
+    );
+  });
+
   it("普通行动分组不再暴露剧情任务入口", () => {
     const parsed = parseWebGameConfig(webConfigDocument);
     const actionIds = parsed.action_groups.flatMap((group) => group.action_ids);
@@ -93,6 +102,10 @@ describe("局内导航配置完整性", () => {
       placements: ["mobile_bottom", "desktop_header"],
       modes: ["story"],
     });
+    expect(parsed.actions.find((action) => action.id === "shelter_map"))
+      .toMatchObject({ label: "避难所地图" });
+    expect(parsed.action_groups.find((group) => group.id === "core")?.action_ids)
+      .toContain("shelter_map");
   });
 
   it("拒绝重复导航 ID，防止点击策略出现歧义", () => {
@@ -296,32 +309,49 @@ describe("开局模式与教程目标完整性", () => {
 
   it("教程每个聚焦 ID 都对应指挥台实际稳定节点", () => {
     const parsed = parseWebGameConfig(webConfigDocument);
-    const dashboardTargetIds = new Set([
+    const requiredDashboardTargetIds = new Set([
       "dashboard-active-player",
       "dashboard-resource-player-food",
       "dashboard-action-explore",
       "dashboard-action-shelter_management",
       "dashboard-action-companions",
+      "dashboard-action-shelter_map",
+      "dashboard-action-archive_storage",
+      "dashboard-action-encounter_battle",
       "dashboard-log",
       "dashboard-settings",
     ]);
+    const configuredTargetIds = new Set(
+      parsed.guided_tutorial.steps.map((step) => step.target_test_id),
+    );
 
-    expect(parsed.guided_tutorial.steps).toHaveLength(dashboardTargetIds.size);
+    expect(parsed.guided_tutorial.steps.length).toBeGreaterThan(
+      requiredDashboardTargetIds.size,
+    );
     parsed.guided_tutorial.steps.forEach((step) => {
-      expect(dashboardTargetIds.has(step.target_test_id), step.id).toBe(true);
+      expect(requiredDashboardTargetIds.has(step.target_test_id), step.id).toBe(true);
+      expect(step.instruction.length, step.id).toBeGreaterThan(80);
+    });
+    requiredDashboardTargetIds.forEach((targetTestId) => {
+      expect(configuredTargetIds.has(targetTestId), targetTestId).toBe(true);
     });
   });
 
   it("教程分栏和制作方背景透明度拒绝越界视觉比例", () => {
     const invalidTutorial = cloneWebConfig();
+    const invalidTutorialTargetGap = cloneWebConfig();
     const invalidSplash = cloneWebConfig();
     const invalidSplashTitleSize = cloneWebConfig();
     invalidTutorial.guided_tutorial.header_step_width_ratio = 0;
+    invalidTutorialTargetGap.guided_tutorial.dialog_target_gap = -1;
     invalidSplash.publisher_splash.background_opacity = 1.01;
     invalidSplashTitleSize.publisher_splash.title_font_size = 0;
 
     expect(() => parseWebGameConfig(invalidTutorial)).toThrow(
       "必须严格位于 0 到 1 之间",
+    );
+    expect(() => parseWebGameConfig(invalidTutorialTargetGap)).toThrow(
+      "guided_tutorial.dialog_target_gap",
     );
     expect(() => parseWebGameConfig(invalidSplash)).toThrow(
       "必须位于 0 到 1 之间",

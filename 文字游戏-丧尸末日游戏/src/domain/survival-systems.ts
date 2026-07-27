@@ -141,6 +141,8 @@ export interface SurvivalSystemsConfigDocument {
     readonly invalid_transport_text: string;
   };
   readonly expedition: {
+    readonly action_food_item_id: string;
+    readonly food_units_per_action: number;
     readonly base_steps: number;
     readonly maximum_companions: number;
     readonly maximum_carried_item_types: number;
@@ -152,7 +154,7 @@ export interface SurvivalSystemsConfigDocument {
     readonly forced_return_keep_percent: number;
     readonly forced_return_health_range: readonly [number, number];
     readonly prepared_text: string;
-    readonly step_text: string;
+    readonly action_text: string;
     readonly safe_return_text: string;
     readonly forced_return_text: string;
     readonly no_active_text: string;

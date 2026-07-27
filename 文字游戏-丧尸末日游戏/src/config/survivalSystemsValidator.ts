@@ -196,6 +196,15 @@ function validateResearchAndCrafting(config: SurvivalSystemsConfigDocument): voi
 function validateExpedition(config: SurvivalSystemsConfigDocument): void {
   const expeditionRecord = requireRecord(config.expedition, "expedition");
   const expedition = config.expedition;
+  requireNonEmptyString(
+    expedition.action_food_item_id,
+    "expedition.action_food_item_id",
+  );
+  requireInteger(
+    expedition.food_units_per_action,
+    "expedition.food_units_per_action",
+    1,
+  );
   requireInteger(expedition.base_steps, "expedition.base_steps", 1);
   requireInteger(expedition.maximum_companions, "expedition.maximum_companions", 0);
   requireInteger(
@@ -240,6 +249,11 @@ function validateExpedition(config: SurvivalSystemsConfigDocument): void {
   const itemIds = new Set(allItems.map((item) => item.item_id));
   const carryableIds = new Set(
     allItems.filter((item) => item.carryable).map((item) => item.item_id),
+  );
+  requireReference(
+    expedition.action_food_item_id,
+    carryableIds,
+    "expedition.action_food_item_id",
   );
   for (const itemId of Object.keys(expedition.carried_item_step_bonuses)) {
     requireReference(itemId, carryableIds, "expedition.carried_item_step_bonuses");

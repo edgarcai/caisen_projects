@@ -3,6 +3,7 @@ import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import v5ToV6MigrationDocument from "../../config/save_migrations/v5_to_v6.json";
 import v6ToV7MigrationDocument from "../../config/save_migrations/v6_to_v7.json";
+import v7ToV8MigrationDocument from "../../config/save_migrations/v7_to_v8.json";
 import { describe, expect, it } from "vitest";
 import { createGameApplication } from "../../src/application";
 import { validateSurvivalSystemsConfig } from "../../src/config/survivalSystemsValidator";
@@ -11,6 +12,7 @@ import type {
   StoryConfigDocument,
   V5ToV6SaveMigrationConfig,
   V6ToV7SaveMigrationConfig,
+  V7ToV8SaveMigrationConfig,
 } from "../../src/domain/content";
 import type { GameState } from "../../src/domain/game-state";
 import type { SaveRepository, SaveSlotSummary } from "../../src/domain/ports";
@@ -18,6 +20,7 @@ import {
   SaveStateValidator,
   V5ToV6SaveMigrator,
   V6ToV7SaveMigrator,
+  V7ToV8SaveMigrator,
 } from "../../src/infrastructure";
 import type { V6ToV7SaveMigrationContext } from "../../src/infrastructure";
 
@@ -25,6 +28,7 @@ const game = gameDocument as unknown as GameConfigDocument;
 const story = storyDocument as unknown as StoryConfigDocument;
 const migration: V5ToV6SaveMigrationConfig = v5ToV6MigrationDocument;
 const currentMigration: V6ToV7SaveMigrationConfig = v6ToV7MigrationDocument;
+const v7ToV8Migration: V7ToV8SaveMigrationConfig = v7ToV8MigrationDocument;
 
 /** 使用权威内容构造 v6→v7 迁移上下文。 */
 function createV7MigrationContext(): V6ToV7SaveMigrationContext {
@@ -72,9 +76,13 @@ function createV6State(): GameState {
   return structuredClone(application.state);
 }
 
-/** 递归移除只属于 v6 的字段，构造真实 v5 结构。 */
+/** 递归移除 v6 及更高版本字段，构造真实 v5 结构。 */
 function downgradeRestorableState(rawState: Record<string, unknown>): void {
+  delete rawState.archive_collection_totals;
   delete rawState.management_cycle_usage;
+  delete rawState.shelter_room_assignments;
+  delete rawState.encounter_battle;
+  delete rawState.pending_return_incident_id;
   delete (rawState.inventory as Record<string, unknown>).equipped_transport_ids;
   delete rawState.last_expedition_failure;
   const players = rawState.players as Record<string, unknown>[];
@@ -138,10 +146,11 @@ describe("v5 到 v6 存档迁移", () => {
       interaction_count: 0,
     });
     expect(snapshot).toHaveProperty("last_expedition_failure", null);
-    const current = new V6ToV7SaveMigrator(
+    const v7 = new V6ToV7SaveMigrator(
       currentMigration,
       createV7MigrationContext(),
     ).migrate(document);
+    const current = new V7ToV8SaveMigrator(v7ToV8Migration).migrate(v7);
     expect(() => validator.parse(current.game_state)).not.toThrow();
   });
 

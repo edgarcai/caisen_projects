@@ -49,7 +49,7 @@ export class CityAccessService {
     const hasTransport = this.transportRequirementSatisfied(state, city);
     const accessible = hasIntelligence && (hasPath || hasTransport);
     const reason = accessible
-      ? this.content.text("city_access_remote_ready", { steps: travelStepCost })
+      ? this.content.text("city_access_remote_ready", { actions: travelStepCost })
       : this.remoteLockedReason(
         city,
         hasIntelligence,
@@ -98,7 +98,7 @@ export class CityAccessService {
       relation,
       travelStepCost,
       accessible: true,
-      reason: this.content.text(textKey, { steps: travelStepCost }),
+      reason: this.content.text(textKey, { actions: travelStepCost }),
       accessSummary: this.accessSummary(city, relation, travelStepCost),
     };
   }
@@ -113,7 +113,7 @@ export class CityAccessService {
       district: city.district,
       terrain: this.content.text(`city_terrain_${city.terrain}`),
       relation: this.content.text(`city_relation_${relation}`),
-      steps: travelStepCost,
+      actions: travelStepCost,
       description: city.description,
     });
   }

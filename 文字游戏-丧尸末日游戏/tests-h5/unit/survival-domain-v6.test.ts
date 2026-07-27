@@ -149,15 +149,15 @@ describe("v6 伙伴管理与避难所活动", () => {
   });
 });
 
-describe("v6 远征步数与强制返程", () => {
-  it("基础步数为10，谨慎周密使最大步数减一", () => {
+describe("v6 远征存档与强制返程", () => {
+  it("携带食物独立决定行动额度，谨慎周密不再减少行动", () => {
     const application = startedApplication();
-    application.prepareExpedition("city_a", "city_a_district_a", [], {});
+    application.prepareExpedition("city_a", "city_a_district_a", [], { food: 5 });
 
     expect(survivalSystemsDocument.expedition.base_steps).toBe(10);
     expect(game.campaign_profiles.traits.find((trait) => trait.id === "meticulous"))
       .toMatchObject({ expedition_step_bonus: -1 });
-    expect(application.expeditionStatus()?.maximumSteps).toBe(9);
+    expect(application.expeditionStatus()?.maximumSteps).toBe(5);
   });
 
   it("拒绝会导致运行态与存档契约不一致的小数返程比例", () => {
@@ -189,23 +189,23 @@ describe("v6 远征步数与强制返程", () => {
     const report = application.resolveExploration("quiet_street");
     const failure = application.lastExpeditionFailure();
 
-    expect(report.messages.join("\n")).toContain("步数耗尽");
+    expect(report.messages.join("\n")).toContain("携带食物");
     expect(requirePlayer(state).health).toBe(3);
     expect(failure).toMatchObject({
       reason: "steps_exhausted",
       health_before: 3,
       health_after: 3,
-      total_original: 10,
-      total_kept: 2,
-      total_lost: 8,
+      total_original: 8,
+      total_kept: 1,
+      total_lost: 7,
     });
     expect(failure?.items).toEqual([
       expect.objectContaining({
         source: "carried",
         item_id: "food",
-        original_quantity: 5,
-        kept_quantity: 1,
-        lost_quantity: 4,
+        original_quantity: 3,
+        kept_quantity: 0,
+        lost_quantity: 3,
       }),
       expect.objectContaining({
         source: "loot",

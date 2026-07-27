@@ -226,6 +226,7 @@ export class CompanionManagementService {
     companion.interaction_count += 1;
     state.players = working.players;
     state.shelter = working.shelter;
+    state.archive_collection_totals = working.archive_collection_totals;
     state.companions = working.companions;
     return {
       applied: true,

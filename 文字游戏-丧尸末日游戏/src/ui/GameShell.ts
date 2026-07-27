@@ -29,6 +29,17 @@ import {
   resolveSelectedCoverTheme,
 } from "./models/CoverThemeModel";
 import {
+  buildEncounterBattlePageView,
+  buildEncounterPreparationPageView,
+  emptyEncounterBattleSelection,
+  emptyEncounterPreparationSelection,
+  resolveEncounterExecutionDraft,
+  resolveEncounterPreparationPlan,
+  type EncounterBattleSelection,
+  type EncounterPreparationSelection,
+} from "./models/DemoSystemPresenters";
+import { archiveDocumentViewKey } from "./models/DemoSystemViewModels";
+import {
   resolveExpeditionEntryScreen,
   resolveExpeditionProgressScreen,
 } from "./navigation/ExpeditionNavigation";
@@ -49,6 +60,16 @@ import {
 } from "./pages/DashboardPage";
 import { createDocumentPage } from "./pages/DocumentPage";
 import {
+  createArchiveCollectionPage,
+  createArchiveDocumentPage,
+  createArchiveStoragePage,
+  createEncounterBattlePage,
+  createEncounterCatalogPage,
+  createEncounterPreparationPage,
+  createReturnIncidentPage,
+} from "./pages/DemoSystemsPages";
+import {
+  createDistrictExplorationTreePage,
   createExpeditionCityDetailPage,
   createExpeditionCityListPage,
   createExpeditionDistrictDetailPage,
@@ -62,10 +83,14 @@ import {
 import { createGuidedTutorialPage } from "./pages/GuidedTutorialPage";
 import { createManagementOptionDetailPage } from "./pages/ManagementPages";
 import { createNewGameSetupPage } from "./pages/NewGameSetupPage";
-import type { PageView } from "./pages/PageView";
+import type { PageTransientState, PageView } from "./pages/PageView";
 import { createPreGameNoticePage } from "./pages/PreGameNoticePage";
 import { createPublisherSplashPage } from "./pages/PublisherSplashPage";
 import { createSaveSlotsPage } from "./pages/SaveSlotsPage";
+import {
+  createShelterMapPage,
+  createShelterRoomPlanningPage,
+} from "./pages/ShelterMapPage";
 import { createSuppliesPage } from "./pages/SuppliesPage";
 import {
   createCraftingPage,
@@ -143,6 +168,8 @@ export class GameShell {
   private readonly resizeCoordinator: DeferredResizeCoordinator;
   private viewportListenersInstalled: boolean;
   private expeditionDraft: ExpeditionDraft;
+  private encounterSelection: EncounterBattleSelection;
+  private encounterPreparationSelection: EncounterPreparationSelection;
   private pendingNewGameRequest: PendingNewGameRequest | null;
 
   /**
@@ -196,6 +223,8 @@ export class GameShell {
     );
     this.viewportListenersInstalled = false;
     this.expeditionDraft = emptyExpeditionDraft();
+    this.encounterSelection = emptyEncounterBattleSelection();
+    this.encounterPreparationSelection = emptyEncounterPreparationSelection();
     this.pendingNewGameRequest = null;
   }
 
@@ -326,6 +355,9 @@ export class GameShell {
       this.stage.height,
       this.config,
     );
+    const transientStates = refreshAll
+      ? this.captureRenderedPageStates()
+      : new Map<GameRoute, PageTransientState>();
     if (refreshAll) {
       this.destroyRenderedPages();
     }
@@ -352,6 +384,10 @@ export class GameShell {
         continue;
       }
       const view = this.createPage(route, layout, this.snapshot);
+      const transientState = transientStates.get(route);
+      if (transientState !== undefined) {
+        view.restoreTransientState?.(transientState);
+      }
       this.host.addChild(view.root);
       this.renderedPages.push({ route, view });
     }
@@ -372,6 +408,18 @@ export class GameShell {
       browserWindow.document.body.dataset.gameCoverAsset =
         resolveCoverThemeArtwork(activeCoverTheme, layout).asset;
     }
+  }
+
+  /** 按稳定路由对象保存页面瞬态状态，避免把状态误套到新路由。 */
+  private captureRenderedPageStates(): Map<GameRoute, PageTransientState> {
+    const states = new Map<GameRoute, PageTransientState>();
+    this.renderedPages.forEach((entry) => {
+      const state = entry.view.captureTransientState?.();
+      if (state !== undefined) {
+        states.set(entry.route, state);
+      }
+    });
+    return states;
   }
 
   /** 销毁全部已渲染页面并清空宿主显示列表。 */
@@ -461,6 +509,24 @@ export class GameShell {
         return this.createCompanionEquipment(route, layout, snapshot);
       case "companion_interaction":
         return this.createCompanionInteraction(route, layout, snapshot);
+      case "shelter_map":
+        return this.createShelterMap(layout, snapshot);
+      case "shelter_room_planning":
+        return this.createShelterRoomPlanning(route, layout, snapshot);
+      case "archive_storage":
+        return this.createArchiveStorage(layout, snapshot);
+      case "archive_collection":
+        return this.createArchiveCollection(route, layout, snapshot);
+      case "archive_document":
+        return this.createArchiveDocument(route, layout, snapshot);
+      case "encounter_catalog":
+        return this.createEncounterCatalog(layout, snapshot);
+      case "encounter_preparation":
+        return this.createEncounterPreparation(route, layout, snapshot);
+      case "encounter_battle":
+        return this.createEncounterBattle(layout, snapshot);
+      case "return_incident":
+        return this.createReturnIncident(layout, snapshot);
       case "supplies":
         return this.createSupplies(layout, snapshot);
       case "warehouse":
@@ -479,6 +545,8 @@ export class GameShell {
         return this.createExpeditionDistrictList(route, layout, snapshot);
       case "expedition_district_detail":
         return this.createExpeditionDistrictDetail(route, layout, snapshot);
+      case "district_exploration_tree":
+        return this.createDistrictExplorationTree(route, layout, snapshot);
       case "expedition_prepare":
         return this.createExpeditionPrepare(layout, snapshot);
       case "expedition_status":
@@ -908,6 +976,273 @@ export class GameShell {
     );
   }
 
+  /** 创建可滚动的避难所横切面，房间点击后继续叠加规划页。 */
+  private createShelterMap(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const view = snapshot.shelterLayout;
+    if (view === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        snapshot.shelterLayoutConfig.title,
+      );
+    }
+    return createShelterMapPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.shelterLayoutConfig,
+      view,
+      {
+        back: this.goBack,
+        openRoom: this.openShelterRoomPlanning,
+      },
+    );
+  }
+
+  /** 创建指定房间的人员规划页，并保留横切面作为上一级。 */
+  private createShelterRoomPlanning(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const roomId = route.context?.roomId ?? "";
+    const room = snapshot.shelterLayout?.rooms.find(
+      (candidate) => candidate.roomId === roomId,
+    );
+    if (room === undefined) {
+      return this.createMissingSelectionPage(
+        layout,
+        snapshot.shelterLayoutConfig.title,
+      );
+    }
+    return createShelterRoomPlanningPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      snapshot.shelterLayoutConfig,
+      room,
+      snapshot.shelterRoomAssignmentOptions[roomId] ?? [],
+      {
+        back: this.goBack,
+        changeAssignment: (residentId, targetRoomId): void => {
+          void this.changeShelterRoomAssignment(residentId, targetRoomId);
+        },
+      },
+    );
+  }
+
+  /** 创建报纸与书籍的文献存储总览。 */
+  private createArchiveStorage(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const view = snapshot.archiveStorage;
+    if (view === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.archive_storage_title,
+      );
+    }
+    return createArchiveStoragePage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      view,
+      {
+        back: this.goBack,
+        openCollection: this.openArchiveCollection,
+      },
+    );
+  }
+
+  /** 创建指定文献分类的锁定与已解锁目录。 */
+  private createArchiveCollection(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const collectionId = route.context?.collectionId ?? "";
+    const view = snapshot.archiveCollections[collectionId];
+    if (view === undefined) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.archive_storage_title,
+      );
+    }
+    return createArchiveCollectionPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      view,
+      {
+        back: this.goBack,
+        openDocument: (documentId, unlocked): void => {
+          this.openArchiveDocument(collectionId, documentId, unlocked);
+        },
+      },
+    );
+  }
+
+  /** 创建一篇支持鼠标滚轮与手机拖动的长文献正文页。 */
+  private createArchiveDocument(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const collectionId = route.context?.collectionId ?? "";
+    const documentId = route.context?.documentId ?? "";
+    const view = snapshot.archiveDocuments[
+      archiveDocumentViewKey(collectionId, documentId)
+    ];
+    if (view === undefined) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.archive_storage_title,
+      );
+    }
+    return createArchiveDocumentPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      view,
+      this.goBack,
+    );
+  }
+
+  /** 创建可手动进入的配置化遭遇目录。 */
+  private createEncounterCatalog(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const view = snapshot.encounterCatalog;
+    if (view === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.encounter_catalog_title,
+      );
+    }
+    return createEncounterCatalogPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      view,
+      {
+        back: this.goBack,
+        prepareEncounter: (encounterId): void => {
+          this.openEncounterPreparation(encounterId);
+        },
+      },
+    );
+  }
+
+  /** 创建职责、治疗和显式开战组成的战前整备页。 */
+  private createEncounterPreparation(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const encounterId = route.context?.encounterId ?? "";
+    const runtime = snapshot.encounterPreparations[encounterId];
+    if (runtime === undefined) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.encounter_catalog_title,
+      );
+    }
+    const view = buildEncounterPreparationPageView(
+      runtime,
+      this.config.texts,
+      this.encounterPreparationSelection,
+    );
+    return createEncounterPreparationPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      view,
+      {
+        back: this.goBack,
+        selectRole: this.selectEncounterPreparationRole,
+        toggleTreatment: this.toggleEncounterPreparationTreatment,
+        startBattle: (): void => {
+          void this.startEncounter(encounterId);
+        },
+      },
+    );
+  }
+
+  /** 创建前后排、敌人意图与逐人下令完整可见的遭遇战页。 */
+  private createEncounterBattle(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const runtime = snapshot.encounterBattle;
+    if (runtime === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.encounter_catalog_title,
+      );
+    }
+    const view = buildEncounterBattlePageView(
+      runtime,
+      this.config.texts,
+      this.encounterSelection,
+      this.config.texts.profile_field_separator,
+    );
+    return createEncounterBattlePage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      view,
+      {
+        back: this.goBack,
+        selectPartyMember: this.selectEncounterActor,
+        selectEnemy: this.selectEncounterTarget,
+        selectAction: this.selectEncounterAction,
+        selectTarget: this.selectEncounterTarget,
+        execute: (): void => {
+          void this.executeEncounterSelection();
+        },
+      },
+    );
+  }
+
+  /** 创建探索返程后必须处理的避难所随机事项。 */
+  private createReturnIncident(
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const view = snapshot.returnIncident;
+    if (view === null) {
+      return this.createMissingSelectionPage(
+        layout,
+        this.config.texts.return_incident_choice_title,
+      );
+    }
+    return createReturnIncidentPage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      view,
+      {
+        defer: (): void => undefined,
+        choose: (choiceId): void => {
+          void this.chooseReturnIncident(choiceId);
+        },
+      },
+    );
+  }
+
   /** 创建单个伙伴的立绘与公开/解锁档案页。 */
   private createCompanionDetail(
     route: GameRoute,
@@ -1259,7 +1594,64 @@ export class GameShell {
             cityId: city.id,
             districtId: district.id,
           };
-          this.navigation.push({ screen: "expedition_prepare" });
+          this.navigation.push({
+            screen: "district_exploration_tree",
+            context: {
+              cityId: city.id,
+              districtId: district.id,
+              districtExplorationPath: [],
+            },
+          });
+          this.render();
+        },
+      },
+    );
+  }
+
+  /** 按路由路径只读取并展示区划探索树当前一层。 */
+  private createDistrictExplorationTree(
+    route: GameRoute,
+    layout: ResponsiveLayout,
+    snapshot: GameUiSnapshot,
+  ): PageView {
+    const city = this.expeditionCity(snapshot, route.context?.cityId);
+    const district = city === null
+      ? null
+      : resolveExpeditionDistrict(city, route.context?.districtId ?? null);
+    if (city === null || district === null) {
+      return this.createMissingExpeditionSelection(layout);
+    }
+    const projection = this.port.getDistrictExplorationLayer(
+      city.id,
+      district.id,
+      route.context?.districtExplorationPath ?? [],
+    );
+    return createDistrictExplorationTreePage(
+      this.runtime,
+      this.factory,
+      this.config,
+      layout,
+      projection,
+      {
+        back: this.goBack,
+        chooseOption: (option): void => {
+          if (option.terminal) {
+            this.expeditionDraft = {
+              ...this.expeditionDraft,
+              cityId: city.id,
+              districtId: district.id,
+            };
+            this.navigation.push({ screen: "expedition_prepare" });
+          } else {
+            this.navigation.push({
+              screen: "district_exploration_tree",
+              context: {
+                cityId: city.id,
+                districtId: district.id,
+                districtExplorationPath: option.address.path,
+              },
+            });
+          }
           this.render();
         },
       },
@@ -1356,7 +1748,7 @@ export class GameShell {
       this.config,
       layout,
       snapshot.expeditionFailure,
-      { returnToDashboard: this.returnToDashboard },
+      { returnToDashboard: this.continueAfterExpeditionFailure },
     );
   }
 
@@ -1676,6 +2068,115 @@ export class GameShell {
     this.render();
   };
 
+  /** 将选中房间作为纯展示路由上下文压入页面栈。 */
+  private readonly openShelterRoomPlanning = (roomId: string): void => {
+    this.navigation.push({
+      screen: "shelter_room_planning",
+      context: { roomId },
+    });
+    this.render();
+  };
+
+  /** 把文献分类作为二级页叠加在存储总览上。 */
+  private readonly openArchiveCollection = (collectionId: string): void => {
+    this.navigation.push({
+      screen: "archive_collection",
+      context: { collectionId },
+    });
+    this.render();
+  };
+
+  /** 打开已解锁正文；锁定项则叠加需求说明页。 */
+  private openArchiveDocument(
+    collectionId: string,
+    documentId: string,
+    unlocked: boolean,
+  ): void {
+    if (!unlocked) {
+      const document = this.requireSnapshot().archiveCollections[collectionId]
+        ?.documents.find((candidate) => candidate.documentId === documentId);
+      this.navigation.push({
+        screen: "message",
+        context: {
+          document: {
+            title: document?.title ?? this.config.texts.archive_storage_title,
+            body: document?.requirementText ?? this.config.texts.encounter_unavailable,
+            tone: "warning",
+          },
+        },
+      });
+      this.render();
+      return;
+    }
+    this.navigation.push({
+      screen: "archive_document",
+      context: { collectionId, documentId },
+    });
+    this.render();
+  }
+
+  /** 把选中的遭遇作为路由上下文压入页面栈，并重置旧整备草稿。 */
+  private openEncounterPreparation(encounterId: string): void {
+    this.encounterPreparationSelection = emptyEncounterPreparationSelection();
+    this.navigation.push({
+      screen: "encounter_preparation",
+      context: { encounterId },
+    });
+    this.render();
+  }
+
+  /** 为一名参战单位选择职责并保留其他单位与治疗草稿。 */
+  private readonly selectEncounterPreparationRole = (
+    memberId: string,
+    roleId: string,
+  ): void => {
+    this.encounterPreparationSelection = {
+      ...this.encounterPreparationSelection,
+      roleIdsByMember: {
+        ...this.encounterPreparationSelection.roleIdsByMember,
+        [memberId]: roleId,
+      },
+    };
+    this.render(true);
+  };
+
+  /** 切换一名单位的战前治疗计划，实际医疗物资延迟到开战时扣除。 */
+  private readonly toggleEncounterPreparationTreatment = (memberId: string): void => {
+    const selected = new Set(this.encounterPreparationSelection.treatedMemberIds);
+    if (selected.has(memberId)) {
+      selected.delete(memberId);
+    } else {
+      selected.add(memberId);
+    }
+    this.encounterPreparationSelection = {
+      ...this.encounterPreparationSelection,
+      treatedMemberIds: [...selected],
+    };
+    this.render(true);
+  };
+
+  /** 切换当前待行动队员并清除旧行动和目标草稿。 */
+  private readonly selectEncounterActor = (actorId: string): void => {
+    this.encounterSelection = { actorId, actionId: null, targetId: null };
+    this.render(true);
+  };
+
+  /** 选择一项战斗行动并要求重新确认目标。 */
+  private readonly selectEncounterAction = (actionId: string): void => {
+    this.encounterSelection = {
+      ...this.encounterSelection,
+      actionId,
+      targetId: null,
+    };
+    this.render(true);
+  };
+
+  /** 选择攻击、治疗或道具作用目标。 */
+  private readonly selectEncounterTarget = (targetId: string): void => {
+    this.encounterSelection = { ...this.encounterSelection, targetId };
+    this.render(true);
+  };
+
   /** 根据待决事件和远征上下文打开正确的探索页。 */
   private openExpedition(): void {
     const screen = resolveExpeditionEntryScreen(this.requireSnapshot());
@@ -1727,6 +2228,13 @@ export class GameShell {
           this.openSettings();
           return;
         }
+        if (
+          intent.screen === "encounter_catalog"
+          && this.requireSnapshot().encounterBattle !== null
+        ) {
+          this.navigation.push({ screen: "encounter_battle" });
+          break;
+        }
         this.navigation.push({ screen: intent.screen });
         break;
       case "save_game":
@@ -1773,6 +2281,8 @@ export class GameShell {
     showTutorial = false,
   ): Promise<void> {
     this.expeditionDraft = emptyExpeditionDraft();
+    this.encounterSelection = emptyEncounterBattleSelection();
+    this.encounterPreparationSelection = emptyEncounterPreparationSelection();
     await this.execute(
       { type: "start_game", mode, playerNames, profile, saveSlotId },
       (): void => {
@@ -1803,6 +2313,8 @@ export class GameShell {
    */
   private async loadGame(slotId: number): Promise<void> {
     this.expeditionDraft = emptyExpeditionDraft();
+    this.encounterSelection = emptyEncounterBattleSelection();
+    this.encounterPreparationSelection = emptyEncounterPreparationSelection();
     await this.execute(
       { type: "load_game", slotId },
       (): void => { this.beginConnectionTransition(); },
@@ -1821,6 +2333,12 @@ export class GameShell {
       this.navigation.reset({ screen: "dashboard" });
       if (this.requireSnapshot().ended) {
         this.navigation.push({ screen: "ending" });
+      } else if (this.requireSnapshot().expeditionFailure !== null) {
+        this.navigation.push({ screen: "expedition_failure" });
+      } else if (this.requireSnapshot().returnIncident !== null) {
+        this.navigation.push({ screen: "return_incident" });
+      } else if (this.requireSnapshot().encounterBattle !== null) {
+        this.navigation.push({ screen: "encounter_battle" });
       } else if (showTutorial) {
         this.navigation.push({ screen: "tutorial" });
       }
@@ -2011,7 +2529,11 @@ export class GameShell {
     await this.execute(
       { type: "exploration_retreat" },
       (): void => {
-        this.navigation.reset({ screen: "dashboard" });
+        this.navigation.reset({
+          screen: this.requireSnapshot().returnIncident === null
+            ? "dashboard"
+            : "return_incident",
+        });
       },
     );
   }
@@ -2073,6 +2595,89 @@ export class GameShell {
     await this.execute(
       { type: "companion_interact", companionId, interactionId },
       (): void => undefined,
+      true,
+    );
+  }
+
+  /** 提交一次房间人员调动，成功后原位刷新规划页。 */
+  private async changeShelterRoomAssignment(
+    residentId: string,
+    targetRoomId: string | null,
+  ): Promise<void> {
+    await this.execute(
+      {
+        type: "shelter_room_assignment_change",
+        residentId,
+        targetRoomId,
+      },
+      (): void => undefined,
+    );
+  }
+
+  /** 提交完整战前整备方案，并在原子校验成功后用战斗页替换整备页。 */
+  private async startEncounter(encounterId: string): Promise<void> {
+    const runtime = this.requireSnapshot().encounterPreparations[encounterId];
+    if (runtime === undefined) return;
+    const plan = resolveEncounterPreparationPlan(
+      runtime,
+      this.encounterPreparationSelection,
+    );
+    if (plan === null) return;
+    await this.execute(
+      {
+        type: "encounter_start",
+        encounterId,
+        roleIdsByMember: plan.role_ids_by_member,
+        treatedMemberIds: plan.treated_member_ids,
+      },
+      (): void => {
+        this.encounterSelection = emptyEncounterBattleSelection();
+        this.encounterPreparationSelection = emptyEncounterPreparationSelection();
+        this.navigation.replace({ screen: "encounter_battle" });
+      },
+    );
+  }
+
+  /** 执行当前完整战斗草稿，或在战斗结束后归档并返回指挥台。 */
+  private async executeEncounterSelection(): Promise<void> {
+    const runtime = this.requireSnapshot().encounterBattle;
+    if (runtime === null) return;
+    if (runtime.state.outcome !== "ongoing") {
+      await this.execute(
+        { type: "encounter_finish" },
+        (): void => {
+          this.encounterSelection = emptyEncounterBattleSelection();
+          this.navigation.reset({ screen: "dashboard" });
+        },
+      );
+      return;
+    }
+    const draft = resolveEncounterExecutionDraft(runtime, this.encounterSelection);
+    if (draft === null) return;
+    await this.execute(
+      { type: "encounter_action", ...draft },
+      (): void => {
+        this.encounterSelection = emptyEncounterBattleSelection();
+        const snapshot = this.requireSnapshot();
+        if (snapshot.ending !== null || snapshot.ended) {
+          this.navigation.replace({ screen: "ending" });
+        }
+      },
+    );
+  }
+
+  /** 结算归来事项并回到指挥台或失败结局。 */
+  private async chooseReturnIncident(choiceId: string): Promise<void> {
+    await this.execute(
+      { type: "return_incident_choose", choiceId },
+      (): void => {
+        const snapshot = this.requireSnapshot();
+        this.navigation.reset({
+          screen: snapshot.ending !== null || snapshot.ended
+            ? "ending"
+            : "dashboard",
+        });
+      },
       true,
     );
   }
@@ -2156,14 +2761,27 @@ export class GameShell {
     await this.execute(
       { type: "expedition_safe_return" },
       (): void => {
-        this.navigation.reset({ screen: "dashboard" });
+        this.navigation.reset({
+          screen: this.requireSnapshot().returnIncident === null
+            ? "dashboard"
+            : "return_incident",
+        });
       },
     );
   }
 
   /** 根据命令后快照替换为事件、远征状态或指挥台。 */
   private navigateAfterExpeditionProgress(): void {
-    const screen = resolveExpeditionProgressScreen(this.requireSnapshot());
+    const snapshot = this.requireSnapshot();
+    const screen = resolveExpeditionProgressScreen(snapshot);
+    if (screen === "expedition_failure") {
+      this.navigation.replace({ screen });
+      return;
+    }
+    if (snapshot.returnIncident !== null) {
+      this.navigation.reset({ screen: "return_incident" });
+      return;
+    }
     if (screen === "dashboard") {
       this.navigation.reset({ screen });
     } else {
@@ -2171,9 +2789,13 @@ export class GameShell {
     }
   }
 
-  /** 从失败结算或浮层安全回到指挥台根页。 */
-  private readonly returnToDashboard = (): void => {
-    this.navigation.reset({ screen: "dashboard" });
+  /** 确认强制返程损失后，优先处理已排队的归来事项。 */
+  private readonly continueAfterExpeditionFailure = (): void => {
+    this.navigation.reset({
+      screen: this.requireSnapshot().returnIncident === null
+        ? "dashboard"
+        : "return_incident",
+    });
     this.render();
   };
 
@@ -2226,6 +2848,8 @@ export class GameShell {
   private async returnToMenu(): Promise<void> {
     this.clearConnectionTimer();
     this.expeditionDraft = emptyExpeditionDraft();
+    this.encounterSelection = emptyEncounterBattleSelection();
+    this.encounterPreparationSelection = emptyEncounterPreparationSelection();
     this.pendingNewGameRequest = null;
     await this.execute(
       { type: "return_to_menu" },
@@ -2343,6 +2967,9 @@ export class GameShell {
     }
     if (screen === "exploration_event") {
       void this.retreatExploration();
+      return;
+    }
+    if (screen === "return_incident") {
       return;
     }
     if (screen === "ending") {

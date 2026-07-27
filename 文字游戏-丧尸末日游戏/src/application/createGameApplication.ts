@@ -6,12 +6,17 @@ import v3ToV4MigrationDocument from "../../config/save_migrations/v3_to_v4.json"
 import v4ToV5MigrationDocument from "../../config/save_migrations/v4_to_v5.json";
 import v5ToV6MigrationDocument from "../../config/save_migrations/v5_to_v6.json";
 import v6ToV7MigrationDocument from "../../config/save_migrations/v6_to_v7.json";
+import v7ToV8MigrationDocument from "../../config/save_migrations/v7_to_v8.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
+import shelterLayoutDocument from "../../config/shelter_layout.json";
 import webDocument from "../../config/web_config.json";
+import { demoSystemsConfig } from "../config/demoSystemsConfig";
+import { districtExplorationTreeConfig } from "../config/districtExplorationTreeConfig";
 import { createKeyItemWarehouseCatalog } from "../config/keyItemCatalog";
 import { validateSurvivalSystemsConfig } from "../config/survivalSystemsValidator";
 import { validateWorldMapConfig } from "../config/worldMapValidator";
+import { parseShelterLayoutConfig } from "../domain/shelter-layout";
 import type {
   EventsConfigDocument,
   GameConfigDocument,
@@ -22,6 +27,7 @@ import type {
   V4ToV5SaveMigrationConfig,
   V5ToV6SaveMigrationConfig,
   V6ToV7SaveMigrationConfig,
+  V7ToV8SaveMigrationConfig,
 } from "../domain/content";
 import type { SurvivalSystemsConfigDocument } from "../domain/survival-systems";
 import type {
@@ -40,17 +46,22 @@ import {
   V2ToV3SaveMigrator,
   V5ToV6SaveMigrator,
   V6ToV7SaveMigrator,
+  V7ToV8SaveMigrator,
 } from "../infrastructure";
 import { V3ToV4SaveMigrator } from "../infrastructure/V3ToV4SaveMigrator";
 import { V4ToV5SaveMigrator } from "../infrastructure/V4ToV5SaveMigrator";
 import {
   AchievementService,
+  ArchiveStorageService,
   CampaignProfileService,
   CompanionManagementService,
   ChronicleService,
   CityAccessService,
   CombatService,
+  DemoSystemsCoordinator,
+  DistrictExplorationTreeService,
   EquipmentService,
+  EncounterBattleService,
   ExpeditionService,
   ExplorationService,
   GameContent,
@@ -58,7 +69,10 @@ import {
   GameRules,
   InventoryService,
   ResearchCraftingService,
+  ReturnIncidentService,
   ShelterService,
+  ShelterLayoutService,
+  ShelterLayoutStateProjector,
   StateOperations,
   StoryService,
   TradeAmbushService,
@@ -99,13 +113,18 @@ export function createGameApplication(
   const v4ToV5Migration: V4ToV5SaveMigrationConfig = v4ToV5MigrationDocument;
   const v5ToV6Migration: V5ToV6SaveMigrationConfig = v5ToV6MigrationDocument;
   const v6ToV7Migration: V6ToV7SaveMigrationConfig = v6ToV7MigrationDocument;
+  const v7ToV8Migration: V7ToV8SaveMigrationConfig = v7ToV8MigrationDocument;
   const storageConfig = webDocument.storage as unknown as StorageDocument;
   const survivalSystems = validateSurvivalSystemsConfig(survivalSystemsDocument);
+  const shelterLayoutConfig = parseShelterLayoutConfig(shelterLayoutDocument);
   validateWorldMapConfig(game, events);
   const content = new GameContent(game, story, events);
   const random = options.randomSource ?? new BrowserRandomSource();
   const storage = options.storage ?? browserStorageOrMemory();
-  const operations = new StateOperations(random);
+  const archiveStorage = new ArchiveStorageService(
+    demoSystemsConfig.archive_storage,
+  );
+  const operations = new StateOperations(random, [archiveStorage]);
   const campaignProfiles = new CampaignProfileService(content, operations);
   const modeCapabilities = new GameModeCapabilityPolicy(content);
   const cityAccess = new CityAccessService(content, survivalSystems);
@@ -118,6 +137,32 @@ export function createGameApplication(
     storyService,
     random,
     tradeAmbush,
+  );
+  const shelterLayout = new ShelterLayoutService(shelterLayoutConfig);
+  const shelterLayoutState = new ShelterLayoutStateProjector(
+    shelterLayout,
+    story.companions,
+  );
+  const encounterBattle = new EncounterBattleService(
+    demoSystemsConfig.encounter_battle,
+    random,
+  );
+  const returnIncidents = new ReturnIncidentService(
+    demoSystemsConfig.return_incidents,
+    operations,
+    random,
+  );
+  const demoSystems = new DemoSystemsCoordinator(
+    demoSystemsConfig,
+    encounterBattle,
+    returnIncidents,
+    archiveStorage,
+    equipment,
+    content,
+  );
+  const districtExplorationTree = new DistrictExplorationTreeService(
+    districtExplorationTreeConfig,
+    content,
   );
   const chronicle = new ChronicleService(content);
   const rules = new GameRules(content, shelter, chronicle, campaignProfiles);
@@ -139,9 +184,7 @@ export function createGameApplication(
     survivalSystems,
     content,
     inventory,
-    researchCrafting,
     cityAccess,
-    campaignProfiles,
     operations,
     random,
   );
@@ -165,6 +208,9 @@ export function createGameApplication(
     v4ToV5Migration,
     v5ToV6Migration,
     v6ToV7Migration,
+    v7ToV8Migration,
+    shelterLayoutState,
+    archiveStorage,
   );
   return new GameApplication(
     content,
@@ -173,6 +219,9 @@ export function createGameApplication(
     storyService,
     combat,
     shelter,
+    shelterLayout,
+    shelterLayoutState,
+    demoSystems,
     companionManagement,
     chronicle,
     inventory,
@@ -180,6 +229,7 @@ export function createGameApplication(
     researchCrafting,
     transportLoadout,
     expedition,
+    districtExplorationTree,
     campaignProfiles,
     modeCapabilities,
     rules,
@@ -201,6 +251,9 @@ function createRepository(
   v4ToV5Migration: V4ToV5SaveMigrationConfig,
   v5ToV6Migration: V5ToV6SaveMigrationConfig,
   v6ToV7Migration: V6ToV7SaveMigrationConfig,
+  v7ToV8Migration: V7ToV8SaveMigrationConfig,
+  shelterLayoutState: ShelterLayoutStateProjector,
+  archiveStorage: ArchiveStorageService,
 ): SaveRepository {
   const validator = new SaveStateValidator(
     game.rules,
@@ -210,6 +263,8 @@ function createRepository(
     survivalSystems,
     game.campaign_profiles,
     game.cities,
+    shelterLayoutState,
+    archiveStorage,
   );
   return new LocalStorageSaveRepository({
     storage: options.storage ?? browserStorageOrMemory(),
@@ -229,6 +284,10 @@ function createRepository(
         facilityManagement: story.facility_management,
         allowedHomeCityIds: game.rules.world_map.home_city_ids,
       }),
+      new V7ToV8SaveMigrator(
+        v7ToV8Migration,
+        demoSystemsConfig.archive_storage.collections,
+      ),
     ],
     now: options.now,
   });

@@ -782,6 +782,8 @@ describe("开局引导与制作方页", () => {
     expect(requireText(root, "guided-tutorial-speaker").text).toContain("豪菜");
     expect(requireText(root, "guided-tutorial-step").text).toContain("1");
     const dialog = requireNode(root, "guided-tutorial-dialog");
+    expect(dialog.width).toBe(webConfig.guided_tutorial.desktop_dialog_width);
+    expect(dialog.height).toBe(webConfig.guided_tutorial.desktop_dialog_height);
     const dialogInnerWidth = dialog.width
       - webConfig.guided_tutorial.dialog_panel_padding * 2;
     expect(requireText(root, "guided-tutorial-step").width).toBeCloseTo(
@@ -804,8 +806,52 @@ describe("开局引导与制作方页", () => {
     view.destroy();
   });
 
-  it("三个质量视口的长教程正文可滚至末尾且按钮固定在底部", () => {
-    for (const viewportId of ["desktop", "mobile", "mobile_landscape"]) {
+  it("桌面端通讯框会换角避让右下方的聚焦目标", () => {
+    const runtime = createFakeRuntime();
+    const layout = createQualityViewportLayout("desktop");
+    const target = {
+      x: layout.stageWidth - layout.outerPadding - 180,
+      y: layout.stageHeight - layout.outerPadding - 140,
+      width: 180,
+      height: 140,
+    };
+    const view = createGuidedTutorialPage(
+      runtime,
+      createFactory(runtime),
+      webConfig,
+      layout,
+      () => target,
+      { onComplete: vi.fn(), onSkip: vi.fn() },
+    );
+    const root = view.root as unknown as FakeNode;
+    const dialog = requireNode(root, "guided-tutorial-dialog");
+    const gap = webConfig.guided_tutorial.dialog_target_gap;
+    const separatedHorizontally = dialog.x + dialog.width + gap <= target.x
+      || target.x + target.width + gap <= dialog.x;
+    const separatedVertically = dialog.y + dialog.height + gap <= target.y
+      || target.y + target.height + gap <= dialog.y;
+
+    expect(dialog.width).toBe(webConfig.guided_tutorial.desktop_dialog_width);
+    expect(dialog.height).toBe(webConfig.guided_tutorial.desktop_dialog_height);
+    expect(separatedHorizontally || separatedVertically).toBe(true);
+    expect(dialog.x).toBe(layout.safeArea.left + layout.outerPadding);
+    view.destroy();
+  });
+
+  it("全部质量视口的长教程正文可滚至末尾且按钮固定在底部", () => {
+    const viewportIds = [
+      "desktop",
+      "minimum_mobile",
+      "small_mobile",
+      "mobile",
+      "large_mobile",
+      "mobile_landscape",
+      "tablet",
+      "desktop_compact",
+      "desktop_short",
+      "desktop_wide",
+    ];
+    for (const viewportId of viewportIds) {
       const runtime = createFakeRuntime();
       const layout = createQualityViewportLayout(viewportId);
       const view = createGuidedTutorialPage(
@@ -839,20 +885,25 @@ describe("开局引导与制作方页", () => {
         expect(Math.abs(content.y)).toBe(0);
 
         if (instruction.height > viewport.height) {
-          if (layout.usesCompactUi) {
+          viewport.emit("mousewheel", { delta: -1 });
+          expect(content.y).toBeLessThan(0);
+          viewport.emit("mousewheel", { delta: 1 });
+          expect(Math.abs(content.y)).toBe(0);
+
+          if (layout.kind === "mobile") {
             const stage = runtime.stage as unknown as FakeStage;
             stage.mouseY = viewport.height;
             viewport.emit("mousedown");
             stage.mouseY = -instruction.height;
             stage.emit("mousemove");
             stage.emit("mouseup");
-          } else {
-            const attempts = Math.ceil(
-              instruction.height / webConfig.controls.scroll_step,
-            ) + 1;
-            for (let attempt = 0; attempt < attempts; attempt += 1) {
-              viewport.emit("mousewheel", { delta: -1 });
-            }
+            expect(content.y).toBeLessThan(0);
+          }
+          const attempts = Math.ceil(
+            instruction.height / webConfig.controls.scroll_step,
+          ) + 1;
+          for (let attempt = 0; attempt < attempts; attempt += 1) {
+            viewport.emit("mousewheel", { delta: -1 });
           }
           expect(content.y).toBeLessThan(0);
           expect(instruction.y + instruction.height + content.y)

@@ -1,5 +1,7 @@
 import type { GameApplication } from "../application";
 import { formatTemplate } from "../domain/content";
+import type { DistrictExplorationLayerProjection } from "../domain/district-exploration-tree";
+import type { EncounterBattleCommand } from "../domain/demo-systems";
 import { GameApplicationError } from "../domain/errors";
 import { activePlayer, isEnded, isVictory } from "../domain/game-state";
 import type {
@@ -15,6 +17,16 @@ import type {
   ManagementOption,
 } from "../domain/reports";
 import type { WebGameConfig } from "../config/types";
+import {
+  archiveDocumentViewKey,
+  type UiArchiveCollectionPageView,
+  type UiArchiveDocumentPageView,
+  type UiArchiveStoragePageView,
+  type UiEncounterBattleRuntimeView,
+  type UiEncounterCatalogPageView,
+  type UiEncounterPreparationRuntimeView,
+  type UiReturnIncidentPageView,
+} from "../ui/models/DemoSystemViewModels";
 import type {
   GameUiCommand,
   GameUiCommandResult,
@@ -138,6 +150,32 @@ export class GameUiAdapter implements GameUiPort {
     const storyStatus = storyAccess === "mode"
       ? this.application.storyStatus()
       : null;
+    const shelterLayout = state === null
+      ? null
+      : this.application.shelterLayoutView();
+    const shelterRoomAssignmentOptions = shelterLayout === null
+      ? {}
+      : Object.fromEntries(
+          shelterLayout.rooms.map((room) => [
+            room.roomId,
+            this.application.shelterRoomAssignmentOptions(room.roomId),
+          ]),
+        );
+    const archives = state === null
+      ? { storage: null, collections: {}, documents: {} }
+      : this.archiveViews(state);
+    const encounterCatalog = state === null
+      ? null
+      : this.encounterCatalogView(state);
+    const encounterPreparations = state === null || state.encounter_battle !== null
+      ? {}
+      : this.encounterPreparationViews();
+    const encounterBattle = state === null
+      ? null
+      : this.encounterBattleRuntimeView();
+    const returnIncident = state === null
+      ? null
+      : this.returnIncidentView();
     return {
       revision: this.revision,
       brand: {
@@ -177,6 +215,16 @@ export class GameUiAdapter implements GameUiPort {
       battle: state === null ? null : this.battleView(state),
       managementCategories: state === null ? [] : this.managementCategoryViews(state),
       companions: state === null ? [] : this.companionViews(state),
+      shelterLayoutConfig: this.application.shelterLayoutConfig(),
+      shelterLayout,
+      shelterRoomAssignmentOptions,
+      archiveStorage: archives.storage,
+      archiveCollections: archives.collections,
+      archiveDocuments: archives.documents,
+      encounterCatalog,
+      encounterPreparations,
+      encounterBattle,
+      returnIncident,
       warehouseItems: state === null ? [] : this.warehouseItemViews(state),
       transportLoadoutOptions: state === null ? [] : this.transportLoadoutOptionViews(),
       researchProjects: state === null ? [] : this.researchProjectViews(),
@@ -268,6 +316,19 @@ export class GameUiAdapter implements GameUiPort {
     );
   }
 
+  /** 把区划树查询透传给应用用例，并保持 UI 不依赖具体服务实现。 */
+  public getDistrictExplorationLayer(
+    cityId: string,
+    districtId: string,
+    parentPath: readonly number[],
+  ): DistrictExplorationLayerProjection {
+    return this.application.districtExplorationLayer(
+      cityId,
+      districtId,
+      parentPath,
+    );
+  }
+
   /** 执行一个已经过判别联合约束的命令。 */
   private executeCommand(
     command: GameUiCommand,
@@ -336,6 +397,34 @@ export class GameUiAdapter implements GameUiPort {
           command.companionId,
           command.interactionId,
         );
+        return { accepted: report.stateChanged, report };
+      }
+      case "shelter_room_assignment_change": {
+        const report = this.application.changeShelterRoomAssignment(
+          command.residentId,
+          command.targetRoomId,
+        );
+        return { accepted: report.stateChanged, report };
+      }
+      case "encounter_start": {
+        const report = this.application.startEncounter(command.encounterId, {
+          role_ids_by_member: command.roleIdsByMember,
+          treated_member_ids: command.treatedMemberIds,
+        });
+        return { accepted: report.stateChanged, report };
+      }
+      case "encounter_action": {
+        const report = this.application.performEncounterAction(
+          this.toEncounterBattleCommand(command),
+        );
+        return { accepted: report.stateChanged, report };
+      }
+      case "encounter_finish": {
+        const report = this.application.finishEncounter();
+        return { accepted: report.stateChanged, report };
+      }
+      case "return_incident_choose": {
+        const report = this.application.resolveReturnIncident(command.choiceId);
         return { accepted: report.stateChanged, report };
       }
       case "expedition_begin": {
@@ -413,6 +502,34 @@ export class GameUiAdapter implements GameUiPort {
       case "return_to_menu":
         return { accepted: true, report: null };
     }
+  }
+
+  /** 将 UI 判别联合安全转换为遭遇战领域指令。 */
+  private toEncounterBattleCommand(
+    command: Extract<GameUiCommand, { readonly type: "encounter_action" }>,
+  ): EncounterBattleCommand {
+    if (command.action === "attack") {
+      if (command.targetId === undefined) {
+        throw new GameApplicationError(this.webConfig.texts.encounter_unavailable);
+      }
+      return {
+        action: "attack",
+        actor_id: command.actorId,
+        target_id: command.targetId,
+      };
+    }
+    if (command.action === "guard" || command.action === "retreat") {
+      return { action: command.action, actor_id: command.actorId };
+    }
+    if (command.abilityId === undefined) {
+      throw new GameApplicationError(this.webConfig.texts.encounter_unavailable);
+    }
+    return {
+      action: command.action,
+      actor_id: command.actorId,
+      ability_id: command.abilityId,
+      ...(command.targetId === undefined ? {} : { target_id: command.targetId }),
+    };
   }
 
   /** 仅在领域生成新的十日检查点时自动落盘，避免每次行动覆盖存档。 */
@@ -960,6 +1077,8 @@ export class GameUiAdapter implements GameUiPort {
       isEnded(state)
       || (state.battle !== null && !state.battle.finished)
       || state.pending_exploration !== null
+      || state.encounter_battle !== null
+      || state.pending_return_incident_id !== null
     ) {
       return [];
     }
@@ -1234,6 +1353,195 @@ export class GameUiAdapter implements GameUiPort {
     }));
   }
 
+  /** 将文献领域目录一次投影为总览、分类目录和已解锁正文。 */
+  private archiveViews(state: GameState): {
+    readonly storage: UiArchiveStoragePageView;
+    readonly collections: Readonly<Record<string, UiArchiveCollectionPageView>>;
+    readonly documents: Readonly<Record<string, UiArchiveDocumentPageView>>;
+  } {
+    void state;
+    const overviews = this.application.archiveOverview();
+    const collections: Record<string, UiArchiveCollectionPageView> = {};
+    const documents: Record<string, UiArchiveDocumentPageView> = {};
+    for (const overview of overviews) {
+      const list = this.application.archiveList(overview.collectionId);
+      collections[overview.collectionId] = {
+        collectionId: overview.collectionId,
+        title: overview.label,
+        body: overview.description,
+        collectedCopiesText: formatTemplate(
+          this.webConfig.texts.archive_collected_format,
+          { copies: overview.collectedCopies },
+        ),
+        emptyText: this.webConfig.texts.archive_storage_empty,
+        backLabel: this.webConfig.texts.back,
+        documents: list.map((document) => ({
+          documentId: document.documentId,
+          title: document.title,
+          summary: document.summary,
+          requirementText: formatTemplate(
+            this.webConfig.texts.archive_requirement_format,
+            { required: document.requiredCopies, current: overview.collectedCopies },
+          ),
+          actionLabel: document.unlocked
+            ? this.webConfig.texts.archive_open_document
+            : this.webConfig.texts.archive_locked_document,
+          unlocked: document.unlocked,
+          tone: document.unlocked ? "primary" : "muted",
+        })),
+      };
+      for (const document of list.filter((candidate) => candidate.unlocked)) {
+        const detail = this.application.archiveDetail(
+          overview.collectionId,
+          document.documentId,
+        );
+        documents[archiveDocumentViewKey(
+          overview.collectionId,
+          document.documentId,
+        )] = {
+          documentId: document.documentId,
+          title: detail.title,
+          metadataLines: [formatTemplate(
+            this.webConfig.texts.archive_document_metadata_format,
+            { collection: overview.label, required: detail.required_copies },
+          )],
+          body: detail.body,
+          backLabel: this.webConfig.texts.back,
+        };
+      }
+    }
+    return {
+      storage: {
+        title: this.webConfig.texts.archive_storage_title,
+        body: this.webConfig.texts.archive_storage_body,
+        emptyText: this.webConfig.texts.archive_storage_empty,
+        backLabel: this.webConfig.texts.back,
+        collections: overviews.map((overview) => ({
+          collectionId: overview.collectionId,
+          label: overview.label,
+          description: overview.description,
+          collectedCopiesText: formatTemplate(
+            this.webConfig.texts.archive_collected_format,
+            { copies: overview.collectedCopies },
+          ),
+          unlockedDocumentsText: formatTemplate(
+            this.webConfig.texts.archive_unlocked_format,
+            { unlocked: overview.unlockedDocuments, total: overview.totalDocuments },
+          ),
+          actionLabel: this.webConfig.texts.archive_open_collection,
+          tone: overview.unlockedDocuments > 0 ? "primary" : "default",
+        })),
+      },
+      collections,
+      documents,
+    };
+  }
+
+  /** 将配置化敌人目录投影为可直接进入的三场遭遇。 */
+  private encounterCatalogView(state: GameState): UiEncounterCatalogPageView {
+    const available = !isEnded(state)
+      && state.battle === null
+      && state.encounter_battle === null
+      && state.pending_exploration === null
+      && state.pending_return_incident_id === null;
+    return {
+      title: this.webConfig.texts.encounter_catalog_title,
+      body: this.webConfig.texts.encounter_catalog_body,
+      emptyText: this.webConfig.texts.encounter_catalog_empty,
+      backLabel: this.webConfig.texts.back,
+      encounters: this.application.encounterCatalog().map((encounter) => ({
+        encounterId: encounter.encounter_id,
+        name: encounter.name,
+        description: encounter.description,
+        enemyRosterText: formatTemplate(
+          this.webConfig.texts.encounter_roster_format,
+          {
+            enemies: encounter.enemies
+              .map((enemy) => enemy.name)
+              .join(this.presentation.interface.h5.message_separator),
+          },
+        ),
+        threatText: formatTemplate(
+          this.webConfig.texts.encounter_threat_format,
+          {
+            threat: encounter.enemies.reduce(
+              (total, enemy) => total + enemy.attack + enemy.defense,
+              0,
+            ),
+          },
+        ),
+        actionLabel: this.webConfig.texts.encounter_start,
+        available,
+        unavailableReason: available
+          ? ""
+          : this.webConfig.texts.encounter_unavailable,
+        tone: available ? "primary" : "muted",
+      })),
+    };
+  }
+
+  /** 为每场配置化遭遇建立当前队伍与医疗库存的战前整备快照。 */
+  private encounterPreparationViews(): Readonly<
+    Record<string, UiEncounterPreparationRuntimeView>
+  > {
+    return Object.fromEntries(this.application.encounterCatalog().map((encounter) => [
+      encounter.encounter_id,
+      { preparation: this.application.encounterPreparation(encounter.encounter_id) },
+    ]));
+  }
+
+  /** 把当前战斗和每名队员行动列表投影为 UI 只读运行时。 */
+  private encounterBattleRuntimeView(): UiEncounterBattleRuntimeView | null {
+    const battle = this.application.encounterBattleState();
+    if (battle === null) return null;
+    const actionsByActor = battle.outcome === "ongoing"
+      ? Object.fromEntries(
+          battle.party
+            .filter((member) => member.health > 0)
+            .map((member) => [
+              member.member_id,
+              this.application.encounterActions(member.member_id),
+            ]),
+        )
+      : {};
+    return {
+      state: battle,
+      encounterDescription: this.application.encounterCatalog().find(
+        (encounter) => encounter.encounter_id === battle.encounter_id,
+      )?.description ?? "",
+      actionsByActor,
+      enemyIntents: battle.outcome === "ongoing"
+        ? this.application.encounterEnemyIntents()
+        : [],
+    };
+  }
+
+  /** 将待处理归来事项投影为不可跳过的决策页。 */
+  private returnIncidentView(): UiReturnIncidentPageView | null {
+    const prompt = this.application.returnIncidentPrompt();
+    if (prompt === null) return null;
+    return {
+      incidentId: prompt.incidentId,
+      title: prompt.title,
+      body: prompt.description,
+      choiceTitle: this.webConfig.texts.return_incident_choice_title,
+      emptyChoiceText: this.webConfig.texts.return_incident_empty,
+      deferLabel: this.webConfig.texts.return_incident_defer,
+      canDefer: false,
+      choices: prompt.choices.map((choice) => ({
+        choiceId: choice.choiceId,
+        label: choice.label,
+        description: choice.description,
+        requirementText: choice.available
+          ? this.webConfig.texts.return_incident_requirement_met
+          : choice.unavailableReason,
+        resultPreviewText: this.webConfig.texts.return_incident_result_preview,
+        available: choice.available,
+        tone: choice.available ? "primary" : "muted",
+      })),
+    };
+  }
+
   /** 格式化一条历史通讯记录的日期、时刻和来源回合。 */
   private historyEntryView(
     entry: ReturnType<GameApplication["weeklyArchives"]>[number]["entries"][number],
@@ -1297,7 +1605,13 @@ export class GameUiAdapter implements GameUiPort {
 
   /** 返回行动当前的领域阻塞原因。 */
   private actionBlockedReason(state: GameState, actionId: string): string | null {
-    const alwaysAllowed = new Set(["tutorial", "save", "return_menu", "companions"]);
+    const alwaysAllowed = new Set([
+      "tutorial",
+      "save",
+      "return_menu",
+      "companions",
+      "archive_storage",
+    ]);
     if (isEnded(state)) {
       return alwaysAllowed.has(actionId)
         ? null
@@ -1312,6 +1626,16 @@ export class GameUiAdapter implements GameUiPort {
       return actionId === "explore" || alwaysAllowed.has(actionId)
         ? null
         : this.application.content.text("pending_event_locked");
+    }
+    if (state.encounter_battle !== null) {
+      return actionId === "encounter_battle" || alwaysAllowed.has(actionId)
+        ? null
+        : this.application.content.text("encounter_battle_in_progress");
+    }
+    if (state.pending_return_incident_id !== null) {
+      return alwaysAllowed.has(actionId)
+        ? null
+        : this.application.content.text("return_incident_must_resolve");
     }
     return null;
   }

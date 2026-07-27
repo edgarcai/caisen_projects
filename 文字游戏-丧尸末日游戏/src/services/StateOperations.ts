@@ -40,13 +40,29 @@ const SHELTER_FIELDS = new Set([
 
 const STORY_FIELDS = new Set(["humanity", "evidence", "infection_pressure"]);
 
+/** 配置化数值写入成功后可订阅的最小观察者端口。 */
+export interface StateMutationObserver {
+  /** 接收一次已通过白名单校验的整数变化。 */
+  stateChanged(
+    target: string,
+    previousValue: number,
+    currentValue: number,
+    state: GameState,
+  ): void;
+}
+
 /** 集中执行配置化数值读写，防止 JSON 越权修改状态。 */
 export class StateOperations {
   private readonly random: RandomSource;
+  private readonly observers: readonly StateMutationObserver[];
 
-  /** 注入可替换的随机源以支持稳定测试。 */
-  public constructor(random: RandomSource) {
+  /** 注入可替换的随机源与可选数值变化观察者。 */
+  public constructor(
+    random: RandomSource,
+    observers: readonly StateMutationObserver[] = [],
+  ) {
     this.random = random;
+    this.observers = [...observers];
   }
 
   /** 读取允许公开给配置的整数状态或派生计数。 */
@@ -127,21 +143,29 @@ export class StateOperations {
       const [root, field] = parts;
       if (root === "player" && field !== undefined) {
         this.requireAllowed(field, PLAYER_FIELDS, target);
-        this.writeNumericField(this.playerAt(state, playerIndex), field, value, target);
+        this.writeObservedNumericField(
+          this.playerAt(state, playerIndex),
+          field,
+          value,
+          target,
+          state,
+        );
         return;
       }
       if (root === "shelter" && field !== undefined) {
         this.requireAllowed(field, SHELTER_FIELDS, target);
-        this.writeNumericField(state.shelter, field, value, target);
+        this.writeObservedNumericField(state.shelter, field, value, target, state);
         return;
       }
       if (root === "story" && field !== undefined) {
         this.requireAllowed(field, STORY_FIELDS, target);
-        this.writeNumericField(state.story, field, value, target);
+        this.writeObservedNumericField(state.story, field, value, target, state);
         return;
       }
       if (root === "facility" && field !== undefined && state.facility_levels[field] !== undefined) {
+        const previousValue = state.facility_levels[field];
         state.facility_levels[field] = value;
+        this.notifyObservers(target, previousValue, value, state);
         return;
       }
     }
@@ -151,7 +175,9 @@ export class StateOperations {
       if (companion === undefined) {
         throw new StateOperationError(`伙伴尚未加入：${target}`);
       }
+      const previousValue = companion.trust;
       companion.trust = value;
+      this.notifyObservers(target, previousValue, value, state);
       return;
     }
     throw new StateOperationError(`状态目标不可写：${target}`);
@@ -230,6 +256,31 @@ export class StateOperations {
       throw new StateOperationError(`目标不是整数属性：${target}`);
     }
     Reflect.set(owner, field, value);
+  }
+
+  /** 写入一个整数字段并在成功后通知全部观察者。 */
+  private writeObservedNumericField(
+    owner: object,
+    field: string,
+    value: number,
+    target: string,
+    state: GameState,
+  ): void {
+    const previousValue = this.readNumericField(owner, field, target);
+    this.writeNumericField(owner, field, value, target);
+    this.notifyObservers(target, previousValue, value, state);
+  }
+
+  /** 依次通知已注入观察者，并保持确定的调用顺序。 */
+  private notifyObservers(
+    target: string,
+    previousValue: number,
+    currentValue: number,
+    state: GameState,
+  ): void {
+    for (const observer of this.observers) {
+      observer.stateChanged(target, previousValue, currentValue, state);
+    }
   }
 
   /** 要求目标字段位于配置可访问白名单中。 */

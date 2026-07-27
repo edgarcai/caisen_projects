@@ -282,7 +282,7 @@ describe("研发、制作与仓库不变量", () => {
 });
 
 describe("配置化远征", () => {
-  it("基础、特性、研发、伙伴信任与携带物共同增加步数，路费和城市成本在首事件前扣除", () => {
+  it("只有携带食物提供行动，城市与区划成本在首事件前扣除", () => {
     const application = startedApplication();
     const state = requireState(application);
     state.research.completed_project_ids.push("field_logistics");
@@ -299,7 +299,7 @@ describe("配置化远征", () => {
       "city_d",
       defaultDistrictId(application, "city_d"),
       ["haocai"],
-      { field_ration: 2 },
+      { food: 10, field_ration: 2 },
     );
 
     expect(report.stateChanged).toBe(true);
@@ -307,25 +307,25 @@ describe("配置化远征", () => {
       cityId: "city_d",
       districtId: defaultDistrictId(application, "city_d"),
       travelStepCost: 3,
-      maximumSteps: 17,
-      remainingSteps: 12,
+      maximumSteps: 10,
+      remainingSteps: 5,
       companionIds: ["haocai"],
-      carriedItems: { field_ration: 2 },
+      carriedItems: { food: 5, field_ration: 2 },
     });
     expect(state.pending_exploration).not.toBeNull();
     expect(state.turn_number).toBe(0);
   });
 
-  it("高危城市比安全城市消耗更多首事件步数", () => {
+  it("高危城市比安全城市消耗更多首事件食物", () => {
     const safe = startedApplication();
     const safeDistrictId = defaultDistrictId(safe, "city_a");
-    safe.prepareExpedition("city_a", safeDistrictId, [], {});
+    safe.prepareExpedition("city_a", safeDistrictId, [], { food: 9 });
     const dangerous = startedApplication();
     const dangerousState = requireState(dangerous);
     dangerousState.shelter.newspapers = 10;
     dangerousState.inventory.crafted_items.route_map = 1;
     const dangerousDistrictId = defaultDistrictId(dangerous, "city_g");
-    dangerous.prepareExpedition("city_g", dangerousDistrictId, [], {});
+    dangerous.prepareExpedition("city_g", dangerousDistrictId, [], { food: 9 });
 
     expect(safe.expeditionStatus()).toMatchObject({
       districtId: safeDistrictId,
@@ -351,7 +351,7 @@ describe("配置化远征", () => {
       travel_step_cost: 1,
       leader_player_index: 0,
       companion_ids: [],
-      carried_items: {},
+      carried_items: { food: 3 },
       loot: { coins: 9 },
       remaining_steps: 3,
       maximum_steps: 4,
@@ -393,7 +393,7 @@ describe("配置化远征", () => {
       throw new Error("测试要求 A 市存在以银行事件为首选的区划。");
     }
 
-    application.prepareExpedition(city.id, bankDistrict.id, [], {});
+    application.prepareExpedition(city.id, bankDistrict.id, [], { food: 6 });
     const firstEvent = state.pending_exploration;
     if (firstEvent === null) throw new Error("首个远征事件不存在。");
     application.resolveExploration(firstEvent.event_id);
@@ -423,7 +423,7 @@ describe("配置化远征", () => {
       "city_a",
       defaultDistrictId(source, "city_a"),
       [],
-      { field_ration: 2 },
+      { food: 5, field_ration: 2 },
     );
     if (sourceState.expedition === null) throw new Error("测试远征未建立。");
     sourceState.expedition.loot.game_consoles = 1;
@@ -436,6 +436,7 @@ describe("配置化远征", () => {
       itemId: "field_ration",
     }));
     expect(restored.expeditionStatus()?.itemNames).toEqual({
+      food: "密封食物",
       field_ration: "行军口粮",
       game_consoles: "游戏机",
     });
@@ -559,7 +560,7 @@ describe("生存系统存档校验", () => {
           travel_step_cost: 1,
           leader_player_index: 0,
           companion_ids: [],
-          carried_items: { food: 7 },
+          carried_items: { food: 25 },
           loot: {},
           remaining_steps: 4,
           maximum_steps: 4,

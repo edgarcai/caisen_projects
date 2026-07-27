@@ -16,6 +16,9 @@ export const DASHBOARD_ACTION_IDS = [
   "story",
   "explore",
   "shelter_management",
+  "shelter_map",
+  "archive_storage",
+  "encounter_battle",
   "companions",
   "companion_management",
   "transport_management",
@@ -52,6 +55,10 @@ export type DashboardPushScreen =
   | "management_categories"
   | "companions"
   | "companion_management"
+  | "shelter_map"
+  | "archive_storage"
+  | "encounter_catalog"
+  | "encounter_battle"
   | "supplies"
   | "settings"
   | "warehouse"
@@ -99,6 +106,9 @@ const DEFAULT_POLICY_ENTRIES = Object.freeze({
   supplies: { type: "push_screen", screen: "supplies" },
   settings: { type: "push_screen", screen: "settings" },
   shelter_management: { type: "push_screen", screen: "management_categories" },
+  shelter_map: { type: "push_screen", screen: "shelter_map" },
+  archive_storage: { type: "push_screen", screen: "archive_storage" },
+  encounter_battle: { type: "push_screen", screen: "encounter_catalog" },
   companions: { type: "push_screen", screen: "companions" },
   companion_management: { type: "push_screen", screen: "companion_management" },
   transport_management: { type: "push_screen", screen: "transport_management" },

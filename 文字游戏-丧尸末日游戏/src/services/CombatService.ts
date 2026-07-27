@@ -544,6 +544,7 @@ export class CombatService {
     target.players = source.players;
     target.active_player_index = source.active_player_index;
     target.shelter = source.shelter;
+    target.archive_collection_totals = source.archive_collection_totals;
     target.story = source.story;
     target.companions = source.companions;
     target.facility_levels = source.facility_levels;

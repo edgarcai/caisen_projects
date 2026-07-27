@@ -297,6 +297,7 @@ export class InventoryService {
   private commit(source: GameState, target: GameState): void {
     target.players = source.players;
     target.shelter = source.shelter;
+    target.archive_collection_totals = source.archive_collection_totals;
     target.inventory = source.inventory;
   }
 }

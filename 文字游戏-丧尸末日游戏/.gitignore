@@ -5,6 +5,8 @@ dist-h5/
 node_modules/
 playwright-report/
 test-results/
+.playwright-cli/
+output/
 coverage/
 artifacts/qa/
 public/assets/

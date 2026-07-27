@@ -642,6 +642,7 @@ describe("通用底部操作区与本地设置", () => {
     );
     const mobile = resolveTestLayout(600, 1067, true);
     expect(selected.id).toBe("bunker_gate");
+    expect(selected.brand_mode).toBe("overlay");
     expect(resolveCoverThemeArtwork(selected, mobile)).toMatchObject({
       asset: "assets/covers/cover_theme_bunker_gate_mobile_2k.webp",
       width: 1152,

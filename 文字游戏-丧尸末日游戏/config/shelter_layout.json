@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "title": "B-17 避难所横切面",
+  "navigation_label": "避难所地图",
+  "description": "通过基建横切面检查房间运行、居住密度与人际关系。合理调配伙伴，可以避免值守冲突持续拉低希望。",
+  "copy": {
+    "back_label": "返回上一级",
+    "map_summary_format": "入驻 {assigned}/{active} 人 · 未安排 {unassigned} 人\n全局和谐度 {harmony}/100 · {harmony_label}",
+    "room_button_format": "{icon}  {name}\n{occupancy}/{capacity} 人 · {status}",
+    "room_detail_format": "{function}\n\n房间等级：{level}\n入驻人员：{residents}\n房间和谐度：{harmony}/100（{harmony_label}）\n\n{requirements}\n\n{advice}",
+    "room_planning_title_format": "{name} · 人员规划",
+    "room_planning_body": "点击人员将其调入当前房间；已在房间内的人员会被移出。调动前请阅读喜恶关系和调度建议。",
+    "resident_option_format": "{name} · {gender} · {action}",
+    "resident_option_detail_format": "喜欢：{likes}｜讨厌：{dislikes}\n当前：{current_room}\n{preference_note}",
+    "assign_action": "调入",
+    "remove_action": "移出",
+    "unassigned_label": "未安排",
+    "empty_residents": "暂无人员",
+    "empty_preferences": "无",
+    "locked_status": "封锁",
+    "running_status": "运行中",
+    "full_status": "已满员",
+    "level_label_format": "Lv.{level}",
+    "unlock_requirements_title": "解锁需求",
+    "expansion_requirements_title": "下一级扩建需求",
+    "requirement_met_format": "[ 已达成 ] {label}：{current}/{minimum}",
+    "requirement_unmet_format": "[ 未达成 ] {label}：{current}/{minimum}",
+    "no_requirement": "无额外需求",
+    "maximum_level": "房间已达最高级",
+    "inactive_reason": "该人员尚未加入避难所。",
+    "locked_room_reason": "房间尚未解锁，请先完成显示的前置需求。",
+    "room_full_reason": "房间已满员，需先移出人员或扩建。",
+    "gender_restricted_reason_format": "{room} 仅允许{allowed}入住。",
+    "unknown_resident_reason": "找不到该人员档案。",
+    "unknown_room_reason": "找不到该房间。",
+    "already_unassigned_reason": "该人员当前已处于未安排状态。",
+    "assignment_success_format": "已将{name}安排到{room}。预计全局和谐度：{harmony}/100。",
+    "removal_success_format": "已将{name}从房间规划中移出。",
+    "conflict_advice_format": "冲突预警：{name_a}与{name_b}对彼此存在抵触，建议分配到不同房间。",
+    "affinity_advice_format": "配合加成：{name_a}与{name_b}能稳定彼此情绪，适合同室值守。",
+    "unassigned_advice_format": "未安排：{names}暂无房间，无法发挥完整岗位效率。",
+    "stable_advice": "当前没有明显冲突。保持现有排班，并在新伙伴加入后重新评估。",
+    "list_separator": "、",
+    "advice_separator": "\n",
+    "section_separator": "\n\n",
+    "floor_label_format": "{floor} · {name}",
+    "unassigned_roster_format": "待安排人员：{names}",
+    "gender_labels": {
+      "male": "男性",
+      "female": "女性",
+      "unspecified": "未设定"
+    }
+  },
+  "validation_copy": {
+    "unknown_room_format": "存档房间 {room_id} 不存在于当前避难所配置。",
+    "unknown_resident_format": "存档房间 {room} 引用了未知住民 {resident_id}。",
+    "locked_room_format": "存档房间 {room} 尚未解锁，不能保留人员分配。",
+    "gender_restricted_format": "存档住民 {resident} 不符合 {room} 的性别限制。",
+    "capacity_exceeded_format": "存档房间 {room} 的在岗人数 {active_count} 超过当前容量 {capacity}。"
+  },
+  "layout": {
+    "desktop_grid_columns": 12,
+    "desktop_room_height": 128,
+    "mobile_room_height": 112,
+    "floor_label_height": 36,
+    "room_gap": 12,
+    "floor_gap": 20,
+    "floor_padding": 12,
+    "summary_min_height": 96,
+    "roster_min_height": 54,
+    "room_font_size": 17
+  },
+  "harmony": {
+    "minimum": 0,
+    "maximum": 100,
+    "base_score": 72,
+    "like_bonus": 9,
+    "dislike_penalty": 18,
+    "unassigned_penalty": 4,
+    "tiers": [
+      {"minimum": 80, "label": "高度协调"},
+      {"minimum": 60, "label": "基本稳定"},
+      {"minimum": 40, "label": "暗流涌动"},
+      {"minimum": 0, "label": "冲突失控"}
+    ]
+  },
+  "default_assignments": {
+    "command_center": ["player:0", "companion:haocai"],
+    "male_dormitory": ["companion:yangguan"]
+  },
+  "resident_preferences": [
+    {
+      "resident_id": "companion:haocai",
+      "name": "豪菜",
+      "gender": "male",
+      "likes": ["companion:xiaoman"],
+      "dislikes": ["companion:linlan"],
+      "preference_note": "喜欢和能跟上他工程思路的人合作；与林岚对白塔往事的处理方式冲突。"
+    },
+    {
+      "resident_id": "companion:yangguan",
+      "name": "阳关",
+      "gender": "male",
+      "likes": ["companion:linlan"],
+      "dislikes": ["companion:haocai"],
+      "preference_note": "信任林岚的医疗判断；讨厌豪菜把所有人都当成计划表上的数字。"
+    },
+    {
+      "resident_id": "companion:linlan",
+      "name": "林岚",
+      "gender": "female",
+      "likes": ["companion:yangguan"],
+      "dislikes": ["companion:haocai"],
+      "preference_note": "习惯让阳关协助分诊；无法轻易原谅豪菜曾经参与的封城程序。"
+    },
+    {
+      "resident_id": "companion:xiaoman",
+      "name": "小满",
+      "gender": "female",
+      "likes": ["companion:haocai"],
+      "dislikes": ["companion:yangguan"],
+      "preference_note": "把豪菜当成嘴硬的导师；阳关在无线电室内的共鸣会干扰她解码。"
+    }
+  ],
+  "floors": [
+    {"floor_id": "surface", "label": "L0", "name": "地表指挥层", "sort_order": 0},
+    {"floor_id": "operations", "label": "B1", "name": "生产与保障层", "sort_order": 1},
+    {"floor_id": "habitation", "label": "B2", "name": "生活层", "sort_order": 2},
+    {"floor_id": "utilities", "label": "B3", "name": "能源与水务层", "sort_order": 3}
+  ],
+  "rooms": [
+    {
+      "room_id": "command_center",
+      "name": "指挥室",
+      "icon": "◈",
+      "floor_id": "surface",
+      "grid_column": 1,
+      "grid_span": 12,
+      "function": "统筹排班、接收通讯与处理紧急事项，指挥员与工程人员在此可缩短事件响应时间。",
+      "allowed_genders": ["male", "female", "unspecified"],
+      "linked_facility_id": null,
+      "base_level": 1,
+      "unlock_requirements": [],
+      "levels": [
+        {"level": 1, "capacity": 3, "requirements": []},
+        {"level": 2, "capacity": 4, "requirements": [{"kind": "shelter_expansion", "target_id": "shelter_expansion", "label": "区域扩张等级", "minimum": 1}, {"kind": "resource", "target_id": "parts", "label": "零件", "minimum": 40}]}
+      ]
+    },
+    {
+      "room_id": "medical_station",
+      "name": "医疗站",
+      "icon": "+",
+      "floor_id": "operations",
+      "grid_column": 1,
+      "grid_span": 4,
+      "function": "分诊伤员、隔离疑似感染者并生产基础医疗用品，医疗人员入驻时工作效率更高。",
+      "allowed_genders": ["male", "female", "unspecified"],
+      "linked_facility_id": "infirmary",
+      "base_level": 0,
+      "unlock_requirements": [{"kind": "facility_level", "target_id": "infirmary", "label": "医务室设施等级", "minimum": 1}],
+      "levels": [
+        {"level": 1, "capacity": 2, "requirements": []},
+        {"level": 2, "capacity": 3, "requirements": [{"kind": "shelter_expansion", "target_id": "shelter_expansion", "label": "区域扩张等级", "minimum": 1}, {"kind": "resource", "target_id": "medical_supplies", "label": "医疗用品", "minimum": 20}]}
+      ]
+    },
+    {
+      "room_id": "workshop",
+      "name": "工坊",
+      "icon": "⚙",
+      "floor_id": "operations",
+      "grid_column": 5,
+      "grid_span": 4,
+      "function": "维修武器、制作远征道具并拆解回收零件，工程特长可提升生产节奏。",
+      "allowed_genders": ["male", "female", "unspecified"],
+      "linked_facility_id": "machine_workshop",
+      "base_level": 1,
+      "unlock_requirements": [],
+      "levels": [
+        {"level": 1, "capacity": 2, "requirements": []},
+        {"level": 2, "capacity": 3, "requirements": [{"kind": "shelter_expansion", "target_id": "shelter_expansion", "label": "区域扩张等级", "minimum": 1}, {"kind": "resource", "target_id": "parts", "label": "零件", "minimum": 50}]}
+      ]
+    },
+    {
+      "room_id": "warehouse",
+      "name": "仓库",
+      "icon": "▣",
+      "floor_id": "operations",
+      "grid_column": 9,
+      "grid_span": 4,
+      "function": "分类保管食物、药品、报纸与制造材料，值守人员可降低霉变和失窃风险。",
+      "allowed_genders": ["male", "female", "unspecified"],
+      "linked_facility_id": null,
+      "base_level": 1,
+      "unlock_requirements": [],
+      "levels": [
+        {"level": 1, "capacity": 2, "requirements": []},
+        {"level": 2, "capacity": 3, "requirements": [{"kind": "shelter_expansion", "target_id": "shelter_expansion", "label": "区域扩张等级", "minimum": 1}, {"kind": "resource", "target_id": "parts", "label": "零件", "minimum": 30}]}
+      ]
+    },
+    {
+      "room_id": "cafeteria",
+      "name": "食堂",
+      "icon": "☰",
+      "floor_id": "habitation",
+      "grid_column": 1,
+      "grid_span": 4,
+      "function": "统一烹饪和分发口粮，安排关系良好的人员共同值班可改善群体情绪。",
+      "allowed_genders": ["male", "female", "unspecified"],
+      "linked_facility_id": "field_kitchen",
+      "base_level": 1,
+      "unlock_requirements": [],
+      "levels": [
+        {"level": 1, "capacity": 3, "requirements": []},
+        {"level": 2, "capacity": 4, "requirements": [{"kind": "shelter_expansion", "target_id": "shelter_expansion", "label": "区域扩张等级", "minimum": 1}, {"kind": "resource", "target_id": "parts", "label": "零件", "minimum": 35}]}
+      ]
+    },
+    {
+      "room_id": "male_dormitory",
+      "name": "男宿舍",
+      "icon": "▥",
+      "floor_id": "habitation",
+      "grid_column": 5,
+      "grid_span": 4,
+      "function": "供男性成员休息、交谈与恢复希望，冲突关系同室会放大值夜压力。",
+      "allowed_genders": ["male"],
+      "linked_facility_id": null,
+      "base_level": 1,
+      "unlock_requirements": [],
+      "levels": [
+        {"level": 1, "capacity": 3, "requirements": []},
+        {"level": 2, "capacity": 5, "requirements": [{"kind": "shelter_expansion", "target_id": "shelter_expansion", "label": "区域扩张等级", "minimum": 1}, {"kind": "resource", "target_id": "parts", "label": "零件", "minimum": 25}]}
+      ]
+    },
+    {
+      "room_id": "female_dormitory",
+      "name": "女宿舍",
+      "icon": "▥",
+      "floor_id": "habitation",
+      "grid_column": 9,
+      "grid_span": 4,
+      "function": "供女性成员休息、交谈与恢复希望，合适的室友关系能提供稳定的情绪支持。",
+      "allowed_genders": ["female"],
+      "linked_facility_id": null,
+      "base_level": 1,
+      "unlock_requirements": [],
+      "levels": [
+        {"level": 1, "capacity": 3, "requirements": []},
+        {"level": 2, "capacity": 5, "requirements": [{"kind": "shelter_expansion", "target_id": "shelter_expansion", "label": "区域扩张等级", "minimum": 1}, {"kind": "resource", "target_id": "parts", "label": "零件", "minimum": 25}]}
+      ]
+    },
+    {
+      "room_id": "generator_room",
+      "name": "发电间",
+      "icon": "⚡",
+      "floor_id": "utilities",
+      "grid_column": 1,
+      "grid_span": 3,
+      "function": "维持主电网与应急照明，持续值守可降低设施在高负载期间停摆的概率。",
+      "allowed_genders": ["male", "female", "unspecified"],
+      "linked_facility_id": "energy_center",
+      "base_level": 0,
+      "unlock_requirements": [{"kind": "facility_level", "target_id": "energy_center", "label": "能源中心设施等级", "minimum": 1}, {"kind": "shelter_expansion", "target_id": "shelter_expansion", "label": "区域扩张等级", "minimum": 2}],
+      "levels": [
+        {"level": 1, "capacity": 2, "requirements": []},
+        {"level": 2, "capacity": 3, "requirements": [{"kind": "resource", "target_id": "parts", "label": "零件", "minimum": 80}]}
+      ]
+    },
+    {
+      "room_id": "water_room",
+      "name": "净水间",
+      "icon": "≋",
+      "floor_id": "utilities",
+      "grid_column": 4,
+      "grid_span": 3,
+      "function": "过滤雨水、地下水与回收水，每周向生活层提供安全配额。",
+      "allowed_genders": ["male", "female", "unspecified"],
+      "linked_facility_id": "water_purification",
+      "base_level": 0,
+      "unlock_requirements": [{"kind": "facility_level", "target_id": "water_purification", "label": "净水系统设施等级", "minimum": 1}, {"kind": "shelter_expansion", "target_id": "shelter_expansion", "label": "区域扩张等级", "minimum": 1}],
+      "levels": [
+        {"level": 1, "capacity": 2, "requirements": []},
+        {"level": 2, "capacity": 3, "requirements": [{"kind": "resource", "target_id": "parts", "label": "零件", "minimum": 60}]}
+      ]
+    },
+    {
+      "room_id": "radio_room",
+      "name": "无线电室",
+      "icon": "⌖",
+      "floor_id": "utilities",
+      "grid_column": 7,
+      "grid_span": 3,
+      "function": "监听幸存者频道、整理城区情报与预警尸群活动，解码人员入驻后可发现稀有文本。",
+      "allowed_genders": ["male", "female", "unspecified"],
+      "linked_facility_id": "radio_room",
+      "base_level": 0,
+      "unlock_requirements": [{"kind": "facility_level", "target_id": "radio_room", "label": "无线电室设施等级", "minimum": 1}],
+      "levels": [
+        {"level": 1, "capacity": 2, "requirements": []},
+        {"level": 2, "capacity": 3, "requirements": [{"kind": "shelter_expansion", "target_id": "shelter_expansion", "label": "区域扩张等级", "minimum": 1}, {"kind": "resource", "target_id": "parts", "label": "零件", "minimum": 45}]}
+      ]
+    },
+    {
+      "room_id": "hydroponics",
+      "name": "水培间",
+      "icon": "✺",
+      "floor_id": "utilities",
+      "grid_column": 10,
+      "grid_span": 3,
+      "function": "使用人工光和循环水培育新鲜作物，同时提供少量可贵的绿色景观。",
+      "allowed_genders": ["male", "female", "unspecified"],
+      "linked_facility_id": "hydroponic_greenhouse",
+      "base_level": 0,
+      "unlock_requirements": [{"kind": "facility_level", "target_id": "hydroponic_greenhouse", "label": "水培温室设施等级", "minimum": 1}, {"kind": "shelter_expansion", "target_id": "shelter_expansion", "label": "区域扩张等级", "minimum": 1}],
+      "levels": [
+        {"level": 1, "capacity": 2, "requirements": []},
+        {"level": 2, "capacity": 3, "requirements": [{"kind": "resource", "target_id": "parts", "label": "零件", "minimum": 70}]}
+      ]
+    }
+  ]
+}

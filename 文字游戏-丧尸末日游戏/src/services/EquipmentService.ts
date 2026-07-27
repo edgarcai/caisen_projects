@@ -1,6 +1,10 @@
 import { DomainError } from "../domain/errors";
-import type { GameState, PlayerState } from "../domain/game-state";
-import type { PlayerAttributeProvider } from "../domain/ports";
+import {
+  findCompanion,
+  type GameState,
+  type PlayerState,
+} from "../domain/game-state";
+import type { EncounterPartyAttributeProvider } from "../domain/ports";
 import type {
   CraftedWarehouseItemConfig,
   EffectivePlayerAttributes,
@@ -8,8 +12,8 @@ import type {
   SurvivalSystemsConfigDocument,
 } from "../domain/survival-systems";
 
-/** 以装备 ID 与配置化加成投影玩家有效属性，不污染存档中的基础属性。 */
-export class EquipmentService implements PlayerAttributeProvider {
+/** 以装备 ID 与配置化加成投影玩家或伙伴的有效属性。 */
+export class EquipmentService implements EncounterPartyAttributeProvider {
   private readonly equipmentById: ReadonlyMap<string, CraftedWarehouseItemConfig>;
 
   /** 从已验证的生存系统配置建立装备索引。 */
@@ -27,8 +31,7 @@ export class EquipmentService implements PlayerAttributeProvider {
     attribute: PlayerCombatAttribute,
     playerIndex: number = state.active_player_index,
   ): number {
-    const player = this.playerAt(state, playerIndex);
-    return player[attribute] + this.equipmentBonus(state, attribute);
+    return this.effectiveAttributes(state, playerIndex)[attribute];
   }
 
   /** 返回指定玩家在当前装备下的完整战斗属性。 */
@@ -36,11 +39,26 @@ export class EquipmentService implements PlayerAttributeProvider {
     state: GameState,
     playerIndex: number = state.active_player_index,
   ): EffectivePlayerAttributes {
-    return {
-      attack: this.effectiveAttribute(state, "attack", playerIndex),
-      defense: this.effectiveAttribute(state, "defense", playerIndex),
-      agility: this.effectiveAttribute(state, "agility", playerIndex),
-    };
+    return this.projectAttributes(
+      this.playerAt(state, playerIndex),
+      [state.inventory.equipped_weapon_id, state.inventory.equipped_armor_id],
+    );
+  }
+
+  /** 在显式伙伴基线上叠加该伙伴存档中的武器与防具加成。 */
+  public effectiveCompanionAttributes(
+    state: GameState,
+    companionId: string,
+    baseline: EffectivePlayerAttributes,
+  ): EffectivePlayerAttributes {
+    const companion = findCompanion(state, companionId);
+    if (companion === undefined) {
+      throw new DomainError(`存档引用了未知伙伴：${companionId}`);
+    }
+    return this.projectAttributes(
+      baseline,
+      [companion.equipped_weapon_id, companion.equipped_armor_id],
+    );
   }
 
   /** 返回攻击、防御与敏捷之和的有效战斗力。 */
@@ -52,12 +70,23 @@ export class EquipmentService implements PlayerAttributeProvider {
     return attributes.attack + attributes.defense + attributes.agility;
   }
 
-  /** 累加已装备武器和防具对指定属性的配置加成。 */
-  private equipmentBonus(state: GameState, attribute: PlayerCombatAttribute): number {
-    const equippedIds = [
-      state.inventory.equipped_weapon_id,
-      state.inventory.equipped_armor_id,
-    ];
+  /** 对一份明确基线应用指定装备列表，并返回不可变属性投影。 */
+  private projectAttributes(
+    baseline: EffectivePlayerAttributes,
+    equippedIds: readonly (string | null)[],
+  ): EffectivePlayerAttributes {
+    return {
+      attack: baseline.attack + this.equipmentBonus(equippedIds, "attack"),
+      defense: baseline.defense + this.equipmentBonus(equippedIds, "defense"),
+      agility: baseline.agility + this.equipmentBonus(equippedIds, "agility"),
+    };
+  }
+
+  /** 累加指定装备对一项战斗属性的配置化加成。 */
+  private equipmentBonus(
+    equippedIds: readonly (string | null)[],
+    attribute: PlayerCombatAttribute,
+  ): number {
     return equippedIds.reduce((total, itemId) => {
       if (itemId === null) return total;
       const item = this.equipmentById.get(itemId);

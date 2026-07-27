@@ -3,16 +3,19 @@ import gameDocument from "../../config/game_config.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import v6ToV7MigrationDocument from "../../config/save_migrations/v6_to_v7.json";
+import v7ToV8MigrationDocument from "../../config/save_migrations/v7_to_v8.json";
 import { validateSurvivalSystemsConfig } from "../../src/config/survivalSystemsValidator";
 import type {
   GameConfigDocument,
   StoryConfigDocument,
   V6ToV7SaveMigrationConfig,
+  V7ToV8SaveMigrationConfig,
 } from "../../src/domain/content";
 import type { GameState } from "../../src/domain/game-state";
 import {
   SaveStateValidator,
   V6ToV7SaveMigrator,
+  V7ToV8SaveMigrator,
 } from "../../src/infrastructure";
 import type { V6ToV7SaveMigrationContext } from "../../src/infrastructure";
 import { buildH5Harness, requireState } from "../helpers/H5TestHarness";
@@ -20,6 +23,7 @@ import { buildH5Harness, requireState } from "../helpers/H5TestHarness";
 const game = gameDocument as unknown as GameConfigDocument;
 const story = storyDocument as unknown as StoryConfigDocument;
 const migration: V6ToV7SaveMigrationConfig = v6ToV7MigrationDocument;
+const currentMigration: V7ToV8SaveMigrationConfig = v7ToV8MigrationDocument;
 
 /** 使用权威内容构造 v6→v7 迁移上下文。 */
 function createMigrationContext(): V6ToV7SaveMigrationContext {
@@ -60,9 +64,13 @@ function createV7StateWithCheckpoint(): GameState {
   return state;
 }
 
-/** 从可恢复状态移除只属于 v7 的字段，构造真实 v6 结构。 */
+/** 从可恢复状态移除 v7 及更高版本字段，构造真实 v6 结构。 */
 function downgradeRestorableState(rawState: Record<string, unknown>): void {
+  delete rawState.archive_collection_totals;
   delete rawState.management_cycle_usage;
+  delete rawState.shelter_room_assignments;
+  delete rawState.encounter_battle;
+  delete rawState.pending_return_incident_id;
   const inventory = rawState.inventory as Record<string, unknown>;
   delete inventory.equipped_transport_ids;
 }
@@ -111,6 +119,15 @@ function facilityLevelsOf(rawState: Record<string, unknown>): Record<string, num
   return rawState.facility_levels as Record<string, number>;
 }
 
+/** 将 v7 迁移结果提升到当前 v8 后执行完整领域校验。 */
+function validateV7AsCurrent(rawState: Record<string, unknown>): void {
+  const current = new V7ToV8SaveMigrator(currentMigration).migrate({
+    schema_version: 7,
+    game_state: rawState,
+  });
+  createValidator().parse(current.game_state);
+}
+
 describe("v6 到 v7 存档迁移", () => {
   it("同步补齐当前状态与检查点中的载具和经营周期容器", () => {
     const validator = createValidator();
@@ -132,7 +149,9 @@ describe("v6 到 v7 存档迁移", () => {
     expect(state.management_cycle_usage).toEqual({});
     expect(snapshotInventory.equipped_transport_ids).toEqual([]);
     expect(snapshot.management_cycle_usage).toEqual({});
-    expect(() => validator.parse(state)).not.toThrow();
+    expect(() => {
+      validateV7AsCurrent(state);
+    }).not.toThrow();
   });
 
   it("拒绝错误版本链和未持有的伪造载具配装", () => {
@@ -237,7 +256,9 @@ describe("v6 到 v7 存档迁移", () => {
 
     expect(migratedCampaign.home_city_id).toBe(expectedCityId);
     expect(migratedSnapshotCampaign.home_city_id).toBe(expectedCityId);
-    expect(() => createValidator().parse(state)).not.toThrow();
+    expect(() => {
+      validateV7AsCurrent(state);
+    }).not.toThrow();
   });
 
   it.each([
@@ -259,7 +280,9 @@ describe("v6 到 v7 存档迁移", () => {
     const state = document.game_state as Record<string, unknown>;
 
     expect(facilityLevelsOf(state).shelter_expansion).toBe(expectedExpansionLevel);
-    expect(() => createValidator().parse(state)).not.toThrow();
+    expect(() => {
+      validateV7AsCurrent(state);
+    }).not.toThrow();
   });
 
   it("为当前状态与检查点分别推导最小扩建等级", () => {
@@ -279,7 +302,9 @@ describe("v6 到 v7 存档迁移", () => {
 
     expect(facilityLevelsOf(state).shelter_expansion).toBe(1);
     expect(facilityLevelsOf(migratedSnapshot).shelter_expansion).toBe(2);
-    expect(() => createValidator().parse(state)).not.toThrow();
+    expect(() => {
+      validateV7AsCurrent(state);
+    }).not.toThrow();
   });
 
   it("明确拒绝常规设施总等级超过最高扩建容量的旧档", () => {

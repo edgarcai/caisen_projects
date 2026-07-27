@@ -47,6 +47,26 @@ interface E2eWebConfig {
   };
 }
 
+interface E2eDistrictExplorationTreeConfig {
+  readonly identity: {
+    readonly node_id_prefix: string;
+    readonly segment_separator: string;
+    readonly path_separator: string;
+    readonly index_width: number;
+  };
+  readonly depth_policy: {
+    readonly minimum_depth: number;
+    readonly maximum_depth: number;
+  };
+}
+
+interface E2eSurvivalSystemsConfig {
+  readonly expedition: {
+    readonly action_food_item_id: string;
+    readonly food_units_per_action: number;
+  };
+}
+
 /** 从权威 H5 配置读取移动端测试阈值，避免测试复制产品参数。 */
 function loadE2eWebConfig(): E2eWebConfig {
   const configPath = resolve(
@@ -56,7 +76,29 @@ function loadE2eWebConfig(): E2eWebConfig {
   return JSON.parse(readFileSync(configPath, "utf8")) as E2eWebConfig;
 }
 
+/** 读取区划探索树的稳定节点编码与深度策略。 */
+function loadE2eDistrictExplorationTreeConfig(): E2eDistrictExplorationTreeConfig {
+  const configPath = resolve(
+    import.meta.dirname,
+    "../../config/district_exploration_tree.json",
+  );
+  return JSON.parse(
+    readFileSync(configPath, "utf8"),
+  ) as E2eDistrictExplorationTreeConfig;
+}
+
+/** 读取远征行动的食物物品与单次消耗换算。 */
+function loadE2eSurvivalSystemsConfig(): E2eSurvivalSystemsConfig {
+  const configPath = resolve(
+    import.meta.dirname,
+    "../../config/survival_systems.json",
+  );
+  return JSON.parse(readFileSync(configPath, "utf8")) as E2eSurvivalSystemsConfig;
+}
+
 const webConfigDocument = loadE2eWebConfig();
+const districtTreeConfigDocument = loadE2eDistrictExplorationTreeConfig();
+const survivalSystemsConfigDocument = loadE2eSurvivalSystemsConfig();
 const qualityConfig = webConfigDocument.quality_assurance;
 const responsiveConfig = webConfigDocument.responsive;
 
@@ -70,6 +112,39 @@ interface DebugNodeBounds {
 }
 
 type CssNodeBounds = Omit<DebugNodeBounds, "stageWidth" | "stageHeight">;
+
+interface DebugEncounterPreparation {
+  readonly encounter_id: string;
+  readonly members: readonly { readonly member_id: string }[];
+  readonly roles: readonly { readonly role_id: string }[];
+}
+
+interface DebugEncounterAvailableAction {
+  readonly action: "attack" | "guard" | "skill" | "item" | "retreat";
+  readonly abilityId: string | null;
+  readonly available: boolean;
+  readonly targetIds: readonly string[];
+}
+
+interface DebugEncounterBattleState {
+  readonly round_number: number;
+  readonly outcome: "ongoing" | "victory" | "defeat" | "retreated";
+  readonly pending_party_member_ids: readonly string[];
+  readonly party: readonly {
+    readonly member_id: string;
+    readonly row: "front" | "back";
+    readonly health: number;
+  }[];
+  readonly enemies: readonly {
+    readonly enemy_id: string;
+    readonly row: "front" | "back";
+    readonly health: number;
+  }[];
+  readonly log: readonly {
+    readonly round_number: number;
+    readonly message: string;
+  }[];
+}
 
 interface BrowserGameDebugHandle {
   getCurrentScreen(): string;
@@ -107,6 +182,7 @@ interface BrowserGameDebugHandle {
       readonly id: string;
       readonly disabled: boolean;
       readonly description: string;
+      readonly travelStepCost: number;
       readonly districts: readonly {
         readonly id: string;
         readonly name: string;
@@ -127,6 +203,28 @@ interface BrowserGameDebugHandle {
       readonly travelStepCost: number;
       readonly remainingSteps: number;
       readonly maximumSteps: number;
+    } | null;
+    readonly returnIncident: {
+      readonly incidentId: string;
+      readonly choices: readonly {
+        readonly choiceId: string;
+        readonly available: boolean;
+      }[];
+    } | null;
+    readonly encounterCatalog: {
+      readonly encounters: readonly {
+        readonly encounterId: string;
+        readonly available: boolean;
+      }[];
+    } | null;
+    readonly encounterPreparations: Readonly<Record<string, {
+      readonly preparation: DebugEncounterPreparation;
+    }>>;
+    readonly encounterBattle: {
+      readonly state: DebugEncounterBattleState;
+      readonly actionsByActor: Readonly<
+        Record<string, readonly DebugEncounterAvailableAction[]>
+      >;
     } | null;
   };
 }
@@ -363,6 +461,122 @@ async function clickScrollableLayaNode(
 ): Promise<void> {
   await scrollLayaNodeIntoView(page, nodeName, scrollViewportName);
   await clickLayaNode(page, nodeName);
+}
+
+/** 按配置编码生成指定深度的第一个区划探索节点 ID。 */
+function buildFirstDistrictExplorationNodeId(
+  cityId: string,
+  districtId: string,
+  depth: number,
+): string {
+  const identity = districtTreeConfigDocument.identity;
+  const firstIndex = String(1).padStart(identity.index_width, "0");
+  const encodedPath = Array.from(
+    { length: depth },
+    () => firstIndex,
+  ).join(identity.path_separator);
+  return [
+    identity.node_id_prefix,
+    cityId,
+    districtId,
+    encodedPath,
+  ].join(identity.segment_separator);
+}
+
+/** 逐层选择区划树的第一个节点，直到配置化终点进入远征整备。 */
+async function followFirstDistrictExplorationBranch(
+  page: Page,
+  cityId: string,
+  districtId: string,
+): Promise<void> {
+  const depthPolicy = districtTreeConfigDocument.depth_policy;
+  await waitForScreen(page, "district_exploration_tree");
+  for (let depth = 1; depth <= depthPolicy.maximum_depth; depth += 1) {
+    const nodeId = buildFirstDistrictExplorationNodeId(cityId, districtId, depth);
+    const nodeName = `page-district-exploration-tree-option-${nodeId}`;
+    await clickLayaNode(page, nodeName);
+    const nextNodeName = depth < depthPolicy.maximum_depth
+      ? `page-district-exploration-tree-option-${buildFirstDistrictExplorationNodeId(
+          cityId,
+          districtId,
+          depth + 1,
+        )}`
+      : null;
+    await expect.poll(async () => {
+      const screen = await page.evaluate(() => (
+        document.body.dataset.gameScreen ?? null
+      ));
+      if (screen === "expedition_prepare") return screen;
+      if (
+        screen === "district_exploration_tree"
+        && nextNodeName !== null
+        && await readLayaNodeBounds(page, nextNodeName) !== null
+      ) {
+        return screen;
+      }
+      return "pending";
+    }).toMatch(/^(district_exploration_tree|expedition_prepare)$/);
+    const screen = await page.evaluate(() => document.body.dataset.gameScreen ?? null);
+    if (screen === "expedition_prepare") {
+      expect(depth).toBeGreaterThanOrEqual(depthPolicy.minimum_depth);
+      return;
+    }
+    if (screen !== "district_exploration_tree") {
+      throw new Error(`区划探索树进入了意外页面：${String(screen)}`);
+    }
+  }
+  throw new Error("区划探索树超过配置最大深度后仍未进入远征整备。");
+}
+
+/** 通过真实 Canvas 选项为远征携带指定数量的食物。 */
+async function carryExpeditionFood(page: Page, quantity: number): Promise<void> {
+  if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+    throw new Error(`远征携带食物数量无效：${String(quantity)}`);
+  }
+  for (let selected = 0; selected < quantity; selected += 1) {
+    await clickScrollableLayaNode(
+      page,
+      `page-expedition-item-${
+        survivalSystemsConfigDocument.expedition.action_food_item_id
+      }`,
+      "page-expedition-prepare-scroll",
+    );
+  }
+}
+
+/** 按当前页面状态尝试可用事件选项，条件失效时关闭通讯并继续下一项。 */
+async function resolveExplorationEventOption(
+  page: Page,
+  options: readonly { readonly id: string; readonly disabled: boolean }[],
+): Promise<void> {
+  const availableOptions = options.filter((option) => !option.disabled);
+  for (const option of availableOptions) {
+    await clickScrollableLayaNode(
+      page,
+      `page-exploration-event-option-${option.id}`,
+      "page-exploration-event-scroll",
+    );
+    await expect.poll(async () => page.evaluate(() => (
+      document.body.dataset.gameScreen ?? null
+    ))).toMatch(/^(message|expedition_status)$/);
+    const screen = await page.evaluate(() => document.body.dataset.gameScreen ?? null);
+    if (screen === "expedition_status") return;
+    await clickLayaNode(page, "page-message-close");
+    await waitForScreen(page, "exploration_event");
+  }
+  throw new Error("远征事件的所有可见选项均因实时条件不足而无法结算。");
+}
+
+/** 为领域行动生成与战斗页一致的稳定按钮 ID。 */
+function encounterActionNodeId(action: DebugEncounterAvailableAction): string {
+  return action.abilityId === null
+    ? action.action
+    : `${action.action}:${action.abilityId}`;
+}
+
+/** 统计当前存活敌人总生命，用于证明单位指令已真实结算。 */
+function totalEncounterEnemyHealth(state: DebugEncounterBattleState): number {
+  return state.enemies.reduce((total, enemy) => total + enemy.health, 0);
 }
 
 /** 把真实指针移动到 Laya 节点中心以验证桌面悬停意图。 */
@@ -850,7 +1064,8 @@ test("长夜守望成就解锁封面并在刷新后保持选择", async ({ page 
   await clickLayaNode(page, "page-cover-theme-selector-back");
   await clickLayaNode(page, "page-settings-back");
   await waitForScreen(page, "menu");
-  expect(await readLayaNodeBounds(page, "menu-title")).toBeNull();
+  expect(await readLayaNodeBounds(page, "menu-title")).not.toBeNull();
+  expect(await readLayaNodeBounds(page, "menu-subtitle")).not.toBeNull();
   expect(await readLayaNodeBounds(page, "menu-cover-art")).not.toBeNull();
 
   const expectedAsset = await page.evaluate(() => {
@@ -898,7 +1113,7 @@ test("Escape 功能菜单叠加在二级页上并逐层返回", async ({ page })
   await waitForScreen(page, "dashboard");
 });
 
-test("远征从整备、事件到安全返程完成闭环", async ({ page }) => {
+test("远征从整备、事件、安全返程到归来事项完成闭环", async ({ page }) => {
   test.slow();
   await closeAutomaticUpdateLog(page);
   await startSingleGame(page, "远征所长");
@@ -921,8 +1136,11 @@ test("远征从整备、事件到安全返程完成闭环", async ({ page }) => 
   const city = (await readDebugSnapshot(page)).cities.find(
     (candidate) => candidate.id === "city_a",
   );
-  expect(city?.districts.length).toBeGreaterThanOrEqual(6);
-  const district = city?.districts[0];
+  if (city === undefined) {
+    throw new Error("远征城市目录缺少 A 市。");
+  }
+  expect(city.districts.length).toBeGreaterThanOrEqual(6);
+  const district = city.districts[0];
   if (district === undefined) {
     throw new Error("A 市缺少可用的默认区划。");
   }
@@ -945,7 +1163,11 @@ test("远征从整备、事件到安全返程完成闭环", async ({ page }) => 
   );
   await waitForScreen(page, "expedition_district_detail");
   await clickLayaNode(page, "page-expedition-district-detail-confirm");
-  await waitForScreen(page, "expedition_prepare");
+  await followFirstDistrictExplorationBranch(page, city.id, district.id);
+  const requiredFood = (
+    city.travelStepCost + district.eventStepCost + 1
+  ) * survivalSystemsConfigDocument.expedition.food_units_per_action;
+  await carryExpeditionFood(page, requiredFood);
   await clickLayaNode(page, "page-expedition-prepare-begin");
   await waitForScreen(page, "exploration_event");
   const expeditionSnapshot = await readDebugSnapshot(page);
@@ -965,21 +1187,133 @@ test("远征从整备、事件到安全返程完成闭环", async ({ page }) => 
   expect(
     status.maximumSteps - status.travelStepCost - status.remainingSteps,
   ).toBe(district.eventStepCost);
-  const option = event.options.find((candidate) => !candidate.disabled);
-  if (option === undefined) {
-    throw new Error("远征首个事件没有可执行选项。");
-  }
-  await clickScrollableLayaNode(
-    page,
-    `page-exploration-event-option-${option.id}`,
-    "page-exploration-event-scroll",
-  );
-  await waitForScreen(page, "expedition_status");
+  await resolveExplorationEventOption(page, event.options);
   expect((await readDebugSnapshot(page)).expeditionStatus?.cityId).toBe("city_a");
 
   await clickLayaNode(page, "page-expedition-status-safe-return");
+  const returnIncident = (await readDebugSnapshot(page)).returnIncident;
+  if (returnIncident !== null) {
+    await waitForScreen(page, "return_incident");
+    const availableChoice = returnIncident.choices.find((choice) => choice.available);
+    if (availableChoice === undefined) {
+      throw new Error("归来事项没有可执行的裁决。");
+    }
+    await clickScrollableLayaNode(
+      page,
+      `page-return-incident-choice-${availableChoice.choiceId}-select`,
+      "page-return-incident-scroll",
+    );
+    await waitForScreen(page, "message");
+    await clickLayaNode(page, "page-message-close");
+  }
   await waitForScreen(page, "dashboard");
   expect((await readDebugSnapshot(page)).expeditionStatus).toBeNull();
+  expect((await readDebugSnapshot(page)).returnIncident).toBeNull();
+});
+
+test("遭遇战职责完整后可执行一次真实单位指令", async ({ page }) => {
+  test.slow();
+  test.skip(
+    await readGameLayout(page) !== "desktop",
+    "仅在桌面主操作区验证完整遭遇战 Canvas 链路",
+  );
+  await closeAutomaticUpdateLog(page);
+  await startSingleGame(page, "战备所长");
+  await clickLayaNode(page, "dashboard-action-encounter_battle");
+  await waitForScreen(page, "encounter_catalog");
+
+  const catalog = (await readDebugSnapshot(page)).encounterCatalog;
+  const encounter = catalog?.encounters.find((candidate) => candidate.available);
+  if (encounter === undefined) {
+    throw new Error("遭遇目录没有可用战斗。");
+  }
+  await clickScrollableLayaNode(
+    page,
+    `page-encounter-catalog-${encounter.encounterId}-start`,
+    "page-encounter-catalog-scroll",
+  );
+  await waitForScreen(page, "encounter_preparation");
+
+  const preparation = (await readDebugSnapshot(page))
+    .encounterPreparations[encounter.encounterId]?.preparation;
+  if (preparation === undefined || preparation.members.length === 0) {
+    throw new Error("遭遇战整备页缺少参战单位。");
+  }
+  const role = preparation.roles[0];
+  if (role === undefined) {
+    throw new Error("遭遇战整备页缺少可分配职责。");
+  }
+
+  await clickLayaNode(page, "page-encounter-preparation-start");
+  expect(await page.evaluate(() => document.body.dataset.gameScreen ?? null))
+    .toBe("encounter_preparation");
+  expect((await readDebugSnapshot(page)).encounterBattle).toBeNull();
+
+  for (const member of preparation.members) {
+    await clickScrollableLayaNode(
+      page,
+      `page-encounter-preparation-member-${member.member_id}-role-${role.role_id}`,
+      "page-encounter-preparation-scroll",
+    );
+  }
+  await clickLayaNode(page, "page-encounter-preparation-start");
+  await waitForScreen(page, "encounter_battle");
+
+  const battle = (await readDebugSnapshot(page)).encounterBattle;
+  if (battle === null) {
+    throw new Error("职责分配完整后未创建遭遇战状态。");
+  }
+  const actorId = battle.state.pending_party_member_ids[0];
+  const actor = battle.state.party.find((member) => member.member_id === actorId);
+  if (actorId === undefined || actor === undefined) {
+    throw new Error("遭遇战缺少待行动单位。");
+  }
+  const actorActions = battle.actionsByActor[actorId] ?? [];
+  const action = actorActions.find((candidate) => (
+    candidate.action === "attack"
+    && candidate.available
+    && candidate.targetIds.length > 0
+  )) ?? actorActions.find((candidate) => (
+    candidate.available && candidate.targetIds.length > 0
+  ));
+  if (action === undefined) {
+    throw new Error("待行动单位没有可选择目标的指令。");
+  }
+  const targetId = action.targetIds[0];
+  if (targetId === undefined) {
+    throw new Error("可用遭遇战指令缺少目标。");
+  }
+
+  await clickScrollableLayaNode(
+    page,
+    `page-encounter-battle-party-${actor.row}-${actorId}`,
+    "page-encounter-battle-scroll",
+  );
+  await clickScrollableLayaNode(
+    page,
+    `page-encounter-battle-action-${encounterActionNodeId(action)}`,
+    "page-encounter-battle-scroll",
+  );
+  await clickScrollableLayaNode(
+    page,
+    `page-encounter-battle-target-${targetId}`,
+    "page-encounter-battle-scroll",
+  );
+  const previousLogLength = battle.state.log.length;
+  const previousEnemyHealth = totalEncounterEnemyHealth(battle.state);
+  await clickLayaNode(page, "page-encounter-battle-execute");
+  await expect.poll(async () => (
+    (await readDebugSnapshot(page)).encounterBattle?.state.log.length ?? 0
+  )).toBeGreaterThan(previousLogLength);
+
+  const resolvedBattle = (await readDebugSnapshot(page)).encounterBattle;
+  if (resolvedBattle === null) {
+    throw new Error("单位指令结算后遭遇战状态意外丢失。");
+  }
+  expect(totalEncounterEnemyHealth(resolvedBattle.state)).toBeLessThan(
+    previousEnemyHealth,
+  );
+  expect(resolvedBattle.state.log.length).toBeGreaterThan(previousLogLength);
 });
 
 test("避难所活动先显示需求且确认一次只结算一次", async ({ page }) => {

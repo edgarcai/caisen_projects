@@ -130,6 +130,8 @@ describe("H5 剧情、战斗与探索命令流", () => {
     expect(defaultDistrict.event_ids).toContain(pending.event_id);
     expect(firstSnapshot.explorationPrompt?.id).toBe(pending.event_id);
     const firstOption = firstSnapshot.explorationPrompt?.options.find(
+      (option) => option.id === "leave",
+    ) ?? firstSnapshot.explorationPrompt?.options.find(
       (option) => !option.disabled,
     );
     if (firstOption === undefined) throw new Error("探索事件没有可执行选项。");

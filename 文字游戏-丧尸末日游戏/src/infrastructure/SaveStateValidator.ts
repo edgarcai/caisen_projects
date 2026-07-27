@@ -69,6 +69,14 @@ const RESTORABLE_V7_STATE_FIELDS = [
   "management_cycle_usage",
 ] as const;
 const V7_STATE_FIELDS = [...RESTORABLE_V7_STATE_FIELDS, "checkpoint"] as const;
+const RESTORABLE_V8_STATE_FIELDS = [
+  ...RESTORABLE_V7_STATE_FIELDS,
+  "archive_collection_totals",
+  "shelter_room_assignments",
+  "encounter_battle",
+  "pending_return_incident_id",
+] as const;
+const V8_STATE_FIELDS = [...RESTORABLE_V8_STATE_FIELDS, "checkpoint"] as const;
 const PLAYER_FIELDS = [
   "name",
   "health",
@@ -193,7 +201,56 @@ const EXPEDITION_LOSS_ITEM_FIELDS = [
   "kept_quantity",
   "lost_quantity",
 ] as const;
+const ENCOUNTER_BATTLE_FIELDS = [
+  "encounter_id",
+  "encounter_name",
+  "round_number",
+  "outcome",
+  "party",
+  "enemies",
+  "pending_party_member_ids",
+  "supplies",
+  "log",
+] as const;
+const ENCOUNTER_PARTY_MEMBER_FIELDS = [
+  "member_id",
+  "name",
+  "row",
+  "maximum_health",
+  "health",
+  "attack",
+  "defense",
+  "agility",
+  "skill_ids",
+  "guarding",
+  "skill_cooldowns",
+] as const;
+const ENCOUNTER_ENEMY_FIELDS = [
+  "enemy_id",
+  "name",
+  "row",
+  "maximum_health",
+  "health",
+  "attack",
+  "defense",
+  "agility",
+  "guarding",
+  "intent_id",
+] as const;
+const ENCOUNTER_LOG_FIELDS = ["round_number", "message"] as const;
 const COMPANION_STATUSES = new Set(["active", "locked", "exiled", "lost", "dead"]);
+
+/** 存档校验器对房间领域规则依赖的最小端口。 */
+export interface ShelterRoomAssignmentValidationPort {
+  /** 校验完整聚合中的持久化房间分配。 */
+  validatePersistentState(state: GameState): void;
+}
+
+/** 存档校验器对配置化文献馆藏规则的最小端口。 */
+export interface ArchiveCollectionProgressValidationPort {
+  /** 校验分类集合、累计份数和当前库存关系。 */
+  validatePersistentState(state: GameState): void;
+}
 
 /** 严格校验版本化存档的字段集合、数据类型与领域不变量。 */
 export class SaveStateValidator {
@@ -208,8 +265,10 @@ export class SaveStateValidator {
   private readonly campaignOriginIds: ReadonlySet<string>;
   private readonly campaignTraitIds: ReadonlySet<string>;
   private readonly homeCityIds: ReadonlySet<string>;
+  private readonly shelterRoomAssignments?: ShelterRoomAssignmentValidationPort;
+  private readonly archiveProgress?: ArchiveCollectionProgressValidationPort;
 
-  /** 注入生存规则、内容 ID、城市地图、开局档案与生存系统配置。 */
+  /** 注入生存配置、内容目录与可选的房间领域校验端口。 */
   public constructor(
     rules: GameRuleConfig,
     facilities: readonly FacilityConfig[],
@@ -218,6 +277,8 @@ export class SaveStateValidator {
     survivalSystems: SurvivalSystemsConfigDocument,
     campaignProfiles: CampaignProfilesConfig,
     cities: readonly CityConfig[],
+    shelterRoomAssignments?: ShelterRoomAssignmentValidationPort,
+    archiveProgress?: ArchiveCollectionProgressValidationPort,
   ) {
     this.rules = rules;
     this.facilityIds = facilities.map((facility) => facility.facility_id);
@@ -238,6 +299,8 @@ export class SaveStateValidator {
       campaignProfiles.traits.map((trait) => trait.id),
     );
     this.homeCityIds = new Set(rules.world_map.home_city_ids);
+    this.shelterRoomAssignments = shelterRoomAssignments;
+    this.archiveProgress = archiveProgress;
   }
 
   /** 在迁移前验证旧 v1 生存状态的精确结构。 */
@@ -343,9 +406,25 @@ export class SaveStateValidator {
     return state;
   }
 
-  /** 从已通过 v7 结构检查的数据创建副本并验证完整状态。 */
+  /** 在构造领域对象前验证 v8 房间规划、遭遇战与归来事项字段。 */
+  public validateRawV8(rawState: unknown): JsonObject {
+    const state = exactObject(rawState, V8_STATE_FIELDS, "v8 game_state");
+    this.validateRawV8Base(state, "v8 game_state");
+    if (state.checkpoint !== null) {
+      const checkpoint = exactObject(state.checkpoint, CHECKPOINT_FIELDS, "v8 checkpoint");
+      const snapshot = exactObject(
+        checkpoint.snapshot,
+        RESTORABLE_V8_STATE_FIELDS,
+        "v8 checkpoint.snapshot",
+      );
+      this.validateRawV8Base(snapshot, "v8 checkpoint.snapshot");
+    }
+    return state;
+  }
+
+  /** 从已通过 v8 结构检查的数据创建副本并验证完整状态。 */
   public parse(rawState: unknown): GameState {
-    const state = structuredClone(this.validateRawV7(rawState)) as unknown as GameState;
+    const state = structuredClone(this.validateRawV8(rawState)) as unknown as GameState;
     this.validate(state);
     return state;
   }
@@ -407,6 +486,13 @@ export class SaveStateValidator {
     this.validateManagementCycleUsage(state);
     this.validateExpedition(state);
     this.validateExpeditionFailure(state);
+    this.validateArchiveCollectionTotals(state);
+    this.validateShelterRoomAssignments(state);
+    this.validateEncounterBattle(state);
+    requireNullableNonEmptyString(
+      state.pending_return_incident_id,
+      "pending_return_incident_id",
+    );
     this.validateCheckpoint(state);
   }
 
@@ -569,6 +655,81 @@ export class SaveStateValidator {
       );
     }
     this.validateRawExpeditionFailure(state, path);
+  }
+
+  /** 校验 v8 可恢复状态的房间分配与遭遇战精确容器。 */
+  private validateRawV8Base(state: JsonObject, path: string): void {
+    this.validateRawV7Base(state, path);
+    const archiveTotals = requireObject(
+      state.archive_collection_totals,
+      `${path}.archive_collection_totals`,
+    );
+    for (const [collectionId, copies] of Object.entries(archiveTotals)) {
+      requireNonEmptyString(collectionId, `${path}.archive_collection_totals 的键`);
+      requireInteger(copies, `${path}.archive_collection_totals.${collectionId}`, 0);
+    }
+    const assignments = requireObject(
+      state.shelter_room_assignments,
+      `${path}.shelter_room_assignments`,
+    );
+    for (const [roomId, residentIds] of Object.entries(assignments)) {
+      requireNonEmptyString(roomId, `${path}.shelter_room_assignments 的键`);
+      requireUniqueStringList(
+        residentIds,
+        `${path}.shelter_room_assignments.${roomId}`,
+      );
+    }
+    this.validateRawEncounterBattle(state.encounter_battle, path);
+    requireNullableNonEmptyString(
+      state.pending_return_incident_id,
+      `${path}.pending_return_incident_id`,
+    );
+  }
+
+  /** 通过注入的文献领域端口校验持久化累计馆藏。 */
+  private validateArchiveCollectionTotals(state: GameState): void {
+    if (this.archiveProgress === undefined) return;
+    try {
+      this.archiveProgress.validatePersistentState(state);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new SaveDataError(message);
+    }
+  }
+
+  /** 校验可空遭遇战及其中队员、敌人、补给与日志的字段集合。 */
+  private validateRawEncounterBattle(value: unknown, path: string): void {
+    if (value === null) return;
+    const battle = exactObject(value, ENCOUNTER_BATTLE_FIELDS, `${path}.encounter_battle`);
+    const party = requireArray(battle.party, `${path}.encounter_battle.party`);
+    for (const [index, member] of party.entries()) {
+      exactObject(
+        member,
+        ENCOUNTER_PARTY_MEMBER_FIELDS,
+        `${path}.encounter_battle.party[${String(index)}]`,
+      );
+    }
+    const enemies = requireArray(battle.enemies, `${path}.encounter_battle.enemies`);
+    for (const [index, enemy] of enemies.entries()) {
+      exactObject(
+        enemy,
+        ENCOUNTER_ENEMY_FIELDS,
+        `${path}.encounter_battle.enemies[${String(index)}]`,
+      );
+    }
+    requireArray(
+      battle.pending_party_member_ids,
+      `${path}.encounter_battle.pending_party_member_ids`,
+    );
+    requireObject(battle.supplies, `${path}.encounter_battle.supplies`);
+    const logs = requireArray(battle.log, `${path}.encounter_battle.log`);
+    for (const [index, entry] of logs.entries()) {
+      exactObject(
+        entry,
+        ENCOUNTER_LOG_FIELDS,
+        `${path}.encounter_battle.log[${String(index)}]`,
+      );
+    }
   }
 
   /** 校验 v6/v7 共用的可选强制返程结构。 */
@@ -1106,7 +1267,109 @@ export class SaveStateValidator {
     }
   }
 
-  /** 校验远征城市、队伍上限、物资白名单、携带容量与步数不变量。 */
+  /** 校验房间 ID、住民 ID 及跨房间唯一分配不变量。 */
+  private validateShelterRoomAssignments(state: GameState): void {
+    const assignments = requireObject(
+      state.shelter_room_assignments,
+      "shelter_room_assignments",
+    );
+    const assignedResidents: string[] = [];
+    for (const [roomId, rawResidentIds] of Object.entries(assignments)) {
+      requireNonEmptyString(roomId, "shelter_room_assignments 的键");
+      requireUniqueStringList(
+        rawResidentIds,
+        `shelter_room_assignments.${roomId}`,
+      );
+      assignedResidents.push(...rawResidentIds);
+    }
+    requireUnique(assignedResidents, "shelter_room_assignments 的全部住民");
+    this.shelterRoomAssignments?.validatePersistentState(state);
+  }
+
+  /** 校验可恢复遭遇战的生命、站位、回合顺序、冷却和补给数量。 */
+  private validateEncounterBattle(state: GameState): void {
+    const battle = state.encounter_battle;
+    if (battle === null) return;
+    requireNonEmptyString(battle.encounter_id, "encounter_battle.encounter_id");
+    requireNonEmptyString(battle.encounter_name, "encounter_battle.encounter_name");
+    requireInteger(battle.round_number, "encounter_battle.round_number", 1);
+    if (!["ongoing", "victory", "defeat", "retreated"].includes(battle.outcome)) {
+      throw new SaveDataError("encounter_battle.outcome 无效。");
+    }
+    if (battle.party.length === 0 || battle.enemies.length === 0) {
+      throw new SaveDataError("遭遇战必须包含队员和敌人。");
+    }
+    const partyIds = battle.party.map((member) => member.member_id);
+    requireUnique(partyIds, "encounter_battle.party.member_id");
+    for (const [index, member] of battle.party.entries()) {
+      const path = `encounter_battle.party[${String(index)}]`;
+      requireNonEmptyString(member.member_id, `${path}.member_id`);
+      requireNonEmptyString(member.name, `${path}.name`);
+      this.validateEncounterUnit(member, path);
+      requireUniqueStringList(member.skill_ids, `${path}.skill_ids`);
+      requireBoolean(member.guarding, `${path}.guarding`);
+      const cooldowns = requireObject(member.skill_cooldowns, `${path}.skill_cooldowns`);
+      for (const [skillId, cooldown] of Object.entries(cooldowns)) {
+        requireNonEmptyString(skillId, `${path}.skill_cooldowns 的键`);
+        requireInteger(cooldown, `${path}.skill_cooldowns.${skillId}`, 0);
+      }
+    }
+    const enemyIds = battle.enemies.map((enemy) => enemy.enemy_id);
+    requireUnique(enemyIds, "encounter_battle.enemies.enemy_id");
+    for (const [index, enemy] of battle.enemies.entries()) {
+      const path = `encounter_battle.enemies[${String(index)}]`;
+      requireNonEmptyString(enemy.enemy_id, `${path}.enemy_id`);
+      requireNonEmptyString(enemy.name, `${path}.name`);
+      requireNonEmptyString(enemy.intent_id, `${path}.intent_id`);
+      this.validateEncounterUnit(enemy, path);
+      requireBoolean(enemy.guarding, `${path}.guarding`);
+    }
+    requireUniqueStringList(
+      battle.pending_party_member_ids,
+      "encounter_battle.pending_party_member_ids",
+    );
+    for (const memberId of battle.pending_party_member_ids) {
+      if (!partyIds.includes(memberId)) {
+        throw new SaveDataError("遭遇战待行动队员不属于当前队伍。");
+      }
+    }
+    const supplies = requireObject(battle.supplies, "encounter_battle.supplies");
+    for (const [itemId, quantity] of Object.entries(supplies)) {
+      requireNonEmptyString(itemId, "encounter_battle.supplies 的键");
+      requireInteger(quantity, `encounter_battle.supplies.${itemId}`, 0);
+    }
+    for (const [index, entry] of battle.log.entries()) {
+      requireInteger(entry.round_number, `encounter_battle.log[${String(index)}].round_number`, 1);
+      requireNonEmptyString(entry.message, `encounter_battle.log[${String(index)}].message`);
+    }
+  }
+
+  /** 校验遭遇战友方与敌方共用的生命、战斗属性和站位字段。 */
+  private validateEncounterUnit(
+    unit: {
+      readonly row: string;
+      readonly maximum_health: number;
+      readonly health: number;
+      readonly attack: number;
+      readonly defense: number;
+      readonly agility: number;
+    },
+    path: string,
+  ): void {
+    if (unit.row !== "front" && unit.row !== "back") {
+      throw new SaveDataError(`${path}.row 无效。`);
+    }
+    requireInteger(unit.maximum_health, `${path}.maximum_health`, 1);
+    requireInteger(unit.health, `${path}.health`, 0);
+    if (unit.health > unit.maximum_health) {
+      throw new SaveDataError(`${path}.health 不能超过最大生命。`);
+    }
+    requireInteger(unit.attack, `${path}.attack`, 0);
+    requireInteger(unit.defense, `${path}.defense`, 0);
+    requireInteger(unit.agility, `${path}.agility`, 0);
+  }
+
+  /** 校验远征城市、队伍上限、物资白名单、携带容量与兼容行动字段。 */
   private validateExpedition(state: GameState): void {
     const expedition = state.expedition;
     if (expedition === null) return;
@@ -1181,7 +1444,7 @@ export class SaveStateValidator {
     );
     requireInteger(expedition.events_resolved, "expedition.events_resolved", 0);
     if (expedition.remaining_steps > expedition.maximum_steps) {
-      throw new SaveDataError("远征剩余步数不能超过最大步数。");
+      throw new SaveDataError("远征剩余行动数不能超过出发时的行动上限。");
     }
     if (
       state.pending_exploration !== null

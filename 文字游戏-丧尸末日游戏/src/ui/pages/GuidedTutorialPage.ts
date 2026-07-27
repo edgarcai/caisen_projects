@@ -141,6 +141,13 @@ export function createGuidedTutorialPage(
       ? config.theme.muted_text
       : config.theme.text;
     const target = resolveTarget(step.target_test_id);
+    const placedDialog = resolveTutorialDialogPlacement(
+      config,
+      layout,
+      dialogGeometry,
+      target,
+    );
+    dialog.pos(placedDialog.x, placedDialog.y);
     refreshTutorialInstructionRegion(
       bindings.instructionRegion,
       config,
@@ -152,7 +159,7 @@ export function createGuidedTutorialPage(
       focusBorder,
       config,
       layout,
-      target ?? resolveFallbackTarget(config, layout, dialogGeometry),
+      target ?? resolveFallbackTarget(config, layout, placedDialog),
     );
     actions.onStepChange?.(step.id, stepIndex);
   };
@@ -398,6 +405,104 @@ export function resolveTutorialDialogGeometry(
     width,
     height,
   };
+}
+
+/**
+ * 在桌面端从四个安全角中选择对聚焦目标遮挡最小的通讯框位置。
+ */
+export function resolveTutorialDialogPlacement(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+  dialog: TutorialDialogGeometry,
+  target: GuidedTutorialTargetBounds | null,
+): TutorialDialogGeometry {
+  if (layout.usesCompactUi || target === null) {
+    return dialog;
+  }
+  const left = layout.safeArea.left + layout.outerPadding;
+  const right = layout.stageWidth
+    - layout.safeArea.right
+    - layout.outerPadding
+    - dialog.width;
+  const bottom = layout.stageHeight
+    - layout.safeArea.bottom
+    - layout.outerPadding
+    - dialog.height;
+  const headingBottom = layout.safeArea.top
+    + layout.outerPadding
+    + config.typography.body_line_height
+    + layout.sectionGap;
+  const top = Math.min(bottom, headingBottom);
+  const candidates: readonly TutorialDialogGeometry[] = [
+    { ...dialog, x: right, y: bottom },
+    { ...dialog, x: left, y: bottom },
+    { ...dialog, x: right, y: top },
+    { ...dialog, x: left, y: top },
+  ];
+  const protectedTarget = expandTutorialTarget(
+    target,
+    config.guided_tutorial.dialog_target_gap,
+  );
+  return candidates.reduce((best, candidate) => {
+    const bestOverlap = tutorialOverlapArea(best, protectedTarget);
+    const candidateOverlap = tutorialOverlapArea(candidate, protectedTarget);
+    if (candidateOverlap < bestOverlap) {
+      return candidate;
+    }
+    if (
+      candidateOverlap > 0
+      && candidateOverlap === bestOverlap
+      && tutorialCenterDistanceSquared(candidate, target)
+        > tutorialCenterDistanceSquared(best, target)
+    ) {
+      return candidate;
+    }
+    return best;
+  });
+}
+
+/** 在聚焦区四周加入配置化留白，避免通讯框紧贴高亮边框。 */
+function expandTutorialTarget(
+  target: GuidedTutorialTargetBounds,
+  gap: number,
+): GuidedTutorialTargetBounds {
+  return {
+    x: target.x - gap,
+    y: target.y - gap,
+    width: target.width + gap * 2,
+    height: target.height + gap * 2,
+  };
+}
+
+/** 计算通讯框与受保护聚焦区的交叠面积。 */
+function tutorialOverlapArea(
+  dialog: TutorialDialogGeometry,
+  target: GuidedTutorialTargetBounds,
+): number {
+  const width = Math.max(
+    0,
+    Math.min(dialog.x + dialog.width, target.x + target.width)
+      - Math.max(dialog.x, target.x),
+  );
+  const height = Math.max(
+    0,
+    Math.min(dialog.y + dialog.height, target.y + target.height)
+      - Math.max(dialog.y, target.y),
+  );
+  return width * height;
+}
+
+/** 计算通讯框与聚焦区中心的平方距离，供遮挡面积同分时决策。 */
+function tutorialCenterDistanceSquared(
+  dialog: TutorialDialogGeometry,
+  target: GuidedTutorialTargetBounds,
+): number {
+  const horizontalDistance = dialog.x + dialog.width / 2
+    - (target.x + target.width / 2);
+  const verticalDistance = dialog.y + dialog.height / 2
+    - (target.y + target.height / 2);
+  return horizontalDistance * horizontalDistance
+    + verticalDistance * verticalDistance;
 }
 
 /** 使用四块遮罩绕开聚焦区，保持目标本身清晰可见。 */

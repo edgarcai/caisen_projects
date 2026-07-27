@@ -97,3 +97,17 @@ export interface PlayerAttributeProvider {
   /** 返回攻击、防御与敏捷之和的有效战斗力。 */
   combatPower(state: GameState, playerIndex?: number): number;
 }
+
+/** 为伙伴投影独立于所长配装的实时战斗属性。 */
+export interface CompanionAttributeProvider {
+  /** 在明确基线上叠加指定伙伴的当前武器与防具加成。 */
+  effectiveCompanionAttributes(
+    state: GameState,
+    companionId: string,
+    baseline: EffectivePlayerAttributes,
+  ): EffectivePlayerAttributes;
+}
+
+/** 遭遇战组队同时需要的玩家与伙伴属性端口。 */
+export interface EncounterPartyAttributeProvider
+  extends PlayerAttributeProvider, CompanionAttributeProvider {}

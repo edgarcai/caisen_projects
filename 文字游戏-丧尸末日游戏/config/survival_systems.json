@@ -16,7 +16,7 @@
     "crafted_items": [
       {"item_id": "field_ration", "name": "行军口粮", "category": "consumable", "carryable": true, "description": "压缩封装的远征口粮，便于长距离行动。"},
       {"item_id": "trauma_kit", "name": "创伤急救包", "category": "consumable", "carryable": true, "description": "把常用止血与抑制感染用品组合成套。"},
-      {"item_id": "signal_beacon", "name": "折叠信标", "category": "tool", "carryable": true, "description": "标记安全路线，为远征提供额外步数。"},
+      {"item_id": "signal_beacon", "name": "折叠信标", "category": "tool", "carryable": true, "description": "标记安全路线，降低远征队在尸群中迷路的风险。"},
       {"item_id": "route_map", "name": "区域安全路线图", "category": "tool", "carryable": false, "description": "由旧报纸和无线电记录拼合的远城通行路径。"},
       {"item_id": "armored_car", "name": "加固越野车", "category": "transport", "transport_mode": "land", "carryable": false, "description": "适合陆地、河岸道路和沿海公路的远行载具。"},
       {"item_id": "motorboat", "name": "浅水机动艇", "category": "transport", "transport_mode": "sea", "carryable": false, "description": "可穿过河道、海湾并抵达岛屿码头。"},
@@ -255,10 +255,12 @@
     "invalid_transport_text": "【{item_name}】不是可驾驶载具。"
   },
   "expedition": {
+    "action_food_item_id": "food",
+    "food_units_per_action": 1,
     "base_steps": 10,
     "maximum_companions": 2,
     "maximum_carried_item_types": 3,
-    "maximum_carried_units": 6,
+    "maximum_carried_units": 24,
     "event_step_cost": 1,
     "companion_step_bonuses": [
       {"companion_id": "haocai", "trait_name": "就地取材", "base_steps": 1, "trust_thresholds": [{"trust": 1, "steps": 1}, {"trust": 3, "steps": 2}]},
@@ -285,16 +287,16 @@
     ],
     "forced_return_keep_percent": 20,
     "forced_return_health_range": [7, 45],
-    "prepared_text": "远征准备完成：最大步数{maximum_steps}，路程消耗{travel_steps}步，剩余{remaining_steps}步；同行{companion_count}人，携带{carried_units}件物资。",
-    "step_text": "远征消耗{spent_steps}步，剩余{remaining_steps}/{maximum_steps}步。",
+    "prepared_text": "远征准备完成：携带食物可支撑{maximum_actions}次行动，前往目的城市消耗{travel_actions}份食物，剩余{remaining_actions}次行动；同行{companion_count}人，携带{carried_units}件物资。",
+    "action_text": "远征队消耗{spent_actions}份携带食物，剩余可用行动{remaining_actions}次。",
     "safe_return_text": "远征队沿标记路线安全返回，战利品已经入库。",
-    "forced_return_text": "步数耗尽，队伍被尸群切断退路。仅保住{kept_percent}%远征物资，所长生命降至{health}。",
+    "forced_return_text": "携带食物已无法支撑下一次行动，队伍被尸群切断退路。仅保住{kept_percent}%远征物资，所长生命降至{health}。",
     "no_active_text": "当前没有正在进行的远征。",
     "selection_invalid_text": "远征队伍或携带物资不符合要求。"
   },
   "display": {
     "cost_item_format": "{item_name}×{quantity}",
     "cost_separator": "、",
-    "step_bonus_format": "远征步数 +{steps}"
+    "step_bonus_format": "远征协作 +{steps}"
   }
 }

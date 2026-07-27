@@ -99,11 +99,25 @@ describe("远征页面导航闭环", () => {
     })).toBe("exploration_event");
   });
 
-  it("事件后仍有远征则回状态页，强制返程则回指挥台", () => {
+  it("事件后仍有远征则回状态页，强制返程优先展示损失", () => {
     expect(resolveExpeditionProgressScreen({
       explorationPrompt: null,
       expeditionStatus: activeExpedition(),
     })).toBe("expedition_status");
+    expect(resolveExpeditionProgressScreen({
+      explorationPrompt: null,
+      expeditionStatus: null,
+      expeditionFailure: {
+        reason: "携带食物耗尽",
+        keptPercent: 20,
+        healthBefore: 100,
+        healthAfter: 20,
+        totalBefore: 10,
+        totalKept: 2,
+        totalLost: 8,
+        items: [],
+      },
+    })).toBe("expedition_failure");
     expect(resolveExpeditionProgressScreen({
       explorationPrompt: null,
       expeditionStatus: null,
@@ -193,7 +207,7 @@ describe("仓库、研发、制作与历史的真实展示模型", () => {
     ]);
 
     expect(research.options[0]).toMatchObject({ disabled: false, tone: "primary" });
-    expect(research.options[0]?.description).toContain("远征步数加成：2");
+    expect(research.options[0]?.description).not.toContain("步数");
     expect(crafting.options[0]).toMatchObject({ disabled: true });
   });
 

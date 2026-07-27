@@ -15,43 +15,38 @@ import type {
   SurvivalSystemsConfigDocument,
 } from "../domain/survival-systems";
 import type { GameContent } from "./GameContent";
-import type { CampaignProfileService } from "./CampaignProfileService";
 import type {
   CityAccessDecision,
   CityAccessService,
 } from "./CityAccessService";
+import { ExpeditionFoodActionPolicy } from "./ExpeditionFoodActionPolicy";
 import type { InventoryService } from "./InventoryService";
-import type { ResearchCraftingService } from "./ResearchCraftingService";
 import type { StateOperations } from "./StateOperations";
 
-/** 编排远征队伍、携带物、步数、战利品和强制返程惩罚。 */
+/** 编排远征队伍、携带物、食物行动、战利品和强制返程惩罚。 */
 export class ExpeditionService {
   private readonly config: SurvivalSystemsConfigDocument;
   private readonly content: GameContent;
   private readonly inventory: InventoryService;
-  private readonly research: ResearchCraftingService;
   private readonly cityAccess: CityAccessService;
-  private readonly campaignProfiles: CampaignProfileService;
+  private readonly actionPolicy: ExpeditionFoodActionPolicy;
   private readonly operations: StateOperations;
   private readonly random: RandomSource;
 
-  /** 注入内容、库存、研发、城市通行、开局档案、状态读写与随机源。 */
+  /** 注入内容、库存、城市通行、状态读写与随机源。 */
   public constructor(
     config: SurvivalSystemsConfigDocument,
     content: GameContent,
     inventory: InventoryService,
-    research: ResearchCraftingService,
     cityAccess: CityAccessService,
-    campaignProfiles: CampaignProfileService,
     operations: StateOperations,
     random: RandomSource,
   ) {
     this.config = config;
     this.content = content;
     this.inventory = inventory;
-    this.research = research;
     this.cityAccess = cityAccess;
-    this.campaignProfiles = campaignProfiles;
+    this.actionPolicy = new ExpeditionFoodActionPolicy(config);
     this.operations = operations;
     this.random = random;
   }
@@ -63,7 +58,7 @@ export class ExpeditionService {
     );
   }
 
-  /** 返回当前可加入远征的伙伴及其技能步数加成。 */
+  /** 返回当前可加入远征的伙伴及其配置化技能摘要。 */
   public companionOptions(state: GameState): readonly ExpeditionCompanionView[] {
     return this.config.expedition.companion_step_bonuses.flatMap((bonus) => {
       const companion = findCompanion(state, bonus.companion_id);
@@ -92,18 +87,34 @@ export class ExpeditionService {
       itemId: item.itemId,
       name: item.name,
       availableQuantity: item.quantity,
-      stepBonusPerUnit:
-        this.config.expedition.carried_item_step_bonuses[item.itemId] ?? 0,
+      stepBonusPerUnit: this.actionPolicy.actionCapacity({ [item.itemId]: 1 }),
     }));
   }
 
-  /** 返回一次所选区划事件需要扣除的真实总步数。 */
+  /** 为旧版直接探索入口选取可携带上限内的全部食物。 */
+  public legacyAutomaticFoodCarry(
+    state: GameState,
+  ): Readonly<Record<string, number>> {
+    const foodItemId = this.actionPolicy.actionFoodItemId();
+    const availableFood = this.inventory.availableQuantity(
+      state,
+      foodItemId,
+      state.active_player_index,
+    );
+    const quantity = Math.min(
+      availableFood,
+      this.config.expedition.maximum_carried_units,
+    );
+    return quantity > 0 ? { [foodItemId]: quantity } : {};
+  }
+
+  /** 返回一次所选区划事件需要消耗的配置化行动数。 */
   public eventStepCost(cityId: string, districtId: string): number {
     return this.config.expedition.event_step_cost
       + this.content.district(cityId, districtId).event_step_cost;
   }
 
-  /** 校验远征准备并原子保存队伍、携带物与最大步数。 */
+  /** 校验远征准备并原子保存队伍、携带物与食物行动额度。 */
   public prepare(
     state: GameState,
     cityId: string,
@@ -135,20 +146,20 @@ export class ExpeditionService {
         turnsConsumed: 0,
       };
     }
-    const maximumSteps = this.maximumSteps(state, companionIds, carriedItems);
-    if (maximumSteps < access.travelStepCost) {
+    const maximumActions = this.actionPolicy.actionCapacity(carriedItems);
+    if (maximumActions < access.travelStepCost) {
       return {
         applied: false,
         messages: [this.content.text("expedition_travel_steps_insufficient", {
           required: access.travelStepCost,
-          maximum: maximumSteps,
+          available: maximumActions,
         })],
         turnsConsumed: 0,
       };
     }
     const working = cloneGameState(state);
     this.inventory.withdraw(working, carriedItems, leaderPlayerIndex);
-    working.expedition = {
+    const expedition = {
       city_id: cityId,
       district_id: districtId,
       travel_step_cost: access.travelStepCost,
@@ -156,18 +167,22 @@ export class ExpeditionService {
       companion_ids: [...companionIds],
       carried_items: { ...carriedItems },
       loot: {},
-      remaining_steps: maximumSteps - access.travelStepCost,
-      maximum_steps: maximumSteps,
+      remaining_steps: maximumActions,
+      maximum_steps: maximumActions,
       events_resolved: 0,
     };
+    if (!this.actionPolicy.spend(expedition, access.travelStepCost)) {
+      throw new GameApplicationError(this.config.expedition.selection_invalid_text);
+    }
+    working.expedition = expedition;
     working.last_expedition_failure = null;
     this.commit(working, state);
     return {
       applied: true,
       messages: [formatTemplate(this.config.expedition.prepared_text, {
-        maximum_steps: maximumSteps,
-        travel_steps: access.travelStepCost,
-        remaining_steps: maximumSteps - access.travelStepCost,
+        maximum_actions: maximumActions,
+        travel_actions: access.travelStepCost,
+        remaining_actions: expedition.remaining_steps,
         companion_count: companionIds.length,
         carried_units: Object.values(carriedItems).reduce(
           (sum, quantity) => sum + quantity,
@@ -178,29 +193,30 @@ export class ExpeditionService {
     };
   }
 
-  /** 在抽取下一事件前扣除全局与所选区划步数；不足时立即强制返程。 */
+  /** 在抽取下一事件前扣除区划行动及对应食物；不足时立即强制返程。 */
   public spendEventSteps(state: GameState): SurvivalSystemResolution {
     const current = this.requireExpedition(state);
     const spentSteps = this.eventStepCost(current.city_id, current.district_id);
-    if (current.remaining_steps < spentSteps) {
+    if (this.actionPolicy.remainingActions(current) < spentSteps) {
       return this.forceReturn(state);
     }
     const working = cloneGameState(state);
     const expedition = this.requireExpedition(working);
-    expedition.remaining_steps -= spentSteps;
+    if (!this.actionPolicy.spend(expedition, spentSteps)) {
+      return this.forceReturn(state);
+    }
     this.commit(working, state);
     return {
       applied: true,
-      messages: [formatTemplate(this.config.expedition.step_text, {
-        spent_steps: spentSteps,
-        remaining_steps: expedition.remaining_steps,
-        maximum_steps: expedition.maximum_steps,
+      messages: [formatTemplate(this.config.expedition.action_text, {
+        spent_actions: spentSteps,
+        remaining_actions: expedition.remaining_steps,
       })],
       turnsConsumed: 0,
     };
   }
 
-  /** 记录本次事件的正向物资增量并在步数归零时强制返程。 */
+  /** 记录本次事件的正向物资增量并在携带食物用尽时强制返程。 */
   public completeEvent(before: GameState, state: GameState): SurvivalSystemResolution {
     const working = cloneGameState(state);
     const expedition = this.requireExpedition(working);
@@ -231,7 +247,7 @@ export class ExpeditionService {
       }
     }
     expedition.events_resolved += 1;
-    if (expedition.remaining_steps <= 0) {
+    if (this.actionPolicy.remainingActions(expedition) <= 0) {
       const resolution = this.forceReturn(working);
       this.commit(working, state);
       return resolution;
@@ -339,7 +355,7 @@ export class ExpeditionService {
       districtId: expedition.district_id,
       travelStepCost: expedition.travel_step_cost,
       leaderPlayerIndex: expedition.leader_player_index,
-      remainingSteps: expedition.remaining_steps,
+      remainingSteps: this.actionPolicy.remainingActions(expedition),
       maximumSteps: expedition.maximum_steps,
       eventsResolved: expedition.events_resolved,
       companionIds: [...expedition.companion_ids],
@@ -390,28 +406,6 @@ export class ExpeditionService {
         lost_quantity: originalQuantity - keptQuantity,
       };
     });
-  }
-
-  /** 计算基础、研发、伙伴词条和携带物共同提供的最大步数。 */
-  private maximumSteps(
-    state: GameState,
-    companionIds: readonly string[],
-    carriedItems: Readonly<Record<string, number>>,
-  ): number {
-    const companionSteps = companionIds.reduce((sum, companionId) => {
-      const companion = findCompanion(state, companionId);
-      return sum + this.companionStepBonus(companion?.trust ?? 0, companionId);
-    }, 0);
-    const carriedSteps = Object.entries(carriedItems).reduce(
-      (sum, [itemId, quantity]) => sum
-        + (this.config.expedition.carried_item_step_bonuses[itemId] ?? 0) * quantity,
-      0,
-    );
-    return this.config.expedition.base_steps
-      + this.research.expeditionStepBonus(state)
-      + this.campaignProfiles.expeditionStepBonus(state)
-      + companionSteps
-      + carriedSteps;
   }
 
   /** 按伙伴基础词条和已达到的信任阈值计算步数。 */
@@ -488,6 +482,7 @@ export class ExpeditionService {
   private commit(source: GameState, target: GameState): void {
     target.players = source.players;
     target.shelter = source.shelter;
+    target.archive_collection_totals = source.archive_collection_totals;
     target.inventory = source.inventory;
     target.pending_exploration = source.pending_exploration;
     target.expedition = source.expedition;

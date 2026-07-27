@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "campaign_id": "embers_era_main_campaign",
-  "title": "避难所：余烬纪元",
+  "title": "避难所·往昔",
   "tagline": "当尸群仍记得自己，人类该如何定义怪物？",
   "world": {
     "outbreak_year": 2166,
@@ -2201,6 +2201,83 @@
         {"target": "shelter.activity", "operation": "add", "amount": 2}
       ],
       "result_text": "碎玻璃后的微光一盏盏亮起，没有人说话，但也没有人提前离开。"
+    },
+    {
+      "activity_id": "radio_theatre",
+      "name": "无线电剧场",
+      "description": "把旧广播片段剪成一出粗糙的声音剧，让每个岗位都能在值班时听见同一个故事。",
+      "duration_hours": 2,
+      "requirements": [
+        {"type": "facility_level", "facility_id": "radio_room", "operator": "gte", "value": 1}
+      ],
+      "costs": [
+        {"target": "player.parts", "operation": "subtract", "amount": 1}
+      ],
+      "rewards": [
+        {"target": "shelter.hope", "operation": "add", "amount": 6},
+        {"target": "shelter.activity", "operation": "add", "amount": 7}
+      ],
+      "result_text": "第一集结束时，连守门的人都在通讯里追问：那个没说名字的旅人到底是谁。"
+    },
+    {
+      "activity_id": "corridor_drill",
+      "name": "走廊防卫演练",
+      "description": "用软垫和空罐模拟感染者突破，训练居民在狭窄通道中换位、救援与封门。",
+      "duration_hours": 3,
+      "requirements": [],
+      "costs": [
+        {"target": "player.parts", "operation": "subtract", "amount": 2}
+      ],
+      "rewards": [
+        {"target": "shelter.defense_damage", "operation": "add", "amount": 2},
+        {"target": "shelter.activity", "operation": "add", "amount": 5},
+        {"target": "shelter.hope", "operation": "add", "amount": 3}
+      ],
+      "result_text": "最后一次警报只用了四十秒就完成封锁。大家第一次相信自己不必永远躲着。"
+    },
+    {
+      "activity_id": "cooking_duel",
+      "name": "末日厨艺赛",
+      "description": "把同样的配给分给两组人，看看谁能把罐头和干粮变得更像一顿饭。",
+      "duration_hours": 2,
+      "requirements": [],
+      "costs": [
+        {"target": "player.food", "operation": "subtract", "amount": 5}
+      ],
+      "rewards": [
+        {"target": "shelter.group_hunger", "operation": "subtract", "amount": 8, "limit_to_available": true},
+        {"target": "shelter.activity", "operation": "add", "amount": 8},
+        {"target": "shelter.hope", "operation": "add", "amount": 5}
+      ],
+      "result_text": "豪菜坚持自己那锅黑色糊状物获得了精神胜利，评委们一致决定不讨论它。"
+    },
+    {
+      "activity_id": "room_mediation",
+      "name": "室友协调会",
+      "description": "让住民说清作息、噪声和相处矛盾，为下一次房间规划留下可执行的约定。",
+      "duration_hours": 1,
+      "requirements": [],
+      "costs": [],
+      "rewards": [
+        {"target": "shelter.activity", "operation": "add", "amount": 4},
+        {"target": "shelter.hope", "operation": "add", "amount": 4}
+      ],
+      "result_text": "争吵没有全部消失，但每个人都写下了自己愿意让步的一件事。"
+    },
+    {
+      "activity_id": "children_game_hour",
+      "name": "一小时游戏时间",
+      "description": "开放收藏的玩具和游戏机，让孩子与轮休人员短暂忘记外面的警报。",
+      "duration_hours": 1,
+      "requirements": [
+        {"type": "attribute", "target": "shelter.toys", "operator": "gte", "value": 1}
+      ],
+      "costs": [],
+      "rewards": [
+        {"target": "shelter.activity", "operation": "add", "amount": 10},
+        {"target": "shelter.hope", "operation": "add", "amount": 6}
+      ],
+      "result_text": "走廊里响起久违的笑声。输掉最后一局的人自愿多值了半班岗。"
     }
   ],
   "trade": {

@@ -69,6 +69,19 @@ export class ScrollRegion {
     this.setOffset(this.offsetY);
   }
 
+  /** 返回当前纵向滚动偏移，供页面刷新前保存瞬态阅读位置。 */
+  public getOffset(): number {
+    return this.offsetY;
+  }
+
+  /** 恢复先前保存的纵向偏移，并按新视口与内容高度重新约束。 */
+  public restoreOffset(offsetY: number): void {
+    if (!Number.isFinite(offsetY)) {
+      return;
+    }
+    this.setOffset(offsetY);
+  }
+
   /** 把指定后代滚入当前裁剪视口，供教程等程序化聚焦流程复用。 */
   public revealNode(
     nodeName: string,

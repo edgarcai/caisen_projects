@@ -118,20 +118,24 @@ function createV4StateWithCheckpoint(): Record<string, unknown> {
 /** 从当前状态和检查点快照删除仅属于 v5 的区划字段。 */
 function downgradeToV4(rawState: Record<string, unknown>): Record<string, unknown> {
   const state = structuredClone(rawState);
-  deleteV6Fields(state);
+  deletePostV5Fields(state);
   deleteDistrictFields(state);
   const checkpoint = asOptionalObject(state.checkpoint);
   const snapshot = checkpoint === null ? null : asObject(checkpoint.snapshot);
   if (snapshot !== null) {
-    deleteV6Fields(snapshot);
+    deletePostV5Fields(snapshot);
     deleteDistrictFields(snapshot);
   }
   return state;
 }
 
-/** 删除 v6 希望、寿命、伙伴管理和失败摘要字段。 */
-function deleteV6Fields(state: Record<string, unknown>): void {
+/** 删除 v6 及更高版本字段，构造精确的 v5 状态。 */
+function deletePostV5Fields(state: Record<string, unknown>): void {
+  delete state.archive_collection_totals;
   delete state.management_cycle_usage;
+  delete state.shelter_room_assignments;
+  delete state.encounter_battle;
+  delete state.pending_return_incident_id;
   delete asObject(state.inventory).equipped_transport_ids;
   delete state.last_expedition_failure;
   for (const player of state.players as Record<string, unknown>[]) {
@@ -275,7 +279,10 @@ describe("v5 区划存档不变量", () => {
     const storage = new MemoryStorage();
     const source = createGameApplication({ storage });
     source.startNewGame(["区划所长"], "single");
-    source.prepareExpedition("city_a", "city_a_district_e", [], {});
+    const player = source.state?.players[0];
+    if (player === undefined) throw new Error("测试所长不存在。");
+    player.food = 5;
+    source.prepareExpedition("city_a", "city_a_district_e", [], { food: 5 });
     source.saveGame();
 
     const restored = createGameApplication({ storage });

@@ -43,7 +43,7 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     const snapshot = adapter.getSnapshot();
 
     expect(snapshot.revision).toBe(0);
-    expect(snapshot.brand).toEqual({ title: "避难所", subtitle: "余烬纪元" });
+    expect(snapshot.brand).toEqual({ title: "避难所", subtitle: "往昔" });
     expect(snapshot.playerCounts).toEqual({
       single: 1,
       multiplayer: 2,
@@ -127,6 +127,61 @@ describe("GameUiAdapter 快照与订阅契约", () => {
     ]);
     expect(snapshot.companions).toHaveLength(4);
     expect(adapter.canLoadGame()).toBe(false);
+  });
+
+  it("开始手动遭遇战后快照降级经营投影且保留战斗读模型", () => {
+    const { adapter } = buildH5Harness();
+    adapter.execute({
+      type: "start_game",
+      mode: "single",
+      playerNames: ["战术所长"],
+    });
+    const preparation = adapter.getSnapshot().encounterPreparations.parking_horde;
+    if (preparation === undefined) throw new Error("战前整备快照缺失。");
+
+    const started = adapter.execute({
+      type: "encounter_start",
+      encounterId: "parking_horde",
+      roleIdsByMember: Object.fromEntries(
+        preparation.preparation.members.map((member) => [member.member_id, "assault"]),
+      ),
+      treatedMemberIds: [],
+    });
+    const commandSnapshot = requireSnapshot(started.snapshot);
+    const freshSnapshot = adapter.getSnapshot();
+
+    expect(started.accepted).toBe(true);
+    expect(commandSnapshot.encounterBattle?.state).toMatchObject({
+      encounter_id: "parking_horde",
+      outcome: "ongoing",
+    });
+    expect(freshSnapshot.encounterBattle).not.toBeNull();
+    expect(freshSnapshot.managementCategories).toEqual([]);
+    expect(freshSnapshot.actionGroups.flatMap((group) => group.actions)
+      .find((action) => action.id === "shelter_management"))
+      .toMatchObject({ disabled: true });
+  });
+
+  it("待裁决归来事项不会阻断快照且仍禁止经营入口", () => {
+    const { adapter, application } = buildH5Harness();
+    adapter.execute({
+      type: "start_game",
+      mode: "single",
+      playerNames: ["归队所长"],
+    });
+    const state = requireState(application);
+    state.pending_return_incident_id = "burst_pipe";
+
+    const snapshot = adapter.getSnapshot();
+
+    expect(snapshot.returnIncident).toMatchObject({
+      incidentId: "burst_pipe",
+      title: "生活区管线爆裂",
+    });
+    expect(snapshot.managementCategories).toEqual([]);
+    expect(snapshot.actionGroups.flatMap((group) => group.actions)
+      .find((action) => action.id === "shelter_management"))
+      .toMatchObject({ disabled: true });
   });
 
   it("未持有的城市通行道具与载具仍显示配置名称而非内部 ID", () => {
@@ -227,13 +282,13 @@ describe("GameUiAdapter 快照与订阅契约", () => {
       city.id,
       city.default_district_id,
     );
-    writerState.inventory.crafted_items.field_ration = 1;
+    requirePlayer(writerState).food = 3;
     writer.adapter.execute({
       type: "expedition_begin",
       cityId: city.id,
       districtId: district.id,
       companionIds: [],
-      carriedItems: { field_ration: 1 },
+      carriedItems: { food: 3 },
     });
     if (writerState.expedition === null) {
       throw new Error("测试远征没有成功建立。");
@@ -250,7 +305,7 @@ describe("GameUiAdapter 快照与订阅契约", () => {
       districtId: district.id,
     });
     expect(snapshot.expeditionStatus?.itemNames).toEqual({
-      field_ration: "行军口粮",
+      food: "密封食物",
       game_consoles: "游戏机",
     });
   });

@@ -18,7 +18,16 @@ export interface PageView {
   readonly root: LayaSpriteLike;
   /** 通知页面自己是否位于页面栈顶层，以清理瞬态交互。 */
   setActive?(active: boolean): void;
+  /** 在页面重建前导出不属于领域存档的轻量交互状态。 */
+  captureTransientState?(): PageTransientState;
+  /** 页面重建后恢复滚动位置等轻量交互状态。 */
+  restoreTransientState?(state: PageTransientState): void;
   destroy(): void;
+}
+
+/** 页面重建时允许保留的纯 UI 瞬态状态。 */
+export interface PageTransientState {
+  readonly scrollOffsetY?: number;
 }
 
 /** 二级页面表面在舞台中的纯几何结果。 */
@@ -167,6 +176,18 @@ export class PageScaffold implements PageView {
   /** 注册随页面一起释放的悬停计时器或其他轻量资源。 */
   public addDisposable(dispose: () => void): void {
     this.disposables.push(dispose);
+  }
+
+  /** 导出通用二级页的滚动位置，避免选择按钮后回到页面顶部。 */
+  public captureTransientState(): PageTransientState {
+    return { scrollOffsetY: this.scroll.getOffset() };
+  }
+
+  /** 在内容完成排版后恢复通用二级页的滚动位置。 */
+  public restoreTransientState(state: PageTransientState): void {
+    if (state.scrollOffsetY !== undefined) {
+      this.scroll.restoreOffset(state.scrollOffsetY);
+    }
   }
 
   /**

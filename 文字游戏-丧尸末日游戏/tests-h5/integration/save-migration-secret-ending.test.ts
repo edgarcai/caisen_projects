@@ -67,7 +67,7 @@ function prepareLinkedHiveSecretEnding(): ReturnType<typeof buildH5Harness> {
 }
 
 describe("H5 v1 存档迁移", () => {
-  it("通过适配器读取 v1 双人存档并经显式保存安全写回 v7", () => {
+  it("通过适配器读取 v1 双人存档并经显式保存安全写回 v8", () => {
     const source = buildH5Harness();
     source.application.startNewGame(["旧所长甲", "旧所长乙"], "multiplayer");
     const sourceState = requireState(source.application);
@@ -112,7 +112,7 @@ describe("H5 v1 存档迁移", () => {
       schema_version: number;
       game_state: Record<string, unknown>;
     };
-    expect(envelope.schema_version).toBe(7);
+    expect(envelope.schema_version).toBe(8);
     expect(envelope.game_state).toHaveProperty("story");
     expect(envelope.game_state).toHaveProperty("campaign");
     expect(envelope.game_state).not.toHaveProperty("ended");

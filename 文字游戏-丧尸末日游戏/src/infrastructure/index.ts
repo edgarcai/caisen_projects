@@ -12,3 +12,4 @@ export * from "./V3ToV4SaveMigrator";
 export * from "./V4ToV5SaveMigrator";
 export * from "./V5ToV6SaveMigrator";
 export * from "./V6ToV7SaveMigrator";
+export * from "./V7ToV8SaveMigrator";

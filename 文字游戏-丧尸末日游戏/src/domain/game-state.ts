@@ -1,4 +1,5 @@
 import { DomainError } from "./errors";
+import type { EncounterBattleState } from "./demo-systems";
 
 export type GameMode = "single" | "multiplayer" | "story" | "endless";
 
@@ -117,6 +118,9 @@ export interface ResearchState {
   completed_project_ids: string[];
 }
 
+/** 按配置化文献分类保存历史累计入库份数。 */
+export type ArchiveCollectionTotalsState = Record<string, number>;
+
 /** 一个配置化经营周期内已使用的次数。 */
 export interface ManagementCycleUsageState {
   cycle_index: number;
@@ -131,7 +135,9 @@ export interface ExpeditionState {
   companion_ids: string[];
   carried_items: Record<string, number>;
   loot: Record<string, number>;
+  /** v1-v8 存档兼容字段：当前表示由携带食物支撑的剩余行动数。 */
   remaining_steps: number;
+  /** v1-v8 存档兼容字段：当前表示出发时食物能支撑的总行动数。 */
   maximum_steps: number;
   events_resolved: number;
 }
@@ -146,8 +152,9 @@ export interface ExpeditionLossItemState {
   lost_quantity: number;
 }
 
-/** 步数耗尽后供失败页和存档共用的结构化摘要。 */
+/** 携带食物耗尽后供失败页和存档共用的结构化摘要。 */
 export interface ExpeditionFailureState {
+  /** 保留旧枚举值，使 v1-v8 存档无需破坏性迁移。 */
   reason: "steps_exhausted";
   kept_percent: number;
   health_before: number;
@@ -200,9 +207,13 @@ export interface RestorableGameState {
   weekly_archives: WeeklyArchiveState[];
   inventory: InventoryState;
   research: ResearchState;
+  archive_collection_totals: ArchiveCollectionTotalsState;
   management_cycle_usage: Record<string, ManagementCycleUsageState>;
   expedition: ExpeditionState | null;
   last_expedition_failure: ExpeditionFailureState | null;
+  shelter_room_assignments: Record<string, string[]>;
+  encounter_battle: EncounterBattleState | null;
+  pending_return_incident_id: string | null;
 }
 
 export interface CheckpointState {

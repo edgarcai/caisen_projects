@@ -1,3 +1,19 @@
+import type {
+  ShelterAssignmentOption,
+  ShelterLayoutConfig,
+  ShelterLayoutView,
+} from "../../domain/shelter-layout";
+import type { DistrictExplorationLayerProjection } from "../../domain/district-exploration-tree";
+import type {
+  UiArchiveCollectionPageView,
+  UiArchiveDocumentPageView,
+  UiArchiveStoragePageView,
+  UiEncounterBattleRuntimeView,
+  UiEncounterCatalogPageView,
+  UiEncounterPreparationRuntimeView,
+  UiReturnIncidentPageView,
+} from "../models/DemoSystemViewModels";
+
 /**
  * UI 可以展示的稳定页面标识。
  */
@@ -23,6 +39,15 @@ export type GameScreenId =
   | "companion_management_detail"
   | "companion_equipment"
   | "companion_interaction"
+  | "shelter_map"
+  | "shelter_room_planning"
+  | "archive_storage"
+  | "archive_collection"
+  | "archive_document"
+  | "encounter_catalog"
+  | "encounter_preparation"
+  | "encounter_battle"
+  | "return_incident"
   | "supplies"
   | "tutorial"
   | "message"
@@ -39,6 +64,7 @@ export type GameScreenId =
   | "expedition_city_detail"
   | "expedition_district_list"
   | "expedition_district_detail"
+  | "district_exploration_tree"
   | "expedition_prepare"
   | "expedition_status"
   | "expedition_failure"
@@ -525,6 +551,20 @@ export interface GameUiSnapshot {
   readonly battle: UiBattleView | null;
   readonly managementCategories: readonly UiManagementCategoryView[];
   readonly companions: readonly UiCompanionView[];
+  readonly shelterLayoutConfig: ShelterLayoutConfig;
+  readonly shelterLayout: ShelterLayoutView | null;
+  readonly shelterRoomAssignmentOptions: Readonly<
+    Record<string, readonly ShelterAssignmentOption[]>
+  >;
+  readonly archiveStorage: UiArchiveStoragePageView | null;
+  readonly archiveCollections: Readonly<Record<string, UiArchiveCollectionPageView>>;
+  readonly archiveDocuments: Readonly<Record<string, UiArchiveDocumentPageView>>;
+  readonly encounterCatalog: UiEncounterCatalogPageView | null;
+  readonly encounterPreparations: Readonly<
+    Record<string, UiEncounterPreparationRuntimeView>
+  >;
+  readonly encounterBattle: UiEncounterBattleRuntimeView | null;
+  readonly returnIncident: UiReturnIncidentPageView | null;
   readonly warehouseItems: readonly UiWarehouseItemView[];
   readonly transportLoadoutOptions: readonly UiTransportLoadoutOptionView[];
   readonly researchProjects: readonly UiResearchProjectView[];
@@ -577,6 +617,26 @@ export type GameUiCommand =
       readonly companionId: string;
       readonly interactionId: string;
     }
+  | {
+      readonly type: "shelter_room_assignment_change";
+      readonly residentId: string;
+      readonly targetRoomId: string | null;
+    }
+  | {
+      readonly type: "encounter_start";
+      readonly encounterId: string;
+      readonly roleIdsByMember: Readonly<Record<string, string>>;
+      readonly treatedMemberIds: readonly string[];
+    }
+  | {
+      readonly type: "encounter_action";
+      readonly action: "attack" | "guard" | "skill" | "item" | "retreat";
+      readonly actorId: string;
+      readonly abilityId?: string;
+      readonly targetId?: string;
+    }
+  | { readonly type: "encounter_finish" }
+  | { readonly type: "return_incident_choose"; readonly choiceId: string }
   | { readonly type: "story_choice"; readonly choiceId: string }
   | { readonly type: "exploration_prepare"; readonly cityId: string }
   | { readonly type: "exploration_resolve"; readonly choiceId: string }
@@ -631,4 +691,11 @@ export interface GameUiPort {
    * 查询当前浏览器是否存在可读取的存档。
    */
   canLoadGame(slotId?: number): MaybePromise<boolean>;
+
+  /** 按需读取一个区划当前层的稳定选项，不递归生成整棵树。 */
+  getDistrictExplorationLayer(
+    cityId: string,
+    districtId: string,
+    parentPath: readonly number[],
+  ): DistrictExplorationLayerProjection;
 }

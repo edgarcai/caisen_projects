@@ -7,6 +7,7 @@ import type {
   GameUiSnapshot,
   UiCompanionView,
 } from "../../src/ui/ports/GameUiPort";
+import type { DistrictExplorationTreeConfig } from "../../src/domain/district-exploration-tree";
 
 interface ConfiguredMode {
   readonly id: GameMode;
@@ -40,14 +41,10 @@ interface CampaignOptionConfig {
   readonly description: string;
 }
 
-interface CampaignTraitConfig extends CampaignOptionConfig {
-  readonly expedition_step_bonus: number;
-}
-
 interface V6GameConfig {
   readonly campaign_profiles: {
     readonly origins: readonly CampaignOptionConfig[];
-    readonly traits: readonly CampaignTraitConfig[];
+    readonly traits: readonly CampaignOptionConfig[];
   };
   readonly rules: {
     readonly player_counts: Readonly<Record<GameMode, unknown>>;
@@ -66,7 +63,8 @@ interface V6SurvivalConfig {
     readonly crafted_items: readonly WarehouseItemConfig[];
   };
   readonly expedition: {
-    readonly base_steps: number;
+    readonly action_food_item_id: string;
+    readonly food_units_per_action: number;
     readonly maximum_carried_units: number;
     readonly forced_return_keep_percent: number;
     readonly forced_return_health_range: readonly [number, number];
@@ -101,8 +99,6 @@ const DESKTOP_PROJECT = "desktop";
 const MOBILE_PROJECT = "mobile";
 const REQUIRED_MODE_COUNT = 4;
 const REQUIRED_ORIGIN_COUNT = 5;
-const REQUIRED_BASE_STEPS = 10;
-const REQUIRED_METICULOUS_STEPS = 9;
 
 /** 读取一份仓库权威 JSON 配置，避免测试复制产品 ID 与数值。 */
 function loadConfig(relativePath: string): unknown {
@@ -116,6 +112,9 @@ const survivalConfig = loadConfig(
   "config/survival_systems.json",
 ) as V6SurvivalConfig;
 const storyConfig = loadConfig("config/story.json") as V6StoryConfig;
+const districtExplorationTreeConfig = loadConfig(
+  "config/district_exploration_tree.json",
+) as DistrictExplorationTreeConfig;
 const qualityConfig = webConfig.quality_assurance;
 
 /**
@@ -611,7 +610,63 @@ async function exerciseCompanionManagement(
   };
 }
 
-/** 用真实 UI 从本城首个区划开始一次无同行、无携带远征。 */
+/** 按区划树稳定 ID 规则构造指定深度的首个选项。 */
+function buildFirstDistrictTreeNodeId(
+  cityId: string,
+  districtId: string,
+  depth: number,
+): string {
+  const { identity } = districtExplorationTreeConfig;
+  const encodedPath = Array.from(
+    { length: depth },
+    () => String(1).padStart(identity.index_width, "0"),
+  ).join(identity.path_separator);
+  return [
+    identity.node_id_prefix,
+    cityId,
+    districtId,
+    encodedPath,
+  ].join(identity.segment_separator);
+}
+
+/** 逐层选择区划树首项，直到服务端确定的稳定终点。 */
+async function traverseDistrictExplorationTree(
+  page: Page,
+  cityId: string,
+  districtId: string,
+): Promise<void> {
+  const maximumDepth = districtExplorationTreeConfig.depth_policy.maximum_depth;
+  for (let depth = 1; depth <= maximumDepth; depth += 1) {
+    const nodeId = buildFirstDistrictTreeNodeId(cityId, districtId, depth);
+    await clickLayaNode(
+      page,
+      `page-district-exploration-tree-option-${nodeId}`,
+    );
+    const nextNodeId = buildFirstDistrictTreeNodeId(
+      cityId,
+      districtId,
+      depth + 1,
+    );
+    await expect.poll(async () => {
+      const screen = await page.evaluate(() =>
+        document.body.dataset.gameScreen ?? null,
+      );
+      if (screen === "expedition_prepare") return true;
+      if (screen !== "district_exploration_tree") return false;
+      return readLayaNodeBounds(
+        page,
+        `page-district-exploration-tree-option-${nextNodeId}`,
+      ).then((bounds) => bounds !== null);
+    }).toBe(true);
+    const screen = await page.evaluate(() =>
+      document.body.dataset.gameScreen ?? null,
+    );
+    if (screen === "expedition_prepare") return;
+  }
+  throw new Error("区划探索树超过配置最大深度后仍未进入远征整备。");
+}
+
+/** 用真实 UI 从本城首个区划开始一次无同行、足额携粮远征。 */
 async function beginUnassistedHomeExpedition(
   page: Page,
 ): Promise<NonNullable<GameUiSnapshot["expeditionStatus"]>> {
@@ -639,12 +694,23 @@ async function beginUnassistedHomeExpedition(
   );
   await waitForScreen(page, "expedition_district_detail");
   await clickLayaNode(page, "page-expedition-district-detail-confirm");
-  await waitForScreen(page, "expedition_prepare");
+  await waitForScreen(page, "district_exploration_tree");
+  await traverseDistrictExplorationTree(page, homeCity.id, district.id);
+  const requiredActions = homeCity.travelStepCost + district.eventStepCost + 1;
+  const requiredFoodQuantity = requiredActions
+    * survivalConfig.expedition.food_units_per_action;
+  for (let quantity = 0; quantity < requiredFoodQuantity; quantity += 1) {
+    await clickScrollableLayaNode(
+      page,
+      `page-expedition-item-${survivalConfig.expedition.action_food_item_id}`,
+      "page-expedition-prepare-scroll",
+    );
+  }
   await clickLayaNode(page, "page-expedition-prepare-begin");
   await waitForScreen(page, "exploration_event");
   const status = (await readDebugSnapshot(page)).expeditionStatus;
   if (status === null) {
-    throw new Error("远征开始后未生成步数状态。");
+    throw new Error("远征开始后未生成食物行动状态。");
   }
   return status;
 }
@@ -776,6 +842,7 @@ test("五个起源与普通入口模式均由建档 UI 暴露并可真实进入�
 test("伙伴档案可查看立绘、完成配装与互动，手机可打开完整通讯", async ({
   page,
 }, testInfo) => {
+  test.slow();
   test.skip(!TARGET_PROJECTS.has(testInfo.project.name), "仅在桌面与标准手机项目验证伙伴闭环");
   const runtimeErrors: string[] = [];
   page.on("pageerror", (error) => { runtimeErrors.push(error.message); });
@@ -833,38 +900,32 @@ test("伙伴档案可查看立绘、完成配装与互动，手机可打开完�
   expect(runtimeErrors).toEqual([]);
 });
 
-test("基础十步与谨慎周密九步生效，零步数强制返程结算 80% 损失", async ({
+test("携带食物决定行动次数，食物耗尽强制返程结算 80% 损失", async ({
   page,
 }, testInfo) => {
   test.slow();
   test.skip(testInfo.project.name !== DESKTOP_PROJECT, "仅在桌面基准项目验证可控远征失败链路");
   const runtimeErrors: string[] = [];
   page.on("pageerror", (error) => { runtimeErrors.push(error.message); });
-  const cautiousTrait = gameConfig.campaign_profiles.traits.find(
-    (trait) => trait.expedition_step_bonus < 0,
-  );
   const carriedItem = survivalConfig.warehouse.resource_items.find(
-    (item) => item.state_target === "player.food",
+    (item) => item.item_id === survivalConfig.expedition.action_food_item_id,
   );
   const lootItem = survivalConfig.warehouse.resource_items.find(
     (item) => item.state_target === "player.medical_supplies",
   );
-  if (cautiousTrait === undefined || carriedItem === undefined || lootItem === undefined) {
-    throw new Error("配置缺少谨慎特性或远征结算物资。");
+  if (carriedItem === undefined || lootItem === undefined) {
+    throw new Error("配置缺少远征行动食物或结算物资。");
   }
-  expect(survivalConfig.expedition.base_steps).toBe(REQUIRED_BASE_STEPS);
-  expect(
-    survivalConfig.expedition.base_steps + cautiousTrait.expedition_step_bonus,
-  ).toBe(REQUIRED_METICULOUS_STEPS);
 
   await bootFreshGame(page);
-  await openNewGameSetup(page, "周密行动者");
-  await selectSetupOption(page, "trait", cautiousTrait.id);
-  await submitNewGame(page);
+  await startDefaultGame(page, "携粮行动者");
   const expeditionStatus = await beginUnassistedHomeExpedition(page);
-  expect(expeditionStatus.maximumSteps).toBe(REQUIRED_METICULOUS_STEPS);
+  const initialMaximumActions = expeditionStatus.maximumSteps;
+  expect(initialMaximumActions).toBeGreaterThan(0);
   expect(expeditionStatus.companionIds).toEqual([]);
-  expect(expeditionStatus.carriedItems).toEqual({});
+  expect(
+    expeditionStatus.carriedItems[survivalConfig.expedition.action_food_item_id],
+  ).toBeGreaterThan(0);
 
   await saveToFirstSlot(page);
   await seedExhaustedExpedition(
@@ -877,7 +938,7 @@ test("基础十步与谨慎周密九步生效，零步数强制返程结算 80% 
   await waitForScreen(page, "expedition_status");
   const exhaustedStatus = (await readDebugSnapshot(page)).expeditionStatus;
   expect(exhaustedStatus?.remainingSteps).toBe(0);
-  expect(exhaustedStatus?.maximumSteps).toBe(REQUIRED_METICULOUS_STEPS);
+  expect(exhaustedStatus?.maximumSteps).toBe(initialMaximumActions);
   await clickLayaNode(page, "page-expedition-status-continue");
   await waitForScreen(page, "expedition_failure");
 
@@ -924,5 +985,11 @@ test("基础十步与谨慎周密九步生效，零步数强制返程结算 80% 
     .not.toBeNull();
   expect(await readLayaNodeBounds(page, "page-expedition-failure-return"))
     .not.toBeNull();
+  const queuedReturnIncident = (await readDebugSnapshot(page)).returnIncident;
+  await clickLayaNode(page, "page-expedition-failure-return");
+  await waitForScreen(
+    page,
+    queuedReturnIncident === null ? "dashboard" : "return_incident",
+  );
   expect(runtimeErrors).toEqual([]);
 });

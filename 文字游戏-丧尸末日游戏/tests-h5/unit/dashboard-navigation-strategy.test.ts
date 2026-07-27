@@ -47,6 +47,9 @@ describe("局内仪表盘导航策略", () => {
       "story",
       "explore",
       "shelter_management",
+      "shelter_map",
+      "archive_storage",
+      "encounter_battle",
       "companions",
       "companion_management",
       "transport_management",
@@ -80,6 +83,10 @@ describe("局内仪表盘导航策略", () => {
     expect(resolveDashboardNavigationIntent("companion_management")).toEqual({
       type: "push_screen",
       screen: "companion_management",
+    });
+    expect(resolveDashboardNavigationIntent("shelter_map")).toEqual({
+      type: "push_screen",
+      screen: "shelter_map",
     });
     expect(resolveDashboardNavigationIntent("transport_management")).toEqual({
       type: "push_screen",

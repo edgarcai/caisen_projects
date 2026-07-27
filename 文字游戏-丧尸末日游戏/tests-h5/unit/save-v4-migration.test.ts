@@ -5,6 +5,7 @@ import v3ToV4MigrationDocument from "../../config/save_migrations/v3_to_v4.json"
 import v4ToV5MigrationDocument from "../../config/save_migrations/v4_to_v5.json";
 import v5ToV6MigrationDocument from "../../config/save_migrations/v5_to_v6.json";
 import v6ToV7MigrationDocument from "../../config/save_migrations/v6_to_v7.json";
+import v7ToV8MigrationDocument from "../../config/save_migrations/v7_to_v8.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import { createGameApplication } from "../../src/application";
@@ -18,6 +19,7 @@ import type {
   V4ToV5SaveMigrationConfig,
   V5ToV6SaveMigrationConfig,
   V6ToV7SaveMigrationConfig,
+  V7ToV8SaveMigrationConfig,
 } from "../../src/domain/content";
 import type {
   GameState,
@@ -33,6 +35,7 @@ import {
   V2ToV3SaveMigrator,
   V5ToV6SaveMigrator,
   V6ToV7SaveMigrator,
+  V7ToV8SaveMigrator,
 } from "../../src/infrastructure";
 import type { V6ToV7SaveMigrationContext } from "../../src/infrastructure";
 import type { SaveDocument } from "../../src/infrastructure/SaveMigration";
@@ -48,6 +51,7 @@ const v3ToV4Config: V3ToV4SaveMigrationConfig = v3ToV4MigrationDocument;
 const v4ToV5Config: V4ToV5SaveMigrationConfig = v4ToV5MigrationDocument;
 const v5ToV6Config: V5ToV6SaveMigrationConfig = v5ToV6MigrationDocument;
 const v6ToV7Config: V6ToV7SaveMigrationConfig = v6ToV7MigrationDocument;
+const v7ToV8Config: V7ToV8SaveMigrationConfig = v7ToV8MigrationDocument;
 
 /** 使用权威内容构造 v6→v7 迁移上下文。 */
 function createV7MigrationContext(): V6ToV7SaveMigrationContext {
@@ -58,12 +62,13 @@ function createV7MigrationContext(): V6ToV7SaveMigrationContext {
   };
 }
 
-/** 把 v6 文档提升到当前 v7，供语义校验复用。 */
+/** 把 v6 文档连续提升到当前 v8，供语义校验复用。 */
 function migrateToCurrent(document: Readonly<SaveDocument>): SaveDocument {
-  return new V6ToV7SaveMigrator(
+  const v7Document = new V6ToV7SaveMigrator(
     v6ToV7Config,
     createV7MigrationContext(),
   ).migrate(document);
+  return new V7ToV8SaveMigrator(v7ToV8Config).migrate(v7Document);
 }
 
 /** 为状态夹具提供不产生外部副作用的存档端口。 */
@@ -123,12 +128,16 @@ function createCurrentState(): GameState {
   return structuredClone(state);
 }
 
-/** 删除一份可回档 v4 状态中只属于 v4 的字段。 */
+/** 删除 v4 及更高版本字段，构造精确的 v3 可恢复状态。 */
 function downgradeRestorableState(
   rawState: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> {
   const state: Record<string, unknown> = structuredClone(rawState);
+  delete state.archive_collection_totals;
   delete state.management_cycle_usage;
+  delete state.shelter_room_assignments;
+  delete state.encounter_battle;
+  delete state.pending_return_incident_id;
   delete asObject(state.inventory).equipped_transport_ids;
   delete state.last_expedition_failure;
   for (const player of state.players as Record<string, unknown>[]) {
@@ -248,7 +257,7 @@ describe("v3 到 v4 存档迁移", () => {
     );
   });
 
-  it("按 1→2→3→4→5→6→7 连续迁移老存档并通过当前语义校验", () => {
+  it("按 1→2→3→4→5→6→7→8 连续迁移老存档并通过当前语义校验", () => {
     const validator = createValidator();
     let document: SaveDocument = {
       schema_version: 1,
@@ -268,7 +277,7 @@ describe("v3 到 v4 存档迁移", () => {
 
     const restored = validator.parse(document.game_state);
 
-    expect(document.schema_version).toBe(7);
+    expect(document.schema_version).toBe(8);
     expect(restored.turn_number).toBe(9);
     expect(restored.story.flags).toContain("legacy_save");
     expect(restored.campaign).toEqual(v3ToV4Config.state_defaults.campaign);

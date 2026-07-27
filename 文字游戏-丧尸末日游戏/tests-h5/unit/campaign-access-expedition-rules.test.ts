@@ -370,23 +370,16 @@ describe("远征路费与首事件步数", () => {
         scenario.cityId,
         district.id,
         [],
-        {},
+        { food: 12 },
       );
       const status = application.expeditionStatus();
       if (status === null) {
         throw new Error(`远征 ${scenario.cityId} 未创建状态。`);
       }
-      const trait = application.content.game.campaign_profiles.traits.find(
-        (candidate) => candidate.id === state.campaign.trait_id,
-      );
-      if (trait === undefined) {
-        throw new Error("当前开局特性未在配置中声明。");
-      }
       const travelCost = configuredTravelCost(application, scenario.relation);
       const eventStepCost = survivalSystemsDocument.expedition.event_step_cost
         + district.event_step_cost;
-      const expectedMaximum =
-        survivalSystemsDocument.expedition.base_steps + trait.expedition_step_bonus;
+      const expectedMaximum = 12;
       const expectedRemaining =
         expectedMaximum -
         travelCost -

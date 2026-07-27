@@ -16,8 +16,13 @@ export interface GameRouteContext {
   readonly optionId?: string;
   readonly companionId?: string;
   readonly equipmentSlot?: UiCompanionEquipmentSlot;
+  readonly roomId?: string;
+  readonly collectionId?: string;
+  readonly documentId?: string;
+  readonly encounterId?: string;
   readonly cityId?: string;
   readonly districtId?: string;
+  readonly districtExplorationPath?: readonly number[];
   readonly document?: UiDocumentView;
 }
 

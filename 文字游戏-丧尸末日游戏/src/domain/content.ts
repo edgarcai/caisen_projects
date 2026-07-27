@@ -642,6 +642,19 @@ export interface V6ToV7SaveMigrationConfig {
   };
 }
 
+/** v7 存档补齐房间规划、遭遇战与归来事项字段的迁移配置。 */
+export interface V7ToV8SaveMigrationConfig {
+  schema_version: number;
+  from_version: number;
+  to_version: number;
+  state_defaults: {
+    archive_collection_totals: Readonly<Record<string, number>>;
+    shelter_room_assignments: Readonly<Record<string, readonly string[]>>;
+    encounter_battle: null;
+    pending_return_incident_id: null;
+  };
+}
+
 /** 格式化 JSON 文案中的简单花括号占位符。 */
 export function formatTemplate(
   template: string,

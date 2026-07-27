@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "node_id_prefix": "district-path",
+    "segment_separator": "~",
+    "path_separator": ".",
+    "index_width": 2,
+    "seed_salt": "embers-district-tree-v1"
+  },
+  "depth_policy": {
+    "minimum_depth": 4,
+    "maximum_depth": 5
+  },
+  "projection": {
+    "root_path_label": "区划入口",
+    "display_path_separator": " → ",
+    "layer_title_template": "{district_name} · 第 {depth} 层探索",
+    "layer_description_template": "[待补文本] 当前路径：{path}。本层提供 {child_count} 个可选方向。"
+  },
+  "layers": [
+    {
+      "depth": 1,
+      "option_count": 40,
+      "label_templates": [
+        "[待补] {district_name}入口 {index}",
+        "[待补] {district_name}未知地点 {index}",
+        "[待补] {district_name}行动线 {index}"
+      ],
+      "description_templates": [
+        "[待补文本] {city_name}{district_name}的一层探索入口，稳定路径 {path}。",
+        "[待补文本] 此入口等待后续剧情与地点文案，节点 {node_id}。"
+      ]
+    },
+    {
+      "depth": 2,
+      "option_count": 20,
+      "label_templates": [
+        "[待补] 二层分支 {path}",
+        "[待补] 深入方向 {index}",
+        "[待补] 现场选择 {index}"
+      ],
+      "description_templates": [
+        "[待补文本] 从上层入口继续深入，当前稳定路径 {path}。",
+        "[待补文本] 可替换为搜索、交涉、绕行或调查内容。"
+      ]
+    },
+    {
+      "depth": 3,
+      "option_count": 10,
+      "label_templates": [
+        "[待补] 三层行动 {index}",
+        "[待补] 线索方向 {path}",
+        "[待补] 风险选择 {index}"
+      ],
+      "description_templates": [
+        "[待补文本] 三层分支占位，可配置为风险、资源或人物事件。",
+        "[待补文本] 当前路径 {path}，后续文案可直接替换模板。"
+      ]
+    },
+    {
+      "depth": 4,
+      "option_count": 10,
+      "label_templates": [
+        "[待补] 四层决策 {index}",
+        "[待补] 深处现场 {path}",
+        "[待补] 关键行动 {index}"
+      ],
+      "description_templates": [
+        "[待补文本] 四层节点可能是终点，也可能继续进入第五层。",
+        "[待补文本] 区划 {district_name}，当前稳定路径 {path}。"
+      ]
+    },
+    {
+      "depth": 5,
+      "option_count": 10,
+      "label_templates": [
+        "[待补] 五层结局 {index}",
+        "[待补] 路径终点 {path}",
+        "[待补] 最终处置 {index}"
+      ],
+      "description_templates": [
+        "[待补文本] 此处为当前探索链终点，等待后续结算内容。",
+        "[待补文本] 最终节点 {node_id}，可替换为奖励、战斗或剧情结果。"
+      ]
+    }
+  ]
+}

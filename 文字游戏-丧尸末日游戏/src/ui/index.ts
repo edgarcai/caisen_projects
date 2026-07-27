@@ -25,6 +25,19 @@ export {
   resolvePublisherLogoAlpha,
 } from "./pages/PublisherSplashPage";
 export type { PublisherSplashPageView } from "./pages/PublisherSplashPage";
+export {
+  createShelterMapPage,
+  createShelterRoomPlanningPage,
+  resolveShelterMapGeometry,
+} from "./pages/ShelterMapPage";
+export * from "./models/DemoSystemPresenters";
+export * from "./models/DemoSystemViewModels";
+export * from "./pages/DemoSystemsPages";
+export type {
+  ShelterMapActions,
+  ShelterMapGeometry,
+  ShelterRoomPlanningActions,
+} from "./pages/ShelterMapPage";
 export type * from "./ports/GameUiPort";
 export type * from "./ports/UiSettingsPort";
 export type { LayaStageLike } from "./laya/LayaRuntime";

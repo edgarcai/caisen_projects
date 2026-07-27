@@ -278,6 +278,46 @@ describe("ESC 菜单滚轮与触控拖动", () => {
     region.destroy();
   });
 
+  it("页面重建后可恢复阅读位置并按新内容高度重新钳制", () => {
+    const { runtime } = createScrollRuntime();
+    const firstParent = new FakeNode();
+    const firstRegion = new ScrollRegion(
+      runtime,
+      firstParent as unknown as LayaNodeLike,
+      "battle-scroll-before-refresh",
+      0,
+      0,
+      320,
+      200,
+      config.controls.scroll_step,
+      config.controls.drag_threshold,
+    );
+    firstRegion.setContentHeight(800);
+    firstRegion.restoreOffset(360);
+    const savedOffset = firstRegion.getOffset();
+    firstRegion.destroy();
+
+    const secondParent = new FakeNode();
+    const secondRegion = new ScrollRegion(
+      runtime,
+      secondParent as unknown as LayaNodeLike,
+      "battle-scroll-after-refresh",
+      0,
+      0,
+      320,
+      200,
+      config.controls.scroll_step,
+      config.controls.drag_threshold,
+    );
+    secondRegion.setContentHeight(500);
+    secondRegion.restoreOffset(savedOffset);
+
+    expect(savedOffset).toBe(360);
+    expect(secondRegion.getOffset()).toBe(300);
+    expect(secondRegion.content.y).toBe(-300);
+    secondRegion.destroy();
+  });
+
   it("教程目标位于滚动区外时会自动滚入当前视口", () => {
     const { runtime } = createScrollRuntime();
     const parent = new FakeNode();

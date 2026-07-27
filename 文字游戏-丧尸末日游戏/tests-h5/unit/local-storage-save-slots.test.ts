@@ -140,6 +140,10 @@ function createState(options: StateOptions = {}): GameState {
     research: {
       completed_project_ids: [],
     },
+    archive_collection_totals: {
+      newspapers: 0,
+      books: 0,
+    },
     management_cycle_usage: {},
     expedition: {
       city_id: "city_a",
@@ -154,6 +158,9 @@ function createState(options: StateOptions = {}): GameState {
       events_resolved: 1,
     },
     last_expedition_failure: null,
+    shelter_room_assignments: {},
+    encounter_battle: null,
+    pending_return_incident_id: null,
   };
 }
 

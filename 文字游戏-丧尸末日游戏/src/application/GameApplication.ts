@@ -1,4 +1,17 @@
 import { GameApplicationError } from "../domain/errors";
+import type {
+  ArchiveCollectionOverview,
+  ArchiveDocumentConfig,
+  ArchiveDocumentListItem,
+  EncounterAvailableAction,
+  EncounterBattleCommand,
+  EncounterBattleState,
+  EncounterDefinitionConfig,
+  EncounterEnemyIntentView,
+  EncounterPreparationPlan,
+  EncounterPreparationSnapshot,
+  ReturnIncidentPrompt,
+} from "../domain/demo-systems";
 import {
   activePlayer,
   cloneGameState,
@@ -33,6 +46,12 @@ import type {
   WarehouseItemView,
 } from "../domain/survival-systems";
 import {
+  type ShelterAssignmentOption,
+  type ShelterLayoutConfig,
+  type ShelterLayoutView,
+} from "../domain/shelter-layout";
+import type { DistrictExplorationLayerProjection } from "../domain/district-exploration-tree";
+import {
   actionReport,
   type ActionReport,
   type CombatAction,
@@ -49,6 +68,8 @@ import type {
   CityAccessDecision,
   CombatService,
   CompanionManagementService,
+  DemoSystemsCoordinator,
+  DistrictExplorationTreeService,
   ExpeditionService,
   ExplorationService,
   GameContent,
@@ -59,6 +80,8 @@ import type {
   ResearchCraftingService,
   ResolvedCampaignProfile,
   ShelterService,
+  ShelterLayoutService,
+  ShelterLayoutStateProjector,
   StoryService,
   TransportLoadoutService,
 } from "../services";
@@ -80,6 +103,9 @@ export class GameApplication {
   private readonly story: StoryService;
   private readonly combat: CombatService;
   private readonly shelter: ShelterService;
+  private readonly shelterLayout: ShelterLayoutService;
+  private readonly shelterLayoutState: ShelterLayoutStateProjector;
+  private readonly demoSystems: DemoSystemsCoordinator;
   private readonly companionManagement: CompanionManagementService;
   private readonly chronicle: ChronicleService;
   private readonly inventory: InventoryService;
@@ -87,6 +113,7 @@ export class GameApplication {
   private readonly researchCrafting: ResearchCraftingService;
   private readonly transportLoadout: TransportLoadoutService;
   private readonly expedition: ExpeditionService;
+  private readonly districtExplorationTree: DistrictExplorationTreeService;
   private readonly campaignProfiles: CampaignProfileService;
   private readonly modeCapabilities: GameModeCapabilityPolicy;
   private readonly rules: GameRules;
@@ -101,6 +128,9 @@ export class GameApplication {
     story: StoryService,
     combat: CombatService,
     shelter: ShelterService,
+    shelterLayout: ShelterLayoutService,
+    shelterLayoutState: ShelterLayoutStateProjector,
+    demoSystems: DemoSystemsCoordinator,
     companionManagement: CompanionManagementService,
     chronicle: ChronicleService,
     inventory: InventoryService,
@@ -108,6 +138,7 @@ export class GameApplication {
     researchCrafting: ResearchCraftingService,
     transportLoadout: TransportLoadoutService,
     expedition: ExpeditionService,
+    districtExplorationTree: DistrictExplorationTreeService,
     campaignProfiles: CampaignProfileService,
     modeCapabilities: GameModeCapabilityPolicy,
     rules: GameRules,
@@ -120,6 +151,9 @@ export class GameApplication {
     this.story = story;
     this.combat = combat;
     this.shelter = shelter;
+    this.shelterLayout = shelterLayout;
+    this.shelterLayoutState = shelterLayoutState;
+    this.demoSystems = demoSystems;
     this.companionManagement = companionManagement;
     this.chronicle = chronicle;
     this.inventory = inventory;
@@ -127,6 +161,7 @@ export class GameApplication {
     this.researchCrafting = researchCrafting;
     this.transportLoadout = transportLoadout;
     this.expedition = expedition;
+    this.districtExplorationTree = districtExplorationTree;
     this.campaignProfiles = campaignProfiles;
     this.modeCapabilities = modeCapabilities;
     this.rules = rules;
@@ -197,11 +232,18 @@ export class GameApplication {
       checkpoint: structuredClone(defaults.checkpoint),
       inventory: structuredClone(defaults.inventory),
       research: structuredClone(defaults.research),
+      archive_collection_totals: {},
       management_cycle_usage: structuredClone(defaults.management_cycle_usage),
       expedition: structuredClone(defaults.expedition),
       last_expedition_failure: structuredClone(defaults.last_expedition_failure),
+      shelter_room_assignments: {},
+      encounter_battle: null,
+      pending_return_incident_id: null,
     };
+    this.demoSystems.initializeArchiveProgress(initialState);
     this.campaignProfiles.applyStartingEffects(initialState, resolvedProfile);
+    initialState.shelter_room_assignments =
+      this.shelterLayoutState.createDefaultAssignments(initialState);
     this.rules.normalize(initialState);
     this.repository.selectSlot(setup.saveSlotId);
     this.state = initialState;
@@ -272,6 +314,7 @@ export class GameApplication {
       this.content.boss(candidate.battle.boss_id);
       if (!candidate.battle.finished) this.combat.availableActions(candidate);
     }
+    this.demoSystems.validatePersistentState(candidate);
     this.state = candidate;
     this.achievements.evaluate(candidate);
     return actionReport(
@@ -422,7 +465,7 @@ export class GameApplication {
     return this.transportLoadout.options(this.requireState());
   }
 
-  /** 返回当前可加入远征的伙伴及其词条步数。 */
+  /** 返回当前可加入远征的伙伴及其词条摘要。 */
   public expeditionCompanions(): readonly ExpeditionCompanionView[] {
     return this.expedition.companionOptions(this.requireState());
   }
@@ -432,17 +475,31 @@ export class GameApplication {
     return this.expedition.carryItemOptions(this.requireState());
   }
 
-  /** 返回指定城市区划一次探索事件的真实总步数。 */
+  /** 返回指定城市区划一次探索事件的配置化行动消耗。 */
   public expeditionEventStepCost(cityId: string, districtId: string): number {
     return this.expedition.eventStepCost(cityId, districtId);
   }
 
-  /** 返回当前远征步数、队伍、携带物和战利品摘要。 */
+  /** 按城市、区划和父路径懒投影当前一层探索选项。 */
+  public districtExplorationLayer(
+    cityId: string,
+    districtId: string,
+    parentPath: readonly number[],
+  ): DistrictExplorationLayerProjection {
+    this.requireState();
+    return this.districtExplorationTree.projectChildren(
+      cityId,
+      districtId,
+      parentPath,
+    );
+  }
+
+  /** 返回当前远征行动、队伍、携带物和战利品摘要。 */
   public expeditionStatus(): ExpeditionStatusView | null {
     return this.expedition.status(this.requireState());
   }
 
-  /** 返回最近一次步数耗尽强制返程的结构化损失。 */
+  /** 返回最近一次食物耗尽强制返程的结构化损失。 */
   public lastExpeditionFailure(): ExpeditionFailureState | null {
     return structuredClone(this.requireState().last_expedition_failure);
   }
@@ -539,7 +596,7 @@ export class GameApplication {
     );
   }
 
-  /** 在剩余步数允许时继续探索，不足时由远征服务强制返程。 */
+  /** 在携带食物足够时继续探索，不足时由远征服务强制返程。 */
   public continueExpedition(): ActionReport {
     const working = cloneGameState(this.requireFreePlayableState());
     const event = this.prepareNextExpeditionEvent(working);
@@ -549,11 +606,13 @@ export class GameApplication {
     });
   }
 
-  /** 在尚有步数时沿标记路线安全返回避难所。 */
+  /** 在尚有携带食物时沿标记路线安全返回避难所。 */
   public returnExpeditionSafely(): ActionReport {
     const working = cloneGameState(this.requireFreePlayableState());
     const resolution = this.expedition.safeReturn(working);
-    return this.commitAction(working, [...resolution.messages], {
+    const messages = [...resolution.messages];
+    this.queueReturnIncident(working, messages);
+    return this.commitAction(working, messages, {
       consumesTurn: false,
       actionType: "exploration",
     });
@@ -571,7 +630,13 @@ export class GameApplication {
     }
     if (state.expedition === null) {
       const districtId = this.content.city(cityId).default_district_id;
-      const preparation = this.expedition.prepare(state, cityId, districtId, [], {});
+      const preparation = this.expedition.prepare(
+        state,
+        cityId,
+        districtId,
+        [],
+        this.expedition.legacyAutomaticFoodCarry(state),
+      );
       if (!preparation.applied) {
         throw new GameApplicationError(preparation.messages.join("\n"));
       }
@@ -610,10 +675,12 @@ export class GameApplication {
     const expeditionResolution = working.expedition === null
       ? { messages: [] as readonly string[] }
       : this.expedition.completeEvent(beforeEvent, working);
-    return this.commitAction(working, [
+    const messages = [
       resolution.message,
       ...expeditionResolution.messages,
-    ], {
+    ];
+    if (working.expedition === null) this.queueReturnIncident(working, messages);
+    return this.commitAction(working, messages, {
       consumesTurn: true,
       actionType: "exploration",
     });
@@ -635,6 +702,7 @@ export class GameApplication {
     working.pending_exploration = null;
     if (working.expedition !== null) {
       messages.push(...this.expedition.safeReturn(working).messages);
+      this.queueReturnIncident(working, messages);
     }
     return this.commitAction(working, messages, {
       consumesTurn: true,
@@ -650,6 +718,153 @@ export class GameApplication {
   /** 返回人口、设施等级与当前可执行计划总览。 */
   public shelterOverview(): string {
     return this.shelter.overview(this.requireState());
+  }
+
+  /** 返回横切面与房间规划页共用的只读配置。 */
+  public shelterLayoutConfig(): ShelterLayoutConfig {
+    return this.shelterLayout.configuration();
+  }
+
+  /** 把当前人员、设施与资源投影为避难所横切面。 */
+  public shelterLayoutView(): ShelterLayoutView {
+    const state = this.requireState();
+    return this.shelterLayout.createView(
+      state.shelter_room_assignments,
+      this.shelterLayoutState.createContext(state),
+    );
+  }
+
+  /** 返回指定房间的全部调度候选项及阻断原因。 */
+  public shelterRoomAssignmentOptions(
+    roomId: string,
+  ): readonly ShelterAssignmentOption[] {
+    const state = this.requireState();
+    return this.shelterLayout.assignmentOptions(
+      state.shelter_room_assignments,
+      roomId,
+      this.shelterLayoutState.createContext(state),
+    );
+  }
+
+  /** 原子调入、调离一名人员，不消耗世界回合。 */
+  public changeShelterRoomAssignment(
+    residentId: string,
+    targetRoomId: string | null,
+  ): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    const resolution = this.shelterLayout.planAssignment(
+      working.shelter_room_assignments,
+      residentId,
+      targetRoomId,
+      this.shelterLayoutState.createContext(working),
+    );
+    if (!resolution.applied) {
+      return actionReport([resolution.message], false);
+    }
+    working.shelter_room_assignments = resolution.assignments;
+    return this.commitAction(working, [resolution.message], {
+      consumesTurn: false,
+    });
+  }
+
+  /** 返回配置化遭遇战目录，供无进行中战斗时选择。 */
+  public encounterCatalog(): readonly EncounterDefinitionConfig[] {
+    return this.demoSystems.encounterCatalog();
+  }
+
+  /** 返回当前遭遇战的隔离副本，避免展示层意外修改存档。 */
+  public encounterBattleState(): EncounterBattleState | null {
+    const battle = this.requireState().encounter_battle;
+    return battle === null ? null : structuredClone(battle);
+  }
+
+  /** 返回一场遭遇的战前职责、队员生命和医疗库存快照。 */
+  public encounterPreparation(encounterId: string): EncounterPreparationSnapshot {
+    return this.demoSystems.encounterPreparation(this.requireState(), encounterId);
+  }
+
+  /** 返回指定待行动队员当前可选的攻击、防御、技能、道具与撤退。 */
+  public encounterActions(
+    actorId: string,
+  ): readonly EncounterAvailableAction[] {
+    return this.demoSystems.availableEncounterActions(this.requireState(), actorId);
+  }
+
+  /** 返回当前敌人的公开行动意图。 */
+  public encounterEnemyIntents(): readonly EncounterEnemyIntentView[] {
+    return this.demoSystems.encounterEnemyIntents(this.requireState());
+  }
+
+  /** 创建一场不推进世界时间的手动遭遇战。 */
+  public startEncounter(
+    encounterId: string,
+    plan: EncounterPreparationPlan,
+  ): ActionReport {
+    const working = cloneGameState(this.requireFreePlayableState());
+    const messages = this.demoSystems.startEncounter(working, encounterId, plan);
+    return this.commitAction(working, [...messages], {
+      consumesTurn: false,
+      actionType: "encounter_battle",
+    });
+  }
+
+  /** 执行一次战斗指令；战斗结束时才推进一个世界回合。 */
+  public performEncounterAction(command: EncounterBattleCommand): ActionReport {
+    const working = cloneGameState(this.requirePlayableState());
+    const resolution = this.demoSystems.performEncounterAction(working, command);
+    return this.commitAction(working, [...resolution.messages], {
+      consumesTurn: resolution.state.outcome !== "ongoing",
+      actionType: "encounter_battle",
+    });
+  }
+
+  /** 查看完胜利或撤退结果后清理遭遇战快照。 */
+  public finishEncounter(): ActionReport {
+    const working = cloneGameState(this.requirePlayableState());
+    const message = this.demoSystems.finishEncounter(working);
+    return this.commitAction(working, [message], {
+      consumesTurn: false,
+      actionType: "encounter_battle",
+    });
+  }
+
+  /** 返回报纸、书籍等文献分类的收集与解锁进度。 */
+  public archiveOverview(): readonly ArchiveCollectionOverview[] {
+    return this.demoSystems.archiveOverview(this.requireState());
+  }
+
+  /** 返回指定文献分类的完整锁定或解锁目录。 */
+  public archiveList(
+    collectionId: string,
+  ): readonly ArchiveDocumentListItem[] {
+    return this.demoSystems.archiveList(this.requireState(), collectionId);
+  }
+
+  /** 返回一篇已经解锁的文献正文。 */
+  public archiveDetail(
+    collectionId: string,
+    documentId: string,
+  ): ArchiveDocumentConfig {
+    return this.demoSystems.archiveDetail(
+      this.requireState(),
+      collectionId,
+      documentId,
+    );
+  }
+
+  /** 返回探索归来后尚未处理的避难所事项。 */
+  public returnIncidentPrompt(): ReturnIncidentPrompt | null {
+    return this.demoSystems.returnIncidentPrompt(this.requireState());
+  }
+
+  /** 结算一项归来决策，不额外推进已经结算过的探索回合。 */
+  public resolveReturnIncident(choiceId: string): ActionReport {
+    const working = cloneGameState(this.requirePlayableState());
+    const resolution = this.demoSystems.resolveReturnIncident(working, choiceId);
+    return this.commitAction(working, [resolution.message], {
+      consumesTurn: false,
+      actionType: "return_incident",
+    });
   }
 
   /** 返回所有伙伴的身份、状态、信任与秘密提示。 */
@@ -883,14 +1098,16 @@ export class GameApplication {
     })], { consumesTurn: true, actionType: "repair_shelter" });
   }
 
-  /** 扣除远征步数并锁定下一事件；步数不足时只返回强制返程报告。 */
+  /** 扣除远征行动食物并锁定下一事件；食物不足时只返回强制返程报告。 */
   private prepareNextExpeditionEvent(
     state: GameState,
   ): { readonly messages: readonly string[] } {
     const stepResolution = this.expedition.spendEventSteps(state);
     const status = this.expedition.status(state);
     if (status === null) {
-      return { messages: stepResolution.messages };
+      const messages = [...stepResolution.messages];
+      this.queueReturnIncident(state, messages);
+      return { messages };
     }
     const prompt = this.exploration.prepare(status.cityId, status.districtId, {
       discovery: this.shelter.passiveModifier(
@@ -913,6 +1130,19 @@ export class GameApplication {
         }),
       ],
     };
+  }
+
+  /** 在远征已经结束时抽取并记录一项待处理归来事项。 */
+  private queueReturnIncident(state: GameState, messages: string[]): void {
+    if (
+      state.expedition !== null
+      || state.pending_exploration !== null
+      || state.pending_return_incident_id !== null
+    ) {
+      return;
+    }
+    const prompt = this.demoSystems.tryQueueReturnIncident(state);
+    if (prompt !== null) messages.push(prompt.title, prompt.description);
   }
 
   /** 完成钳制、生存回合、失败清理和一次性状态提交。 */
@@ -941,6 +1171,8 @@ export class GameApplication {
     if (isEnded(working)) {
       working.pending_exploration = null;
       working.battle = null;
+      working.encounter_battle = null;
+      working.pending_return_incident_id = null;
     }
     this.storeState(working);
     if (isEnded(working)) {
@@ -980,9 +1212,13 @@ export class GameApplication {
     this.state.checkpoint = source.checkpoint;
     this.state.inventory = source.inventory;
     this.state.research = source.research;
+    this.state.archive_collection_totals = source.archive_collection_totals;
     this.state.management_cycle_usage = source.management_cycle_usage;
     this.state.expedition = source.expedition;
     this.state.last_expedition_failure = source.last_expedition_failure;
+    this.state.shelter_room_assignments = source.shelter_room_assignments;
+    this.state.encounter_battle = source.encounter_battle;
+    this.state.pending_return_incident_id = source.pending_return_incident_id;
   }
 
   /** 把旧签名升级为完整开局设置，并确保槽位仍来自仓库配置范围。 */
@@ -1089,8 +1325,18 @@ export class GameApplication {
     if (this.hasActiveBattle(state)) {
       throw new GameApplicationError(this.content.text("battle_in_progress"));
     }
+    if (state.encounter_battle !== null) {
+      throw new GameApplicationError(
+        this.content.text("encounter_battle_in_progress"),
+      );
+    }
     if (state.pending_exploration !== null) {
       throw new GameApplicationError(this.content.text("pending_event_must_resolve"));
+    }
+    if (state.pending_return_incident_id !== null) {
+      throw new GameApplicationError(
+        this.content.text("return_incident_must_resolve"),
+      );
     }
     return state;
   }
