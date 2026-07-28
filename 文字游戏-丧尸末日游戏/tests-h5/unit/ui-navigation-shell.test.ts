@@ -16,6 +16,7 @@ import { DelayedHoverIntent } from "../../src/ui/interactions/DelayedHoverIntent
 import { PageStack } from "../../src/ui/navigation/PageStack";
 import {
   buildCoverMenuItems,
+  resolveCoverBrandGeometry,
   resolveCoverAccountGeometry,
   resolveCoverArtwork,
   resolveCoverChangelogGeometry,
@@ -273,6 +274,7 @@ describe("五入口响应式封面与系统键契约", () => {
     expect(webConfig.assets.skins.cover_button_idle)
       .toMatch(/menu_button_idle(?:_2k)?\.png$/u);
     expect(desktopFirst.shape).toBe("parallelogram");
+    expect(resolveCoverMenuLayout(webConfig, desktop).use_button_skin).toBe(true);
     expect(desktopSecondRow.y).toBeGreaterThan(desktopFirst.y);
     expect(desktopSecondRow.x).toBeGreaterThan(desktopFirst.x);
     expect(desktopLast.y).toBeGreaterThan(desktopSecondRow.y);
@@ -281,6 +283,7 @@ describe("五入口响应式封面与系统键契约", () => {
         + webConfig.typography.body_line_height * 4,
     );
     expect(mobileFirst.shape).toBe("rectangle");
+    expect(resolveCoverMenuLayout(webConfig, mobile).use_button_skin).toBe(false);
     expect(mobileFirst.x).toBe((mobile.stageWidth - mobileFirst.width) / 2);
     expect(mobileSecond.x).toBe(mobileFirst.x);
     expect(mobileSecond.y).toBeGreaterThan(mobileFirst.y);
@@ -288,6 +291,68 @@ describe("五入口响应式封面与系统键契约", () => {
     expect(resolveCoverArtwork(webConfig, desktop)).toBe(webConfig.assets.cover);
     expect(resolveCoverArtwork(webConfig, mobile)).toBe(
       webConfig.assets.mobile_cover,
+    );
+  });
+
+  it("紧凑电脑无论横竖屏都保持 PNG 平行四边形", () => {
+    const portrait = resolveTestLayout(700, 900, false);
+    const landscape = resolveTestLayout(1024, 600, false);
+    const itemCount = buildCoverMenuItems(webConfig, false, createActions()).length;
+    const portraitFirst = resolveCoverMenuItemGeometry(
+      webConfig,
+      portrait,
+      0,
+      itemCount,
+    );
+    const portraitSecond = resolveCoverMenuItemGeometry(
+      webConfig,
+      portrait,
+      1,
+      itemCount,
+    );
+    const landscapeFirst = resolveCoverMenuItemGeometry(
+      webConfig,
+      landscape,
+      0,
+      itemCount,
+    );
+    const landscapeSecond = resolveCoverMenuItemGeometry(
+      webConfig,
+      landscape,
+      1,
+      itemCount,
+    );
+
+    expect(portrait.kind).toBe("compact");
+    expect(portraitFirst.shape).toBe("parallelogram");
+    expect(portraitSecond.x).toBeGreaterThan(portraitFirst.x);
+    expect(resolveCoverMenuLayout(webConfig, portrait).use_button_skin).toBe(true);
+    expect(landscape.kind).toBe("compact");
+    expect(landscapeFirst.shape).toBe("parallelogram");
+    expect(landscapeSecond.x).toBeGreaterThan(landscapeFirst.x);
+    expect(resolveCoverMenuLayout(webConfig, landscape).use_button_skin).toBe(true);
+  });
+
+  it("品牌横线装饰由配置生成并限制在标题宽度内", () => {
+    const desktop = resolveTestLayout(1440, 900, false);
+    const geometry = resolveCoverBrandGeometry(webConfig, desktop);
+
+    expect(geometry.dividerWidth).toBe(
+      webConfig.layout.cover.brand_divider_width,
+    );
+    expect(geometry.dividerAccentWidth).toBeLessThan(geometry.dividerWidth);
+    expect(geometry.dividerHeight).toBe(
+      webConfig.layout.cover.brand_divider_height,
+    );
+    expect(geometry.dividerY).toBeGreaterThan(geometry.subtitleY);
+  });
+
+  it("拒绝给手机直角按钮启用桌面平行四边形皮肤", () => {
+    const invalidConfig = structuredClone(webConfigDocument);
+    invalidConfig.layout.cover.mobile.use_button_skin = true;
+
+    expect(() => parseWebGameConfig(invalidConfig)).toThrow(
+      /直角按钮不能启用平行四边形封面皮肤/u,
     );
   });
 

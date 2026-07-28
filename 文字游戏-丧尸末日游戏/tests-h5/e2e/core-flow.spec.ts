@@ -1529,6 +1529,22 @@ test("启动更新日志关闭后展示五个主入口且不再提供封面退�
   for (const nodeName of menuNodes) {
     expect(await readLayaNodeBounds(page, nodeName)).not.toBeNull();
   }
+  const titleBounds = await readLayaNodeBounds(page, "menu-title");
+  const dividerBounds = await readLayaNodeBounds(page, "menu-brand-divider");
+  expect(titleBounds).not.toBeNull();
+  expect(dividerBounds).not.toBeNull();
+  expect(dividerBounds?.width).toBeGreaterThan(0);
+  expect(dividerBounds?.x).toBeGreaterThanOrEqual(titleBounds?.x ?? 0);
+  expect((dividerBounds?.x ?? 0) + (dividerBounds?.width ?? 0)).toBeLessThanOrEqual(
+    (titleBounds?.x ?? 0) + (titleBounds?.width ?? 0),
+  );
+  const coverLayout = await readGameLayout(page);
+  const coverSkinBounds = await readLayaNodeBounds(page, "menu-new-game-skin");
+  if (coverLayout === "mobile") {
+    expect(coverSkinBounds).toBeNull();
+  } else {
+    expect(coverSkinBounds).not.toBeNull();
+  }
   for (const utilityNode of [
     "menu-settings",
     "menu-account-login",
@@ -2152,9 +2168,17 @@ test("真实手机能力使用移动布局且关键入口满足触控尺寸", as
     document.body.dataset.gameLayout,
   )).toBe("mobile");
   const firstButton = await readCssNodeBounds(page, "menu-new-game");
+  const secondButton = await readCssNodeBounds(page, "menu-load-game");
   const coverSettingsButton = await readCssNodeBounds(page, "menu-settings");
+  const coverAccountButton = await readCssNodeBounds(page, "menu-account-login");
   expect(firstButton).not.toBeNull();
+  expect(secondButton).not.toBeNull();
   expect(coverSettingsButton).not.toBeNull();
+  expect(coverAccountButton).not.toBeNull();
+  expect(firstButton?.x).toBe(secondButton?.x);
+  expect(await readLayaNodeBounds(page, "menu-new-game-skin")).toBeNull();
+  expect(await readLayaNodeBounds(page, "menu-brand-divider")).not.toBeNull();
+  expect(coverSettingsButton?.x).toBeLessThan(coverAccountButton?.x ?? 0);
   expect(firstButton?.height).toBeGreaterThanOrEqual(
     qualityConfig.minimum_touch_css_px,
   );

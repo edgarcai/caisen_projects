@@ -381,6 +381,9 @@ export interface CoverMenuLayoutConfig {
   readonly menu_column_gap: number;
   readonly menu_row_gap: number;
   readonly menu_row_step_x: number;
+  readonly button_shape: "rectangle" | "parallelogram";
+  readonly use_button_skin: boolean;
+  readonly pointer_tooltip_enabled: boolean;
   readonly settings_button_anchor: CoverSettingsButtonAnchor;
   readonly settings_button_offset: number;
   readonly settings_button_top: number;
@@ -402,6 +405,10 @@ export interface CoverLayoutConfig {
   readonly desktop: CoverMenuLayoutConfig;
   readonly mobile: CoverMenuLayoutConfig;
   readonly mobile_landscape: CoverMenuLayoutConfig;
+  readonly brand_divider_width: number;
+  readonly brand_divider_accent_width: number;
+  readonly brand_divider_height: number;
+  readonly brand_divider_gap: number;
   readonly image_dark_edge_ratio: number;
   readonly image_dark_solid_ratio: number;
   readonly image_dark_fade_steps: number;

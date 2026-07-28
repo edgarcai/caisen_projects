@@ -54,7 +54,7 @@ const HORIZONTAL_ALIGNMENTS = ["left", "center", "right"] as const;
 const VERTICAL_ALIGNMENTS = ["top", "middle", "bottom"] as const;
 const COVER_SETTINGS_BUTTON_ANCHORS = ["left", "right"] as const;
 const HEADER_NAVIGATION_ANCHORS = ["left", "right"] as const;
-const ESC_MENU_BUTTON_SHAPES = ["rectangle", "parallelogram"] as const;
+const BUTTON_SHAPES = ["rectangle", "parallelogram"] as const;
 const FRAME_MODES = ["fast", "slow", "mouse", "sleep"] as const;
 const NAVIGATION_PLACEMENTS = [
   "mobile_bottom",
@@ -182,6 +182,12 @@ const COVER_LAYOUT_KEYS = [
   "description_top",
   "description_width",
   "description_height",
+] as const;
+const COVER_BRAND_DIVIDER_KEYS = [
+  "brand_divider_width",
+  "brand_divider_accent_width",
+  "brand_divider_height",
+  "brand_divider_gap",
 ] as const;
 const DESKTOP_LAYOUT_KEYS = [
   "outer_padding",
@@ -1384,7 +1390,7 @@ function parseCoverMenuLayout(
   path: string,
 ): CoverMenuLayoutConfig {
   const source = expectObject(value, path);
-  return {
+  const config: CoverMenuLayoutConfig = {
     horizontal_alignment: expectEnum(
       source.horizontal_alignment,
       HORIZONTAL_ALIGNMENTS,
@@ -1400,9 +1406,28 @@ function parseCoverMenuLayout(
       COVER_SETTINGS_BUTTON_ANCHORS,
       `${path}.settings_button_anchor`,
     ),
+    button_shape: expectEnum(
+      source.button_shape,
+      BUTTON_SHAPES,
+      `${path}.button_shape`,
+    ),
+    use_button_skin: expectBoolean(
+      source.use_button_skin,
+      `${path}.use_button_skin`,
+    ),
+    pointer_tooltip_enabled: expectBoolean(
+      source.pointer_tooltip_enabled,
+      `${path}.pointer_tooltip_enabled`,
+    ),
     ...readNumberFields(source, COVER_LAYOUT_KEYS, path),
     menu_columns: expectInteger(source.menu_columns, `${path}.menu_columns`, 1),
   };
+  if (config.button_shape === "rectangle" && config.use_button_skin) {
+    throw new WebConfigError(
+      `${path} 的直角按钮不能启用平行四边形封面皮肤`,
+    );
+  }
+  return config;
 }
 
 /** 解析一个 ESC 菜单响应式变体，并校验形状与皮肤开关。 */
@@ -1413,7 +1438,7 @@ function parseEscMenuLayoutVariant(
   const source = expectObject(value, path);
   const buttonShape = expectEnum(
     source.button_shape,
-    ESC_MENU_BUTTON_SHAPES,
+    BUTTON_SHAPES,
     `${path}.button_shape`,
   );
   const useCoverButtonSkin = expectBoolean(
@@ -1456,6 +1481,11 @@ function parseLayout(value: unknown): LayoutConfig {
       mobile_landscape: parseCoverMenuLayout(
         coverSource.mobile_landscape,
         "layout.cover.mobile_landscape",
+      ),
+      ...readNumberFields(
+        coverSource,
+        COVER_BRAND_DIVIDER_KEYS,
+        "layout.cover",
       ),
       image_dark_edge_ratio: expectRatio(
         coverSource.image_dark_edge_ratio,

@@ -47,6 +47,18 @@ export interface CoverMenuItemGeometry {
   readonly shape: "rectangle" | "parallelogram";
 }
 
+/** 封面双行标题与下划装饰的纯布局结果。 */
+export interface CoverBrandGeometry {
+  readonly x: number;
+  readonly titleY: number;
+  readonly subtitleY: number;
+  readonly width: number;
+  readonly dividerY: number;
+  readonly dividerWidth: number;
+  readonly dividerAccentWidth: number;
+  readonly dividerHeight: number;
+}
+
 /** 封面独立设置键的纯布局结果。 */
 export interface CoverSettingsGeometry {
   readonly x: number;
@@ -157,7 +169,42 @@ export function resolveCoverMenuItemGeometry(
     y: menuTop + row * (config.controls.button_height + menuLayout.menu_row_gap),
     width: menuLayout.menu_width,
     height: config.controls.button_height,
-    shape: layout.kind === "mobile" ? "rectangle" : "parallelogram",
+    shape: menuLayout.button_shape,
+  };
+}
+
+/** 计算封面标题、次标题和配置化双色横线的位置。 */
+export function resolveCoverBrandGeometry(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+): CoverBrandGeometry {
+  const menuLayout = resolveCoverMenuLayout(config, layout);
+  const columns = Math.max(1, Math.floor(menuLayout.menu_columns));
+  const width = menuLayout.menu_width * columns
+    + menuLayout.menu_column_gap * (columns - 1);
+  const x = resolveCoverHorizontalPosition(menuLayout, layout, width);
+  const titleY = layout.safeArea.top + menuLayout.content_top;
+  const subtitleY = titleY
+    + config.typography.cover_title_size
+    + config.controls.button_gap;
+  const dividerWidth = Math.min(
+    width,
+    config.layout.cover.brand_divider_width,
+  );
+  return {
+    x,
+    titleY,
+    subtitleY,
+    width,
+    dividerY: subtitleY
+      + config.typography.cover_subtitle_size
+      + config.layout.cover.brand_divider_gap,
+    dividerWidth,
+    dividerAccentWidth: Math.min(
+      dividerWidth,
+      config.layout.cover.brand_divider_accent_width,
+    ),
+    dividerHeight: config.layout.cover.brand_divider_height,
   };
 }
 

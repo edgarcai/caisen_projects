@@ -12,9 +12,9 @@ import type {
 import type { UiBrandView } from "../ports/GameUiPort";
 import {
   buildCoverMenuItems,
+  resolveCoverBrandGeometry,
   resolveCoverAccountGeometry,
   resolveCoverChangelogGeometry,
-  resolveCoverHorizontalPosition,
   resolveCoverMenuItemGeometry,
   resolveCoverMenuLayout,
   resolveCoverSettingsGeometry,
@@ -62,9 +62,10 @@ export class CoverPage implements PageView {
       this.renderBrand(factory, config, layout, brand);
     }
     this.renderUtilities(factory, config, layout, actions);
-    this.tooltip = layout.kind === "mobile"
-      ? null
-      : this.createPointerTooltip(runtime, factory, config, layout);
+    const menuLayout = resolveCoverMenuLayout(config, layout);
+    this.tooltip = menuLayout.pointer_tooltip_enabled
+      ? this.createPointerTooltip(runtime, factory, config, layout)
+      : null;
     this.renderMenu(
       factory,
       config,
@@ -194,19 +195,13 @@ export class CoverPage implements PageView {
     layout: ResponsiveLayout,
     brand: UiBrandView,
   ): void {
-    const menuLayout = resolveCoverMenuLayout(config, layout);
-    const columns = Math.max(1, Math.floor(menuLayout.menu_columns));
-    const titleWidth =
-      menuLayout.menu_width * columns +
-      menuLayout.menu_column_gap * (columns - 1);
-    const coverLeft = resolveCoverHorizontalPosition(menuLayout, layout, titleWidth);
-    const coverTop = layout.safeArea.top + menuLayout.content_top;
+    const geometry = resolveCoverBrandGeometry(config, layout);
     factory.text(this.root, {
       testId: "menu-title",
       text: brand.title,
-      x: coverLeft,
-      y: coverTop,
-      width: titleWidth,
+      x: geometry.x,
+      y: geometry.titleY,
+      width: geometry.width,
       height: config.typography.cover_title_size + config.controls.button_gap,
       fontSize: config.typography.cover_title_size,
       color: config.theme.text,
@@ -216,18 +211,36 @@ export class CoverPage implements PageView {
     factory.text(this.root, {
       testId: "menu-subtitle",
       text: brand.subtitle,
-      x: coverLeft,
-      y: coverTop + config.typography.cover_title_size + config.controls.button_gap,
-      width: titleWidth,
+      x: geometry.x,
+      y: geometry.subtitleY,
+      width: geometry.width,
       height: config.typography.cover_subtitle_size + config.controls.button_gap,
       fontSize: config.typography.cover_subtitle_size,
       color: config.theme.accent,
       bold: true,
       wordWrap: false,
     });
+    const divider = factory.container("menu-brand-divider");
+    divider.pos(geometry.x, geometry.dividerY);
+    divider.size(geometry.dividerWidth, geometry.dividerHeight);
+    divider.graphics.drawRect(
+      0,
+      0,
+      geometry.dividerWidth,
+      geometry.dividerHeight,
+      config.theme.border,
+    );
+    divider.graphics.drawRect(
+      0,
+      0,
+      geometry.dividerAccentWidth,
+      geometry.dividerHeight,
+      config.theme.accent,
+    );
+    this.root.addChild(divider);
   }
 
-  /** 按响应式网格绘制五个入口，桌面使用 PNG 平行四边形皮肤。 */
+  /** 按响应式配置绘制五个入口，皮肤与形状由当前封面变体决定。 */
   private renderMenu(
     factory: UiFactory,
     config: GameUiConfig,
@@ -240,6 +253,7 @@ export class CoverPage implements PageView {
       pressed: config.assets.skins.cover_button_pressed,
       disabled: config.assets.skins.cover_button_disabled,
     };
+    const menuLayout = resolveCoverMenuLayout(config, layout);
     menuItems.forEach((item, index) => {
       const geometry = resolveCoverMenuItemGeometry(
         config,
@@ -253,7 +267,7 @@ export class CoverPage implements PageView {
         ...geometry,
         tone: "primary",
         disabled: item.disabled,
-        skin: layout.kind === "mobile" ? undefined : desktopSkin,
+        skin: menuLayout.use_button_skin ? desktopSkin : undefined,
         onClick: item.action,
       });
       if (this.tooltip !== null) {
