@@ -593,6 +593,8 @@ export interface GameTextTokens extends SettlementNetworkTextConfig {
   readonly expedition_district_list_title: string;
   readonly expedition_district_list_body: string;
   readonly expedition_district_detail_confirm: string;
+  readonly expedition_retreat_confirm_title: string;
+  readonly expedition_retreat_confirm_body: string;
   readonly expedition_detail_fields_title: string;
   readonly expedition_detail_requirements_title: string;
   readonly expedition_detail_field_format: string;

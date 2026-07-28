@@ -636,7 +636,7 @@ function buildFirstDistrictTreeNodeId(
   ].join(identity.segment_separator);
 }
 
-/** 逐层选择区划树首项，直到服务端确定的稳定终点。 */
+/** 逐层选择远征事件栏首项，直到进入真实探索事件。 */
 async function traverseDistrictExplorationTree(
   page: Page,
   cityId: string,
@@ -658,7 +658,7 @@ async function traverseDistrictExplorationTree(
       const screen = await page.evaluate(() =>
         document.body.dataset.gameScreen ?? null,
       );
-      if (screen === "expedition_prepare") return true;
+      if (screen === "exploration_event") return true;
       if (screen !== "district_exploration_tree") return false;
       return readLayaNodeBounds(
         page,
@@ -668,9 +668,9 @@ async function traverseDistrictExplorationTree(
     const screen = await page.evaluate(() =>
       document.body.dataset.gameScreen ?? null,
     );
-    if (screen === "expedition_prepare") return;
+    if (screen === "exploration_event") return;
   }
-  throw new Error("区划探索树超过配置最大深度后仍未进入远征整备。");
+  throw new Error("远征事件栏超过配置最大深度后仍未进入真实探索事件。");
 }
 
 /** 用真实 UI 从本城首个区划开始一次无同行、足额携粮远征。 */
@@ -701,8 +701,7 @@ async function beginUnassistedHomeExpedition(
   );
   await waitForScreen(page, "expedition_district_detail");
   await clickLayaNode(page, "page-expedition-district-detail-confirm");
-  await waitForScreen(page, "district_exploration_tree");
-  await traverseDistrictExplorationTree(page, homeCity.id, district.id);
+  await waitForScreen(page, "expedition_prepare");
   const requiredActions = homeCity.travelStepCost + district.eventStepCost + 1;
   const requiredFoodQuantity = requiredActions
     * survivalConfig.expedition.food_units_per_action;
@@ -714,6 +713,8 @@ async function beginUnassistedHomeExpedition(
     );
   }
   await clickLayaNode(page, "page-expedition-prepare-begin");
+  await waitForScreen(page, "district_exploration_tree");
+  await traverseDistrictExplorationTree(page, homeCity.id, district.id);
   await waitForScreen(page, "exploration_event");
   const status = (await readDebugSnapshot(page)).expeditionStatus;
   if (status === null) {

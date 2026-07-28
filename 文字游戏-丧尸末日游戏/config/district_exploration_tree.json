@@ -14,8 +14,8 @@
   "projection": {
     "root_path_label": "区划入口",
     "display_path_separator": " → ",
-    "layer_title_template": "{district_name} · 第 {depth} 层探索",
-    "layer_description_template": "[待补文本] 当前路径：{path}。本层提供 {child_count} 个可选方向。"
+    "layer_title_template": "远征事件 · {district_name} · 第 {depth} 层",
+    "layer_description_template": "[待补文本] 远征已经开始。当前事件路径：{path}，本层提供 {child_count} 个可选方向。"
   },
   "layers": [
     {

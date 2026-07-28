@@ -238,6 +238,8 @@ interface DebugCampaignOption {
 }
 
 type DebugGameSnapshot = ReturnType<BrowserGameDebugHandle["getSnapshot"]>;
+type DebugExpeditionCity = DebugGameSnapshot["cities"][number];
+type DebugExpeditionDistrict = DebugExpeditionCity["districts"][number];
 type GameLayoutKind = "mobile" | "compact" | "desktop";
 type TestGameMode = "single" | "story";
 
@@ -567,7 +569,7 @@ function buildFirstDistrictExplorationNodeId(
   ].join(identity.segment_separator);
 }
 
-/** 逐层选择区划树的第一个节点，直到配置化终点进入远征整备。 */
+/** 逐层选择远征事件栏首项，直到配置化终点进入真实探索事件。 */
 async function followFirstDistrictExplorationBranch(
   page: Page,
   cityId: string,
@@ -590,7 +592,7 @@ async function followFirstDistrictExplorationBranch(
       const screen = await page.evaluate(() => (
         document.body.dataset.gameScreen ?? null
       ));
-      if (screen === "expedition_prepare") return screen;
+      if (screen === "exploration_event") return screen;
       if (
         screen === "district_exploration_tree"
         && nextNodeName !== null
@@ -599,9 +601,9 @@ async function followFirstDistrictExplorationBranch(
         return screen;
       }
       return "pending";
-    }).toMatch(/^(district_exploration_tree|expedition_prepare)$/);
+    }).toMatch(/^(district_exploration_tree|exploration_event)$/);
     const screen = await page.evaluate(() => document.body.dataset.gameScreen ?? null);
-    if (screen === "expedition_prepare") {
+    if (screen === "exploration_event") {
       expect(depth).toBeGreaterThanOrEqual(depthPolicy.minimum_depth);
       return depth;
     }
@@ -609,7 +611,7 @@ async function followFirstDistrictExplorationBranch(
       throw new Error(`区划探索树进入了意外页面：${String(screen)}`);
     }
   }
-  throw new Error("区划探索树超过配置最大深度后仍未进入远征整备。");
+  throw new Error("远征事件栏超过配置最大深度后仍未进入真实探索事件。");
 }
 
 /** 通过真实 Canvas 选项为远征携带指定数量的食物。 */
@@ -628,66 +630,39 @@ async function carryExpeditionFood(page: Page, quantity: number): Promise<void> 
   }
 }
 
-/** 等待区划探索树完成同 screen 重建，并以配置化节点路径确认目标层级。 */
-async function waitForDistrictExplorationLayer(
+/** 从指挥台选择首个可用城市与区划，直到远征整备页。 */
+async function openFirstAvailableExpeditionPrepare(
   page: Page,
-  cityId: string,
-  districtId: string,
-  depth: number,
-): Promise<void> {
-  const nodeId = buildFirstDistrictExplorationNodeId(cityId, districtId, depth);
-  const optionNode = `page-district-exploration-tree-option-${nodeId}`;
-  await expect.poll(async () => {
-    const screen = await page.evaluate(() => (
-      document.body.dataset.gameScreen ?? null
-    ));
-    if (screen !== "district_exploration_tree") return false;
-    const option = await readLayaNodeBounds(page, optionNode);
-    return option !== null;
-  }).toBe(true);
-  await waitForDistrictExplorationBack(page);
-}
-
-/** 等待当前区划探索树完成渲染并注册栈顶可见返回节点。 */
-async function waitForDistrictExplorationBack(page: Page): Promise<void> {
-  await expect.poll(async () => {
-    const screen = await page.evaluate(() => (
-      document.body.dataset.gameScreen ?? null
-    ));
-    if (screen !== "district_exploration_tree") return null;
-    return readLayaNodeBounds(page, "page-district-exploration-tree-back");
-  }).not.toBeNull();
-}
-
-/** 从远征整备按已选择路径逐层返回区划详情，验证草稿生命周期。 */
-async function returnFromExpeditionPrepareToDistrictDetail(
-  page: Page,
-  cityId: string,
-  districtId: string,
-  selectedDepth: number,
-): Promise<void> {
-  await clickLayaNode(page, "page-expedition-prepare-back");
-  await waitForScreen(page, "district_exploration_tree");
-  await waitForDistrictExplorationLayer(
-    page,
-    cityId,
-    districtId,
-    selectedDepth,
+): Promise<{
+  readonly city: DebugExpeditionCity;
+  readonly district: DebugExpeditionDistrict;
+}> {
+  await clickLayaNode(page, explorationEntryNode(await readGameLayout(page)));
+  await waitForScreen(page, "expedition_city_list");
+  const city = (await readDebugSnapshot(page)).cities.find(
+    (candidate) => !candidate.disabled && candidate.districts.length > 0,
   );
-  for (let depth = selectedDepth; depth >= 1; depth -= 1) {
-    await clickLayaNode(page, "page-district-exploration-tree-back");
-    if (depth === 1) {
-      await waitForScreen(page, "expedition_district_detail");
-      return;
-    }
-    await waitForDistrictExplorationLayer(
-      page,
-      cityId,
-      districtId,
-      depth - 1,
-    );
+  const district = city?.districts[0];
+  if (city === undefined || district === undefined) {
+    throw new Error("远征城市目录缺少可用区划。");
   }
-  throw new Error("区划探索树未能沿配置化路径返回区划详情。");
+  await clickScrollableLayaNode(
+    page,
+    `page-expedition-city-list-option-${city.id}`,
+    "page-expedition-city-list-scroll",
+  );
+  await waitForScreen(page, "expedition_city_detail");
+  await clickLayaNode(page, "page-expedition-city-detail-confirm");
+  await waitForScreen(page, "expedition_district_list");
+  await clickScrollableLayaNode(
+    page,
+    `page-expedition-district-list-option-${district.id}`,
+    "page-expedition-district-list-scroll",
+  );
+  await waitForScreen(page, "expedition_district_detail");
+  await clickLayaNode(page, "page-expedition-district-detail-confirm");
+  await waitForScreen(page, "expedition_prepare");
+  return { city, district };
 }
 
 /** 按当前页面状态尝试可用事件选项，条件失效时关闭通讯并继续下一项。 */
@@ -1383,6 +1358,49 @@ test("Escape 功能菜单叠加在二级页上并逐层返回", async ({ page })
   await waitForScreen(page, "dashboard");
 });
 
+test("远征事件栏深层返回上一层，根层撤离需二次确认", async ({ page }) => {
+  test.slow();
+  await closeAutomaticUpdateLog(page);
+  await startSingleGame(page, "撤离测试员");
+  const { city, district } = await openFirstAvailableExpeditionPrepare(page);
+  const requiredFood = (
+    city.travelStepCost + district.eventStepCost + 1
+  ) * survivalSystemsConfigDocument.expedition.food_units_per_action;
+  await carryExpeditionFood(page, requiredFood);
+  await clickLayaNode(page, "page-expedition-prepare-begin");
+  await waitForScreen(page, "district_exploration_tree");
+
+  const rootNodeName = `page-district-exploration-tree-option-${
+    buildFirstDistrictExplorationNodeId(city.id, district.id, 1)
+  }`;
+  const childNodeName = `page-district-exploration-tree-option-${
+    buildFirstDistrictExplorationNodeId(city.id, district.id, 2)
+  }`;
+  await clickLayaNode(page, rootNodeName);
+  await expect.poll(async () => readLayaNodeBounds(page, childNodeName))
+    .not.toBeNull();
+  await clickLayaNode(page, "page-district-exploration-tree-back");
+  await expect.poll(async () => ({
+    root: await readLayaNodeBounds(page, rootNodeName),
+    child: await readLayaNodeBounds(page, childNodeName),
+  })).toMatchObject({ root: expect.any(Object), child: null });
+
+  await page.evaluate(() => { window.history.back(); });
+  await waitForScreen(page, "expedition_retreat_confirm");
+  await clickLayaNode(page, "page-expedition-retreat-confirm-cancel");
+  await waitForScreen(page, "district_exploration_tree");
+
+  await clickLayaNode(page, "page-district-exploration-tree-back");
+  await waitForScreen(page, "expedition_retreat_confirm");
+  await clickLayaNode(page, "page-expedition-retreat-confirm-confirm");
+  await expect.poll(async () => (
+    page.evaluate(() => document.body.dataset.gameScreen ?? null)
+  )).toMatch(/^(dashboard|return_incident)$/);
+  const retreatedSnapshot = await readDebugSnapshot(page);
+  expect(retreatedSnapshot.explorationPrompt).toBeNull();
+  expect(retreatedSnapshot.expeditionStatus).toBeNull();
+});
+
 test("远征从整备、事件、安全返程到归来事项完成闭环", async ({ page }) => {
   test.slow();
   await closeAutomaticUpdateLog(page);
@@ -1433,20 +1451,12 @@ test("远征从整备、事件、安全返程到归来事项完成闭环", async
   );
   await waitForScreen(page, "expedition_district_detail");
   await clickLayaNode(page, "page-expedition-district-detail-confirm");
-  const selectedDepth = await followFirstDistrictExplorationBranch(
-    page,
-    city.id,
-    district.id,
-  );
+  await waitForScreen(page, "expedition_prepare");
   await carryExpeditionFood(page, 1);
-  await returnFromExpeditionPrepareToDistrictDetail(
-    page,
-    city.id,
-    district.id,
-    selectedDepth,
-  );
+  await clickLayaNode(page, "page-expedition-prepare-back");
+  await waitForScreen(page, "expedition_district_detail");
   await clickLayaNode(page, "page-expedition-district-detail-confirm");
-  await followFirstDistrictExplorationBranch(page, city.id, district.id);
+  await waitForScreen(page, "expedition_prepare");
   const requiredFood = (
     city.travelStepCost + district.eventStepCost + 1
   ) * survivalSystemsConfigDocument.expedition.food_units_per_action;
@@ -1464,7 +1474,7 @@ test("远征从整备、事件、安全返程到归来事项完成闭环", async
     "page-expedition-prepare-scroll",
   );
   await clickLayaNode(page, "page-expedition-prepare-begin");
-  await waitForScreen(page, "exploration_event");
+  await waitForScreen(page, "district_exploration_tree");
   const expeditionSnapshot = await readDebugSnapshot(page);
   const event = expeditionSnapshot.explorationPrompt;
   if (event === null) {
@@ -1485,6 +1495,11 @@ test("远征从整备、事件、安全返程到归来事项完成闭环", async
   expect(
     status.maximumSteps - status.travelStepCost - status.remainingSteps,
   ).toBe(district.eventStepCost);
+  await followFirstDistrictExplorationBranch(page, city.id, district.id);
+  const eventAfterOpeningTree = await readDebugSnapshot(page);
+  expect(eventAfterOpeningTree.explorationPrompt?.id).toBe(event.id);
+  expect(eventAfterOpeningTree.expeditionStatus?.remainingSteps)
+    .toBe(status.remainingSteps);
   await resolveExplorationEventOption(page, event.options);
   expect((await readDebugSnapshot(page)).expeditionStatus?.cityId).toBe("city_a");
 

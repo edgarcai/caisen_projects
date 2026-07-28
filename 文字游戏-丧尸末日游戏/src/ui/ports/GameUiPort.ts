@@ -63,6 +63,7 @@ export type GameScreenId =
   | "expedition_district_list"
   | "expedition_district_detail"
   | "district_exploration_tree"
+  | "expedition_retreat_confirm"
   | "expedition_prepare"
   | "expedition_status"
   | "expedition_failure"

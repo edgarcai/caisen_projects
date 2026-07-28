@@ -99,7 +99,11 @@ describe("远征页面导航闭环", () => {
     })).toBe("exploration_event");
   });
 
-  it("事件后仍有远征则回状态页，强制返程优先展示损失", () => {
+  it("待决事件不重复前置事件栏，强制返程优先展示损失", () => {
+    expect(resolveExpeditionProgressScreen({
+      explorationPrompt: pendingExploration(),
+      expeditionStatus: activeExpedition(),
+    })).toBe("exploration_event");
     expect(resolveExpeditionProgressScreen({
       explorationPrompt: null,
       expeditionStatus: activeExpedition(),

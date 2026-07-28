@@ -401,6 +401,8 @@ const TEXT_KEYS = [
   "expedition_district_list_title",
   "expedition_district_list_body",
   "expedition_district_detail_confirm",
+  "expedition_retreat_confirm_title",
+  "expedition_retreat_confirm_body",
   "expedition_detail_fields_title",
   "expedition_detail_requirements_title",
   "expedition_detail_field_format",
