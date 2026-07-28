@@ -47,14 +47,11 @@ interface E2eWebConfig {
   };
 }
 
-interface E2eDistrictExplorationTreeConfig {
-  readonly identity: {
-    readonly node_id_prefix: string;
-    readonly segment_separator: string;
-    readonly path_separator: string;
-    readonly index_width: number;
-  };
-  readonly depth_policy: {
+interface E2eExpeditionBranchingEventsConfig {
+  readonly policy: {
+    readonly capacity_policy: readonly number[];
+    readonly visible_choice_minimum: number;
+    readonly visible_choice_maximum: number;
     readonly minimum_depth: number;
     readonly maximum_depth: number;
   };
@@ -76,15 +73,15 @@ function loadE2eWebConfig(): E2eWebConfig {
   return JSON.parse(readFileSync(configPath, "utf8")) as E2eWebConfig;
 }
 
-/** 读取区划探索树的稳定节点编码与深度策略。 */
-function loadE2eDistrictExplorationTreeConfig(): E2eDistrictExplorationTreeConfig {
+/** 读取远征语义分支的层级容量与可见选项策略。 */
+function loadE2eExpeditionBranchingEventsConfig(): E2eExpeditionBranchingEventsConfig {
   const configPath = resolve(
     import.meta.dirname,
-    "../../config/district_exploration_tree.json",
+    "../../config/expedition_branching_events.json",
   );
   return JSON.parse(
     readFileSync(configPath, "utf8"),
-  ) as E2eDistrictExplorationTreeConfig;
+  ) as E2eExpeditionBranchingEventsConfig;
 }
 
 /** 读取远征行动的食物物品与单次消耗换算。 */
@@ -97,7 +94,8 @@ function loadE2eSurvivalSystemsConfig(): E2eSurvivalSystemsConfig {
 }
 
 const webConfigDocument = loadE2eWebConfig();
-const districtTreeConfigDocument = loadE2eDistrictExplorationTreeConfig();
+const expeditionBranchingConfigDocument =
+  loadE2eExpeditionBranchingEventsConfig();
 const survivalSystemsConfigDocument = loadE2eSurvivalSystemsConfig();
 const qualityConfig = webConfigDocument.quality_assurance;
 const responsiveConfig = webConfigDocument.responsive;
@@ -148,6 +146,7 @@ interface DebugEncounterBattleState {
 
 interface BrowserGameDebugHandle {
   getCurrentScreen(): string;
+  getRouteScreens(): readonly string[];
   getNodeBounds(nodeName: string): DebugNodeBounds | null;
   getSnapshot(): {
     readonly mode: "single" | "multiplayer" | "story" | "endless" | null;
@@ -269,6 +268,17 @@ async function readDebugSnapshot(
       throw new Error("游戏只读诊断接口尚未就绪。");
     }
     return debug.getSnapshot();
+  });
+}
+
+/** 读取页面组合根公布的只读路由栈快照。 */
+async function readDebugRouteScreens(page: Page): Promise<readonly string[]> {
+  return page.evaluate(() => {
+    const debug = window.__SHELTER_GAME__;
+    if (debug === undefined) {
+      throw new Error("游戏只读诊断接口尚未就绪。");
+    }
+    return debug.getRouteScreens();
   });
 }
 
@@ -549,69 +559,82 @@ async function clickNestedScrollableLayaNode(
   await clickLayaNode(page, nodeName);
 }
 
-/** 按配置编码生成指定深度的第一个区划探索节点 ID。 */
-function buildFirstDistrictExplorationNodeId(
-  cityId: string,
-  districtId: string,
-  depth: number,
-): string {
-  const identity = districtTreeConfigDocument.identity;
-  const firstIndex = String(1).padStart(identity.index_width, "0");
-  const encodedPath = Array.from(
-    { length: depth },
-    () => firstIndex,
-  ).join(identity.path_separator);
-  return [
-    identity.node_id_prefix,
-    cityId,
-    districtId,
-    encodedPath,
-  ].join(identity.segment_separator);
+/** 返回当前必须处理的语义远征节点。 */
+function requireExplorationPrompt(
+  snapshot: DebugGameSnapshot,
+): NonNullable<DebugGameSnapshot["explorationPrompt"]> {
+  const prompt = snapshot.explorationPrompt;
+  if (prompt === null) {
+    throw new Error("远征事件栏缺少当前语义节点。");
+  }
+  return prompt;
 }
 
-/** 逐层选择远征事件栏首项，直到配置化终点进入真实探索事件。 */
-async function followFirstDistrictExplorationBranch(
-  page: Page,
-  cityId: string,
-  districtId: string,
-): Promise<number> {
-  const depthPolicy = districtTreeConfigDocument.depth_policy;
-  await waitForScreen(page, "district_exploration_tree");
-  for (let depth = 1; depth <= depthPolicy.maximum_depth; depth += 1) {
-    const nodeId = buildFirstDistrictExplorationNodeId(cityId, districtId, depth);
-    const nodeName = `page-district-exploration-tree-option-${nodeId}`;
-    await clickLayaNode(page, nodeName);
-    const nextNodeName = depth < depthPolicy.maximum_depth
-      ? `page-district-exploration-tree-option-${buildFirstDistrictExplorationNodeId(
-          cityId,
-          districtId,
-          depth + 1,
-        )}`
-      : null;
+/** 沿当前首个可用语义选项推进，直到 4～5 层终点回到远征状态。 */
+async function followFirstSemanticExplorationBranch(page: Page): Promise<number> {
+  const policy = expeditionBranchingConfigDocument.policy;
+  const expectedEventStack = [
+    "dashboard",
+    "expedition_status",
+    "exploration_event",
+  ];
+  await waitForScreen(page, "exploration_event");
+  for (let depth = 1; depth <= policy.maximum_depth; depth += 1) {
+    expect(await readDebugRouteScreens(page)).toEqual(expectedEventStack);
+    const prompt = requireExplorationPrompt(await readDebugSnapshot(page));
+    expect(prompt.options.length).toBeGreaterThanOrEqual(
+      policy.visible_choice_minimum,
+    );
+    expect(prompt.options.length).toBeLessThanOrEqual(
+      policy.visible_choice_maximum,
+    );
+    const layerCapacity = policy.capacity_policy[depth - 1];
+    if (layerCapacity === undefined) {
+      throw new Error(`远征分支容量策略缺少第 ${String(depth)} 层。`);
+    }
+    expect(prompt.options.length).toBeLessThanOrEqual(layerCapacity);
+    const option = prompt.options.find((candidate) => !candidate.disabled);
+    if (option === undefined) {
+      throw new Error(`远征事件 ${prompt.id} 没有可用的语义选项。`);
+    }
+    const previousIdentity = `${prompt.id}\n${prompt.title}`;
+    await clickScrollableLayaNode(
+      page,
+      `page-exploration-event-option-${option.id}`,
+      "page-exploration-event-scroll",
+    );
     await expect.poll(async () => {
       const screen = await page.evaluate(() => (
         document.body.dataset.gameScreen ?? null
       ));
-      if (screen === "exploration_event") return screen;
+      const nextPrompt = (await readDebugSnapshot(page)).explorationPrompt;
+      if (screen === "expedition_status" && nextPrompt === null) {
+        return "resolved";
+      }
       if (
-        screen === "district_exploration_tree"
-        && nextNodeName !== null
-        && await readLayaNodeBounds(page, nextNodeName) !== null
+        screen === "exploration_event"
+        && nextPrompt !== null
+        && `${nextPrompt.id}\n${nextPrompt.title}` !== previousIdentity
       ) {
-        return screen;
+        return "advanced";
       }
       return "pending";
-    }).toMatch(/^(district_exploration_tree|exploration_event)$/);
-    const screen = await page.evaluate(() => document.body.dataset.gameScreen ?? null);
-    if (screen === "exploration_event") {
-      expect(depth).toBeGreaterThanOrEqual(depthPolicy.minimum_depth);
+    }).toMatch(/^(advanced|resolved)$/);
+    const nextScreen = await page.evaluate(() => (
+      document.body.dataset.gameScreen ?? null
+    ));
+    if (nextScreen === "expedition_status") {
+      expect(depth).toBeGreaterThanOrEqual(policy.minimum_depth);
+      expect(await readDebugRouteScreens(page)).toEqual([
+        "dashboard",
+        "expedition_status",
+      ]);
       return depth;
     }
-    if (screen !== "district_exploration_tree") {
-      throw new Error(`区划探索树进入了意外页面：${String(screen)}`);
-    }
+    expect(nextScreen).toBe("exploration_event");
+    expect(await readDebugRouteScreens(page)).toEqual(expectedEventStack);
   }
-  throw new Error("远征事件栏超过配置最大深度后仍未进入真实探索事件。");
+  throw new Error("远征语义事件超过配置最大深度后仍未结算。");
 }
 
 /** 通过真实 Canvas 选项为远征携带指定数量的食物。 */
@@ -663,29 +686,6 @@ async function openFirstAvailableExpeditionPrepare(
   await clickLayaNode(page, "page-expedition-district-detail-confirm");
   await waitForScreen(page, "expedition_prepare");
   return { city, district };
-}
-
-/** 按当前页面状态尝试可用事件选项，条件失效时关闭通讯并继续下一项。 */
-async function resolveExplorationEventOption(
-  page: Page,
-  options: readonly { readonly id: string; readonly disabled: boolean }[],
-): Promise<void> {
-  const availableOptions = options.filter((option) => !option.disabled);
-  for (const option of availableOptions) {
-    await clickScrollableLayaNode(
-      page,
-      `page-exploration-event-option-${option.id}`,
-      "page-exploration-event-scroll",
-    );
-    await expect.poll(async () => page.evaluate(() => (
-      document.body.dataset.gameScreen ?? null
-    ))).toMatch(/^(message|expedition_status)$/);
-    const screen = await page.evaluate(() => document.body.dataset.gameScreen ?? null);
-    if (screen === "expedition_status") return;
-    await clickLayaNode(page, "page-message-close");
-    await waitForScreen(page, "exploration_event");
-  }
-  throw new Error("远征事件的所有可见选项均因实时条件不足而无法结算。");
 }
 
 /** 为领域行动生成与战斗页一致的稳定按钮 ID。 */
@@ -1358,7 +1358,7 @@ test("Escape 功能菜单叠加在二级页上并逐层返回", async ({ page })
   await waitForScreen(page, "dashboard");
 });
 
-test("远征事件栏深层返回上一层，根层撤离需二次确认", async ({ page }) => {
+test("远征事件栏返回始终确认撤离且不回退决策", async ({ page }) => {
   test.slow();
   await closeAutomaticUpdateLog(page);
   await startSingleGame(page, "撤离测试员");
@@ -1368,29 +1368,47 @@ test("远征事件栏深层返回上一层，根层撤离需二次确认", async
   ) * survivalSystemsConfigDocument.expedition.food_units_per_action;
   await carryExpeditionFood(page, requiredFood);
   await clickLayaNode(page, "page-expedition-prepare-begin");
-  await waitForScreen(page, "district_exploration_tree");
+  await waitForScreen(page, "exploration_event");
+  const expectedEventStack = [
+    "dashboard",
+    "expedition_status",
+    "exploration_event",
+  ];
+  expect(await readDebugRouteScreens(page)).toEqual(expectedEventStack);
+  const rootPrompt = requireExplorationPrompt(await readDebugSnapshot(page));
+  const firstOption = rootPrompt.options.find((option) => !option.disabled);
+  if (firstOption === undefined) {
+    throw new Error("远征开场事件没有可用的语义选项。");
+  }
+  await clickScrollableLayaNode(
+    page,
+    `page-exploration-event-option-${firstOption.id}`,
+    "page-exploration-event-scroll",
+  );
+  await expect.poll(async () => {
+    const current = requireExplorationPrompt(await readDebugSnapshot(page));
+    return `${current.id}\n${current.title}`;
+  }).not.toBe(`${rootPrompt.id}\n${rootPrompt.title}`);
+  const currentPrompt = requireExplorationPrompt(await readDebugSnapshot(page));
+  expect(await readDebugRouteScreens(page)).toEqual(expectedEventStack);
 
-  const rootNodeName = `page-district-exploration-tree-option-${
-    buildFirstDistrictExplorationNodeId(city.id, district.id, 1)
-  }`;
-  const childNodeName = `page-district-exploration-tree-option-${
-    buildFirstDistrictExplorationNodeId(city.id, district.id, 2)
-  }`;
-  await clickLayaNode(page, rootNodeName);
-  await expect.poll(async () => readLayaNodeBounds(page, childNodeName))
-    .not.toBeNull();
-  await clickLayaNode(page, "page-district-exploration-tree-back");
-  await expect.poll(async () => ({
-    root: await readLayaNodeBounds(page, rootNodeName),
-    child: await readLayaNodeBounds(page, childNodeName),
-  })).toMatchObject({ root: expect.any(Object), child: null });
+  await clickLayaNode(page, "page-exploration-event-back");
+  await waitForScreen(page, "expedition_retreat_confirm");
+  await clickLayaNode(page, "page-expedition-retreat-confirm-cancel");
+  await waitForScreen(page, "exploration_event");
+  expect(requireExplorationPrompt(await readDebugSnapshot(page)).id)
+    .toBe(currentPrompt.id);
+  expect(await readDebugRouteScreens(page)).toEqual(expectedEventStack);
 
   await page.evaluate(() => { window.history.back(); });
   await waitForScreen(page, "expedition_retreat_confirm");
   await clickLayaNode(page, "page-expedition-retreat-confirm-cancel");
-  await waitForScreen(page, "district_exploration_tree");
+  await waitForScreen(page, "exploration_event");
+  expect(requireExplorationPrompt(await readDebugSnapshot(page)).id)
+    .toBe(currentPrompt.id);
+  expect(await readDebugRouteScreens(page)).toEqual(expectedEventStack);
 
-  await clickLayaNode(page, "page-district-exploration-tree-back");
+  await clickLayaNode(page, "page-exploration-event-back");
   await waitForScreen(page, "expedition_retreat_confirm");
   await clickLayaNode(page, "page-expedition-retreat-confirm-confirm");
   await expect.poll(async () => (
@@ -1399,6 +1417,67 @@ test("远征事件栏深层返回上一层，根层撤离需二次确认", async
   const retreatedSnapshot = await readDebugSnapshot(page);
   expect(retreatedSnapshot.explorationPrompt).toBeNull();
   expect(retreatedSnapshot.expeditionStatus).toBeNull();
+});
+
+test("远征分支中途存档读档后恢复当前事件与三层页面栈", async ({ page }) => {
+  test.slow();
+  await closeAutomaticUpdateLog(page);
+  await startSingleGame(page, "续接测试员");
+  const { city, district } = await openFirstAvailableExpeditionPrepare(page);
+  const requiredFood = (
+    city.travelStepCost + district.eventStepCost + 1
+  ) * survivalSystemsConfigDocument.expedition.food_units_per_action;
+  await carryExpeditionFood(page, requiredFood);
+  await clickLayaNode(page, "page-expedition-prepare-begin");
+  await waitForScreen(page, "exploration_event");
+  const entry = requireExplorationPrompt(await readDebugSnapshot(page));
+  const firstChoice = entry.options.find((option) => !option.disabled);
+  if (firstChoice === undefined) throw new Error("远征入口没有可执行选项。");
+  await clickScrollableLayaNode(
+    page,
+    `page-exploration-event-option-${firstChoice.id}`,
+    "page-exploration-event-scroll",
+  );
+  await expect.poll(async () => (
+    requireExplorationPrompt(await readDebugSnapshot(page)).id
+  )).not.toBe(entry.id);
+  const savedPrompt = requireExplorationPrompt(await readDebugSnapshot(page));
+
+  await page.keyboard.press("Escape");
+  await waitForScreen(page, "function_menu");
+  await clickScrollableLayaNode(
+    page,
+    "page-function-menu-option-save",
+    "page-function-menu-scroll",
+  );
+  await waitForScreen(page, "save_slots");
+  const targetSlotId = 1;
+  await clickScrollableLayaNode(
+    page,
+    `page-save-slots-slot-${String(targetSlotId)}`,
+    "page-save-slots-scroll",
+  );
+  await waitForScreen(page, "message");
+
+  await page.reload();
+  await expect(page.locator("#boot-status")).toBeHidden();
+  await closeAutomaticUpdateLog(page);
+  await clickLayaNode(page, "menu-load-game");
+  await waitForScreen(page, "save_slots");
+  await clickScrollableLayaNode(
+    page,
+    `page-save-slots-slot-${String(targetSlotId)}`,
+    "page-save-slots-scroll",
+  );
+  await waitForScreen(page, "connection");
+  await waitForScreen(page, "exploration_event");
+
+  expect(requireExplorationPrompt(await readDebugSnapshot(page)).id).toBe(savedPrompt.id);
+  expect(await readDebugRouteScreens(page)).toEqual([
+    "dashboard",
+    "expedition_status",
+    "exploration_event",
+  ]);
 });
 
 test("远征从整备、事件、安全返程到归来事项完成闭环", async ({ page }) => {
@@ -1474,13 +1553,18 @@ test("远征从整备、事件、安全返程到归来事项完成闭环", async
     "page-expedition-prepare-scroll",
   );
   await clickLayaNode(page, "page-expedition-prepare-begin");
-  await waitForScreen(page, "district_exploration_tree");
+  await waitForScreen(page, "exploration_event");
   const expeditionSnapshot = await readDebugSnapshot(page);
   const event = expeditionSnapshot.explorationPrompt;
   if (event === null) {
     throw new Error("远征首个事件未进入调试快照。");
   }
-  expect(district.eventLabels).toContain(event.title);
+  expect(event.options.length).toBeGreaterThanOrEqual(
+    expeditionBranchingConfigDocument.policy.visible_choice_minimum,
+  );
+  expect(event.options.length).toBeLessThanOrEqual(
+    expeditionBranchingConfigDocument.policy.visible_choice_maximum,
+  );
   expect(expeditionSnapshot.expeditionStatus).toMatchObject({
     cityId: "city_a",
     districtId: district.id,
@@ -1495,12 +1579,14 @@ test("远征从整备、事件、安全返程到归来事项完成闭环", async
   expect(
     status.maximumSteps - status.travelStepCost - status.remainingSteps,
   ).toBe(district.eventStepCost);
-  await followFirstDistrictExplorationBranch(page, city.id, district.id);
-  const eventAfterOpeningTree = await readDebugSnapshot(page);
-  expect(eventAfterOpeningTree.explorationPrompt?.id).toBe(event.id);
-  expect(eventAfterOpeningTree.expeditionStatus?.remainingSteps)
+  const resolvedDepth = await followFirstSemanticExplorationBranch(page);
+  expect(resolvedDepth).toBeGreaterThanOrEqual(
+    expeditionBranchingConfigDocument.policy.minimum_depth,
+  );
+  const eventAfterResolution = await readDebugSnapshot(page);
+  expect(eventAfterResolution.explorationPrompt).toBeNull();
+  expect(eventAfterResolution.expeditionStatus?.remainingSteps)
     .toBe(status.remainingSteps);
-  await resolveExplorationEventOption(page, event.options);
   expect((await readDebugSnapshot(page)).expeditionStatus?.cityId).toBe("city_a");
 
   await clickLayaNode(page, "page-expedition-status-safe-return");

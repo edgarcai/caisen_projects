@@ -770,6 +770,8 @@ export interface TextConfig extends SettlementNetworkTextConfig {
   readonly expedition_begin: string;
   readonly expedition_status_title: string;
   readonly expedition_status_format: string;
+  readonly exploration_branch_title_format: string;
+  readonly exploration_branch_intro_format: string;
   readonly exploration_location_format: string;
   readonly expedition_loot_format: string;
   readonly expedition_continue: string;

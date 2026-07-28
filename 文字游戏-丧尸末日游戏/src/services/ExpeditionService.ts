@@ -112,23 +112,6 @@ export class ExpeditionService {
     }));
   }
 
-  /** 为旧版直接探索入口选取可携带上限内的全部食物。 */
-  public legacyAutomaticFoodCarry(
-    state: GameState,
-  ): Readonly<Record<string, number>> {
-    const foodItemId = this.actionPolicy.actionFoodItemId();
-    const availableFood = this.inventory.availableQuantity(
-      state,
-      foodItemId,
-      state.active_player_index,
-    );
-    const quantity = Math.min(
-      availableFood,
-      this.config.expedition.maximum_carried_units,
-    );
-    return quantity > 0 ? { [foodItemId]: quantity } : {};
-  }
-
   /** 返回一次所选区划事件需要消耗的配置化行动数。 */
   public eventStepCost(cityId: string, districtId: string): number {
     return this.config.expedition.event_step_cost

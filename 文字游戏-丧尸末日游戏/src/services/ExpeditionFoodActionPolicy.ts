@@ -12,11 +12,6 @@ export class ExpeditionFoodActionPolicy {
     this.foodUnitsPerAction = config.expedition.food_units_per_action;
   }
 
-  /** 返回作为远征行动能源的配置物品 ID。 */
-  public actionFoodItemId(): string {
-    return this.foodItemId;
-  }
-
   /** 把携带食物数量换算为可用移动或探索行动数。 */
   public actionCapacity(carriedItems: Readonly<Record<string, number>>): number {
     const foodQuantity = carriedItems[this.foodItemId] ?? 0;

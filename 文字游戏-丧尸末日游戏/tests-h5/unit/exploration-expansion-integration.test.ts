@@ -11,16 +11,25 @@ describe("探索内容扩展接线", () => {
     application.startNewGame(["发现接线员"], "single");
     const state = requireState(application);
     requirePlayer(state).food = 20;
-    const prompt = application.prepareExploration("city_a");
+    const city = application.content.city("city_a");
+    const district = application.content.district(city.id, city.default_district_id);
+    application.prepareExpedition(city.id, district.id, [], { food: 10 });
     const pending = state.pending_exploration;
     if (pending === null) throw new Error("测试要求探索事件已锁定。");
-    const event = application.content.event(prompt.eventId);
-    const choiceId = event.choices?.find(
-      (choice) => (choice.requirements ?? []).length === 0,
-    )?.id ?? null;
     const beforeItems = { ...state.inventory.crafted_items };
 
-    const report = application.resolveExploration(prompt.eventId, choiceId);
+    let report = application.resolveExplorationBranch(
+      application.explorationBranchPrompt()?.choices.find(
+        (choice) => application.explorationBranchChoiceAvailable(choice.id),
+      )?.id ?? "missing_choice",
+    );
+    while (state.pending_exploration !== null) {
+      const choice = application.explorationBranchPrompt()?.choices.find(
+        (candidate) => application.explorationBranchChoiceAvailable(candidate.id),
+      );
+      if (choice === undefined) throw new Error("探索分支没有可执行选项。");
+      report = application.resolveExplorationBranch(choice.id);
+    }
 
     expect(report.stateChanged).toBe(true);
     expect(report.messages.some((message) => message.includes("出处一致"))).toBe(true);

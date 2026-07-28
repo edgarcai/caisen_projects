@@ -437,6 +437,8 @@ const TEXT_KEYS = [
   "expedition_begin",
   "expedition_status_title",
   "expedition_status_format",
+  "exploration_branch_title_format",
+  "exploration_branch_intro_format",
   "exploration_location_format",
   "expedition_loot_format",
   "expedition_continue",

@@ -9,6 +9,7 @@ import {
   H5_TEST_STORAGE_KEY,
   requirePlayer,
   requireState,
+  resolvePendingExplorationBranch,
   ScriptedRandomSource,
 } from "../helpers/H5TestHarness";
 
@@ -57,20 +58,6 @@ function unlockRemoteCityForExpedition(
   for (const transportId of transportIds) {
     expect(application.toggleTransport(transportId).stateChanged).toBe(true);
   }
-}
-
-/** 使用当前事件中无前置需求的选项完成待决探索。 */
-function resolvePendingExploration(
-  application: GameApplication,
-  state: GameState,
-): void {
-  const pending = state.pending_exploration;
-  if (pending === null) throw new Error("测试要求存在待决探索事件。");
-  const event = application.content.event(pending.event_id);
-  const choiceId = event.choices?.find(
-    (choice) => (choice.requirements ?? []).length === 0,
-  )?.id ?? null;
-  application.resolveExploration(pending.event_id, choiceId);
 }
 
 /** 创建一个只有主档的合法存档，再按测试用例注入指定损坏状态。 */
@@ -409,7 +396,7 @@ describe("配置化远征", () => {
 
     const pending = state.pending_exploration;
     if (pending === null) throw new Error("继续远征没有锁定事件。");
-    resolvePendingExploration(application, state);
+    resolvePendingExplorationBranch(application);
     const coinsBeforeReturn = requirePlayer(state).coins;
     const expeditionCoins = application.expeditionStatus()?.loot.coins ?? 0;
     const returned = application.returnExpeditionSafely();
@@ -434,9 +421,7 @@ describe("配置化远征", () => {
     }
 
     application.prepareExpedition(city.id, bankDistrict.id, [], { food: 6 });
-    const firstEvent = state.pending_exploration;
-    if (firstEvent === null) throw new Error("首个远征事件不存在。");
-    application.resolveExploration(firstEvent.event_id);
+    resolvePendingExplorationBranch(application);
 
     expect(state.active_player_index).toBe(1);
     expect(application.expeditionStatus()?.loot).toEqual({ coins: 10 });
@@ -444,9 +429,7 @@ describe("配置化远征", () => {
     expect(requirePlayer(state, 1).coins).toBe(40);
 
     application.continueExpedition();
-    const secondEvent = state.pending_exploration;
-    if (secondEvent === null) throw new Error("继续远征没有生成事件。");
-    application.resolveExploration(secondEvent.event_id);
+    resolvePendingExplorationBranch(application);
     const totalExpeditionCoins = application.expeditionStatus()?.loot.coins ?? 0;
     application.returnExpeditionSafely();
 

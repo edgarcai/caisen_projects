@@ -117,6 +117,8 @@ export interface PendingExplorationState {
   city_id: string;
   district_id: string;
   event_id: string;
+  branch_node_id: string | null;
+  branch_path: string[];
 }
 
 export interface InventoryState {

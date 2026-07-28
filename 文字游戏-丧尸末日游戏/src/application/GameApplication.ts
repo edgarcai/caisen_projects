@@ -57,7 +57,7 @@ import {
   shelterWallSnapshot,
   type ShelterWallSnapshot,
 } from "../domain/shelter-fortification";
-import type { DistrictExplorationLayerProjection } from "../domain/district-exploration-tree";
+import type { ExpeditionBranchingPromptProjection } from "../domain/expedition-branching-event";
 import type {
   CityReconMissionView,
   OutpostView,
@@ -69,7 +69,6 @@ import {
   actionReport,
   type ActionReport,
   type CombatAction,
-  type EventPrompt,
   type ManagementCategory,
   type ManagementOption,
   type StoryPrompt,
@@ -83,7 +82,7 @@ import type {
   CombatService,
   CompanionManagementService,
   DemoSystemsCoordinator,
-  DistrictExplorationTreeService,
+  ExpeditionBranchingEventService,
   ExpeditionService,
   ExplorationService,
   GameContent,
@@ -133,7 +132,7 @@ export class GameApplication {
   private readonly transportLoadout: TransportLoadoutService;
   private readonly expedition: ExpeditionService;
   private readonly settlementNetwork: SettlementNetworkService;
-  private readonly districtExplorationTree: DistrictExplorationTreeService;
+  private readonly expeditionBranchingEvents: ExpeditionBranchingEventService;
   private readonly campaignProfiles: CampaignProfileService;
   private readonly modeCapabilities: GameModeCapabilityPolicy;
   private readonly rules: GameRules;
@@ -161,7 +160,7 @@ export class GameApplication {
     transportLoadout: TransportLoadoutService,
     expedition: ExpeditionService,
     settlementNetwork: SettlementNetworkService,
-    districtExplorationTree: DistrictExplorationTreeService,
+    expeditionBranchingEvents: ExpeditionBranchingEventService,
     campaignProfiles: CampaignProfileService,
     modeCapabilities: GameModeCapabilityPolicy,
     rules: GameRules,
@@ -187,7 +186,7 @@ export class GameApplication {
     this.transportLoadout = transportLoadout;
     this.expedition = expedition;
     this.settlementNetwork = settlementNetwork;
-    this.districtExplorationTree = districtExplorationTree;
+    this.expeditionBranchingEvents = expeditionBranchingEvents;
     this.campaignProfiles = campaignProfiles;
     this.modeCapabilities = modeCapabilities;
     this.rules = rules;
@@ -335,6 +334,10 @@ export class GameApplication {
         throw new GameApplicationError(this.content.text("no_pending_event"));
       }
       this.exploration.prompt(candidate.pending_exploration.event_id);
+      this.expeditionBranchingEvents.prompt(
+        candidate.pending_exploration.event_id,
+        candidate.pending_exploration.branch_node_id,
+      );
     }
     if (candidate.battle !== null) {
       this.content.boss(candidate.battle.boss_id);
@@ -542,18 +545,32 @@ export class GameApplication {
     return this.expedition.eventStepCost(cityId, districtId);
   }
 
-  /** 按城市、区划和父路径懒投影当前一层探索选项。 */
-  public districtExplorationLayer(
-    cityId: string,
-    districtId: string,
-    parentPath: readonly number[],
-  ): DistrictExplorationLayerProjection {
-    this.requireState();
-    return this.districtExplorationTree.projectChildren(
-      cityId,
-      districtId,
-      parentPath,
+  /** 返回当前待决探索的单页分支情境，null 表示没有进行中事件。 */
+  public explorationBranchPrompt(): ExpeditionBranchingPromptProjection | null {
+    const pending = this.requireState().pending_exploration;
+    return pending === null
+      ? null
+      : this.expeditionBranchingEvents.prompt(
+          pending.event_id,
+          pending.branch_node_id,
+        );
+  }
+
+  /** 检查当前分支决策是否可推进或满足终点旧事件的结算条件。 */
+  public explorationBranchChoiceAvailable(choiceId: string): boolean {
+    const state = this.requireState();
+    const pending = this.requirePendingExploration(state);
+    const transition = this.expeditionBranchingEvents.choose(
+      pending.event_id,
+      pending.branch_node_id,
+      choiceId,
     );
+    return transition.kind === "advanced"
+      || this.exploration.canResolve(
+        pending.event_id,
+        transition.resolutionChoiceId,
+        state,
+      );
   }
 
   /** 返回当前远征行动、队伍、携带物和战利品摘要。 */
@@ -771,40 +788,37 @@ export class GameApplication {
     });
   }
 
-  /** 兼容旧调用方，使用城市默认区划抽取并持久化事件。 */
-  public prepareExploration(cityId: string): EventPrompt {
-    const state = this.requirePlayableState();
-    if (this.hasActiveBattle(state)) {
-      throw new GameApplicationError(this.content.text("battle_in_progress"));
-    }
-    const existingPending = state.pending_exploration;
-    if (existingPending !== null) {
-      return this.exploration.prompt(existingPending.event_id);
-    }
-    if (state.expedition === null) {
-      const districtId = this.content.city(cityId).default_district_id;
-      const preparation = this.expedition.prepare(
-        state,
-        cityId,
-        districtId,
-        [],
-        this.expedition.legacyAutomaticFoodCarry(state),
+  /** 推进同一探索事件的语义分支；只有终点决策才进入原子结算。 */
+  public resolveExplorationBranch(choiceId: string): ActionReport {
+    const current = this.requirePlayableState();
+    const pending = this.requirePendingExploration(current);
+    const transition = this.expeditionBranchingEvents.choose(
+      pending.event_id,
+      pending.branch_node_id,
+      choiceId,
+    );
+    if (transition.kind === "resolved") {
+      return this.settlePendingExploration(
+        pending.event_id,
+        transition.resolutionChoiceId,
+        transition.resolutionOutcomeId,
       );
-      if (!preparation.applied) {
-        throw new GameApplicationError(preparation.messages.join("\n"));
-      }
-      this.chronicle.record(state, preparation.messages);
     }
-    const event = this.prepareNextExpeditionEvent(state);
-    this.chronicle.record(state, event.messages);
-    const pending = this.requirePendingExploration(state);
-    return this.exploration.prompt(pending.event_id);
+    const working = cloneGameState(current);
+    const workingPending = this.requirePendingExploration(working);
+    workingPending.branch_node_id = transition.nextNodeId;
+    workingPending.branch_path = [...workingPending.branch_path, choiceId];
+    return this.commitAction(working, [], {
+      consumesTurn: false,
+      actionType: "exploration_branch",
+    });
   }
 
-  /** 结算已经锁定的探索事件并推进一个有效世界回合。 */
-  public resolveExploration(
+  /** 仅供已到达语义终点的分支内部结算锁定事件。 */
+  private settlePendingExploration(
     eventId: string,
     choiceId: string | null = null,
+    outcomeId: string | null = null,
   ): ActionReport {
     const current = this.requirePlayableState();
     const pending = current.pending_exploration;
@@ -820,7 +834,12 @@ export class GameApplication {
     const working = cloneGameState(current);
     this.activateExpeditionLeader(working);
     const beforeEvent = cloneGameState(working);
-    const resolution = this.exploration.resolve(eventId, choiceId, working);
+    const resolution = this.exploration.resolve(
+      eventId,
+      choiceId,
+      working,
+      outcomeId,
+    );
     if (!resolution.applied) {
       return actionReport([resolution.message], false);
     }
@@ -1291,10 +1310,13 @@ export class GameApplication {
       ),
       ambush: this.shelter.passiveModifier(state, "rules.ambush_weight_percent"),
     });
+    const branchCursor = this.expeditionBranchingEvents.start(prompt.eventId);
     state.pending_exploration = {
       city_id: status.cityId,
       district_id: status.districtId,
       event_id: prompt.eventId,
+      branch_node_id: branchCursor.currentNodeId,
+      branch_path: [],
     };
     return {
       messages: [

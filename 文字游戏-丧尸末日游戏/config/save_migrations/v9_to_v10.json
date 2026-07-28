@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "from_version": 9,
+  "to_version": 10,
+  "state_defaults": {
+    "branch_node_id": null,
+    "branch_path": []
+  }
+}

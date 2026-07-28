@@ -59,6 +59,20 @@ export class ExplorationService {
     return this.buildPrompt(this.content.event(eventId));
   }
 
+  /** 检查旧事件结算选项当前是否满足条件，不执行随机抽取或数值效果。 */
+  public canResolve(
+    eventId: string,
+    choiceId: string | null,
+    state: GameState,
+  ): boolean {
+    const event = this.content.event(eventId);
+    const payload = this.resolveChoice(event, choiceId);
+    const requirements = "requirements" in payload
+      ? payload.requirements ?? []
+      : [];
+    return this.requirementsMet(requirements, state);
+  }
+
   /** 原子应用事件开场效果，并返回开场文案。 */
   public applyPrelude(eventId: string, state: GameState): string | null {
     const event = this.content.event(eventId);
@@ -80,6 +94,7 @@ export class ExplorationService {
     eventId: string,
     choiceId: string | null,
     state: GameState,
+    outcomeId: string | null = null,
   ): EventResolution {
     const event = this.content.event(eventId);
     const payload = this.resolveChoice(event, choiceId);
@@ -92,7 +107,7 @@ export class ExplorationService {
         applied: false,
       };
     }
-    const resolved = this.selectOutcome(payload);
+    const resolved = this.selectOutcome(payload, outcomeId);
     const working = cloneGameState(state);
     const effects: NumericEffectConfig[] = [...(event.pre_effects ?? [])];
     if (resolved !== event) {
@@ -144,10 +159,23 @@ export class ExplorationService {
   }
 
   /** 在分支含有多个随机叶结果时按权重抽取一项。 */
-  private selectOutcome(payload: EventConfig | EventChoiceConfig): EventPayload {
+  private selectOutcome(
+    payload: EventConfig | EventChoiceConfig,
+    outcomeId: string | null,
+  ): EventPayload {
     const outcomes = "outcomes" in payload ? payload.outcomes ?? [] : [];
     if (outcomes.length === 0) {
+      if (outcomeId !== null) {
+        throw new ExplorationError(`探索结算不存在随机结果 ${outcomeId}。`);
+      }
       return payload;
+    }
+    if (outcomeId !== null) {
+      const selected = outcomes.find((outcome) => outcome.id === outcomeId);
+      if (selected === undefined) {
+        throw new ExplorationError(`探索结算不存在随机结果 ${outcomeId}。`);
+      }
+      return selected;
     }
     return this.random.weightedChoice(
       outcomes,

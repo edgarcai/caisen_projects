@@ -4,7 +4,13 @@ import { describe, expect, it } from "vitest";
 import type { GameApplication } from "../../src/application";
 import { validateSurvivalSystemsConfig } from "../../src/config/survivalSystemsValidator";
 import type { GameConfigDocument } from "../../src/domain/content";
-import { buildH5Harness, requirePlayer, requireState, ScriptedRandomSource } from "../helpers/H5TestHarness";
+import {
+  buildH5Harness,
+  requirePlayer,
+  requireState,
+  resolvePendingExplorationBranch,
+  ScriptedRandomSource,
+} from "../helpers/H5TestHarness";
 
 const game = gameDocument as unknown as GameConfigDocument;
 
@@ -183,10 +189,9 @@ describe("v6 远征存档与强制返程", () => {
     }
     state.expedition.remaining_steps = 0;
     state.expedition.loot.food = 5;
-    state.pending_exploration.event_id = "quiet_street";
     requirePlayer(state).health = 3;
 
-    const report = application.resolveExploration("quiet_street");
+    const report = resolvePendingExplorationBranch(application);
     const failure = application.lastExpeditionFailure();
 
     expect(report.messages.join("\n")).toContain("携带食物");

@@ -2,7 +2,7 @@ export * from "./content";
 export * from "./campaign-profile-metadata";
 export * from "./coop";
 export * from "./demo-systems";
-export * from "./district-exploration-tree";
+export * from "./expedition-branching-event";
 export * from "./errors";
 export * from "./game-state";
 export * from "./ports";

@@ -96,6 +96,8 @@ function createV4StateWithCheckpoint(): Record<string, unknown> {
     city_id: "city_a",
     district_id: "city_a_district_b",
     event_id: "bank",
+    branch_node_id: null,
+    branch_path: [],
   };
   const snapshot = structuredClone(state);
   if (snapshot.expedition === null) throw new Error("检查点远征夹具未创建。");
@@ -109,6 +111,8 @@ function createV4StateWithCheckpoint(): Record<string, unknown> {
     city_id: "city_d",
     district_id: "city_d_district_b",
     event_id: "skyscraper",
+    branch_node_id: null,
+    branch_path: [],
   };
   const restorableSnapshot = snapshot as unknown as Record<string, unknown>;
   delete restorableSnapshot.checkpoint;
@@ -165,7 +169,11 @@ function deleteDistrictFields(state: Record<string, unknown>): void {
   const expedition = asOptionalObject(state.expedition);
   if (expedition !== null) delete expedition.district_id;
   const pending = asOptionalObject(state.pending_exploration);
-  if (pending !== null) delete pending.district_id;
+  if (pending !== null) {
+    delete pending.district_id;
+    delete pending.branch_node_id;
+    delete pending.branch_path;
+  }
 }
 
 /** 将未知值读取为对象，并为测试失败提供清晰错误。 */
@@ -256,6 +264,8 @@ describe("v5 区划存档不变量", () => {
       city_id: "city_a",
       district_id: "city_a_district_b",
       event_id: "bank",
+      branch_node_id: null,
+      branch_path: [],
     };
 
     expect(() => createValidator().parse(state)).toThrow("远征城市或区划");
@@ -279,6 +289,8 @@ describe("v5 区划存档不变量", () => {
       city_id: "city_a",
       district_id: "city_a_district_a",
       event_id: "bank",
+      branch_node_id: null,
+      branch_path: [],
     };
 
     expect(() => createValidator().parse(state)).toThrow("不属于所选区划事件池");

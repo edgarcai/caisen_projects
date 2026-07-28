@@ -1,0 +1,439 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "capacity_policy": [40, 20, 10, 10, 10],
+    "visible_choice_minimum": 2,
+    "visible_choice_maximum": 4,
+    "minimum_depth": 4,
+    "maximum_depth": 5,
+    "minimum_profile_count": 4
+  },
+  "required_event_ids": [
+    "bank",
+    "elder",
+    "medical_pod",
+    "thief",
+    "trade_route_ambush",
+    "hospital",
+    "commercial_street",
+    "skyscraper",
+    "quiet_street"
+  ],
+  "profiles": [
+    {
+      "id": "thief_pursuit",
+      "entry_node_id": "thief_wallet_missing",
+      "nodes": [
+        {
+          "id": "thief_wallet_missing",
+          "title": "钱袋不见了",
+          "body": "两名幸存者撞过你的肩膀后钻进小巷。你摸向腰间，钱袋已经轻了。",
+          "choices": [
+            {"kind": "advance", "id": "chase", "label": "追上去", "description": "沿着刚留下的脚印冲进小巷。", "next_node_id": "thief_rain_alley"},
+            {"kind": "advance", "id": "do_not_chase", "label": "不追", "description": "先检查周围，避免落入调虎离山的陷阱。", "next_node_id": "thief_withdraw_route"}
+          ]
+        },
+        {
+          "id": "thief_rain_alley",
+          "title": "雨巷追踪",
+          "body": "雨水正在冲淡脚印。前方岔路一边传来急促脚步，另一边的消防梯仍在晃动。",
+          "choices": [
+            {"kind": "advance", "id": "follow_footprints", "label": "沿脚印追踪", "description": "相信地面的新鲜泥印。", "next_node_id": "thief_market_trace"},
+            {"kind": "advance", "id": "climb_fire_escape", "label": "爬上消防梯", "description": "从高处寻找逃跑者。", "next_node_id": "thief_rooftop_trace"}
+          ]
+        },
+        {
+          "id": "thief_withdraw_route",
+          "title": "克制怒火",
+          "body": "你没有贸然追赶，但附近还有被翻动的纸箱和一串通向屋顶的湿脚印。",
+          "choices": [
+            {"kind": "advance", "id": "search_crates", "label": "检查纸箱", "description": "寻找小偷遗落的物品和去向。", "next_node_id": "thief_market_trace"},
+            {"kind": "advance", "id": "mark_escape_route", "label": "标记撤离路线", "description": "先保证退路，再观察屋顶动静。", "next_node_id": "thief_rooftop_trace"}
+          ]
+        },
+        {
+          "id": "thief_market_trace",
+          "title": "废市场的身影",
+          "body": "两道人影闪进废市场。摊位间有新拉起的细线，后门却留着尚未干透的血迹。",
+          "choices": [
+            {"kind": "advance", "id": "cut_tripwire", "label": "拆掉绊线", "description": "缓慢接近藏身处。", "next_node_id": "thief_cornered"},
+            {"kind": "advance", "id": "circle_back_door", "label": "绕到后门", "description": "沿血迹截住他们。", "next_node_id": "thief_decoy"}
+          ]
+        },
+        {
+          "id": "thief_rooftop_trace",
+          "title": "屋顶上的暗号",
+          "body": "屋顶晾衣杆上系着新的红布，远处有人用镜片反光回应。小偷显然不是单独行动。",
+          "choices": [
+            {"kind": "advance", "id": "signal_back", "label": "伪造回应", "description": "把对方引到近处。", "next_node_id": "thief_cornered"},
+            {"kind": "advance", "id": "shadow_runner", "label": "跟随接头人", "description": "继续追查赃物去向。", "next_node_id": "thief_decoy"}
+          ]
+        },
+        {
+          "id": "thief_cornered",
+          "title": "堵住去路",
+          "body": "你终于在封死的卷帘门前截住两人。他们放下钱袋，却把手按在藏起的武器上。",
+          "choices": [
+            {"kind": "terminal", "id": "take_wallet", "label": "夺回钱袋", "description": "立刻收回失物并撤离。", "outcome_id": "caught"},
+            {"kind": "terminal", "id": "make_deal", "label": "要求赔偿", "description": "逼他们交出更多赃物换取离开。", "outcome_id": "deal"}
+          ]
+        },
+        {
+          "id": "thief_decoy",
+          "title": "第二道诱饵",
+          "body": "你追到巷口才发现外套只是挂在木架上的诱饵，远处仓库门正在缓慢关闭。",
+          "choices": [
+            {"kind": "terminal", "id": "stop_pursuit", "label": "停止追踪", "description": "保住队伍，不再冒险。", "outcome_id": "withdraw"},
+            {"kind": "advance", "id": "enter_warehouse", "label": "闯进仓库", "description": "趁门尚未关闭继续追赶。", "next_node_id": "thief_warehouse_standoff"}
+          ]
+        },
+        {
+          "id": "thief_warehouse_standoff",
+          "title": "仓库对峙",
+          "body": "仓库里不只有小偷。几名持械者守着赃物堆，侧面的超市通道似乎无人看守。",
+          "choices": [
+            {"kind": "terminal", "id": "raid_stash", "label": "突袭赃物堆", "description": "冒险夺回被偷走的东西。", "outcome_id": "raid"},
+            {"kind": "terminal", "id": "search_supermarket", "label": "转入超市搜索", "description": "放弃正面对抗，带走能找到的物资。", "outcome_id": "scavenge"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scavenging_site",
+      "entry_node_id": "scavenge_site_arrival",
+      "nodes": [
+        {
+          "id": "scavenge_site_arrival",
+          "title": "封闭地点",
+          "body": "目标建筑仍有搜索价值，但入口附近的尘土和碎玻璃说明最近有人来过。",
+          "choices": [
+            {"kind": "advance", "id": "enter_front", "label": "从正门进入", "description": "快速确认内部情况。", "next_node_id": "scavenge_front_hall"},
+            {"kind": "advance", "id": "survey_perimeter", "label": "先绕行侦察", "description": "寻找风险更低的入口。", "next_node_id": "scavenge_service_lane"},
+            {"kind": "advance", "id": "watch_roofline", "label": "观察屋顶", "description": "从通风井、天窗和新脚印判断另一条入口。", "next_node_id": "scavenge_service_lane"}
+          ]
+        },
+        {
+          "id": "scavenge_front_hall",
+          "title": "寂静大厅",
+          "body": "大厅里散落着搬运痕迹，楼梯口和柜台后的通道都能继续深入。",
+          "choices": [
+            {"kind": "advance", "id": "inspect_counter", "label": "检查柜台", "description": "优先寻找容易带走的物资。", "next_node_id": "scavenge_supply_trace"},
+            {"kind": "advance", "id": "take_stairs", "label": "走上楼梯", "description": "搜索尚未被翻动的楼层。", "next_node_id": "scavenge_power_trace"},
+            {"kind": "advance", "id": "read_floor_map", "label": "查看楼层图", "description": "沿标注的库房路线寻找物资。", "next_node_id": "scavenge_supply_trace"},
+            {"kind": "advance", "id": "listen_below", "label": "倾听地下动静", "description": "先判断地下层是否还有活动目标。", "next_node_id": "scavenge_power_trace"}
+          ]
+        },
+        {
+          "id": "scavenge_service_lane",
+          "title": "后勤通道",
+          "body": "侧门后的后勤通道有新鲜拖痕，配电箱旁还夹着一张褪色的楼层图。",
+          "choices": [
+            {"kind": "advance", "id": "follow_drag_marks", "label": "跟随拖痕", "description": "寻找刚被搬动的物资。", "next_node_id": "scavenge_supply_trace"},
+            {"kind": "advance", "id": "restore_power", "label": "检查配电箱", "description": "尝试恢复局部照明。", "next_node_id": "scavenge_power_trace"}
+          ]
+        },
+        {
+          "id": "scavenge_supply_trace",
+          "title": "未封好的库门",
+          "body": "库门只剩一道生锈插销，门缝里能闻到药品、机油和潮湿纸张混杂的气味。",
+          "choices": [
+            {"kind": "advance", "id": "open_quietly", "label": "安静开锁", "description": "降低惊动附近感染者的风险。", "next_node_id": "scavenge_secure_cache"},
+            {"kind": "advance", "id": "force_door", "label": "强行破门", "description": "在其他人赶来前抢占仓库。", "next_node_id": "scavenge_deep_corridor"}
+          ]
+        },
+        {
+          "id": "scavenge_power_trace",
+          "title": "忽明忽暗的楼层",
+          "body": "应急灯亮起后，一间上锁办公室和通往地下层的安全门同时显露出来。",
+          "choices": [
+            {"kind": "advance", "id": "search_office", "label": "搜索办公室", "description": "寻找钥匙、记录和便携物资。", "next_node_id": "scavenge_secure_cache"},
+            {"kind": "advance", "id": "open_basement", "label": "打开地下层", "description": "深入可能保存大宗物资的区域。", "next_node_id": "scavenge_deep_corridor"}
+          ]
+        },
+        {
+          "id": "scavenge_secure_cache",
+          "title": "安全储藏间",
+          "body": "储藏间内的箱子仍然干燥，但远处已经传来玻璃被踩碎的声音。",
+          "choices": [
+            {"kind": "terminal", "id": "take_essentials", "label": "处理主要目标", "description": "优先完成现场价值最高的行动。", "outcome_id": "search"},
+            {"kind": "terminal", "id": "catalog_then_leave", "label": "谨慎确认现场", "description": "控制风险，并保留能带回避难所的资料。", "outcome_id": "careful"}
+          ]
+        },
+        {
+          "id": "scavenge_deep_corridor",
+          "title": "深处的回声",
+          "body": "走廊尽头传来碰撞声，脚下的灰尘里却有一条通往隐藏库房的新痕迹。",
+          "choices": [
+            {"kind": "terminal", "id": "withdraw_now", "label": "立即撤离", "description": "不为未知物资承担额外风险。", "outcome_id": "withdraw"},
+            {"kind": "advance", "id": "follow_hidden_trace", "label": "继续深入", "description": "沿新痕迹寻找隐藏库房。", "next_node_id": "scavenge_hidden_cache"}
+          ]
+        },
+        {
+          "id": "scavenge_hidden_cache",
+          "title": "隐藏库房",
+          "body": "暗门后堆着尚未登记的物资，警报指示灯也在这一刻重新亮起。",
+          "choices": [
+            {"kind": "terminal", "id": "load_cache", "label": "冒险继续搜寻", "description": "在危险到来前尝试取得更有价值的成果。", "outcome_id": "deep_search"},
+            {"kind": "terminal", "id": "take_documents", "label": "转向轻便目标", "description": "放弃沉重物资，优先处理资料或其他便携目标。", "outcome_id": "alternate_search"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "survivor_contact",
+      "entry_node_id": "contact_first_sighting",
+      "nodes": [
+        {
+          "id": "contact_first_sighting",
+          "title": "陌生幸存者",
+          "body": "一名幸存者在废墟边向你示意。他看起来疲惫，却始终把一只手藏在身后。",
+          "choices": [
+            {"kind": "advance", "id": "approach_openly", "label": "表明来意", "description": "尝试建立最基本的信任。", "next_node_id": "contact_nearby_talk"},
+            {"kind": "advance", "id": "observe_first", "label": "保持距离观察", "description": "先判断周围是否还有同伴。", "next_node_id": "contact_distant_watch"}
+          ]
+        },
+        {
+          "id": "contact_nearby_talk",
+          "title": "短暂交谈",
+          "body": "对方说自己已经两天没有进食，并愿意用一条路线情报交换帮助。",
+          "choices": [
+            {"kind": "advance", "id": "ask_needs", "label": "询问具体需求", "description": "确认援助是否在承受范围内。", "next_node_id": "contact_trust_test"},
+            {"kind": "advance", "id": "ask_route", "label": "先核对情报", "description": "验证对方是否值得信任。", "next_node_id": "contact_hidden_companion"}
+          ]
+        },
+        {
+          "id": "contact_distant_watch",
+          "title": "暗处的观察",
+          "body": "你发现远处窗后还有一道影子。陌生人可能在保护同伴，也可能在等待伏击信号。",
+          "choices": [
+            {"kind": "advance", "id": "call_out", "label": "要求同伴现身", "description": "避免在信息不明时靠近。", "next_node_id": "contact_hidden_companion"},
+            {"kind": "advance", "id": "offer_water", "label": "放下一份援助", "description": "用克制的善意试探反应。", "next_node_id": "contact_trust_test"}
+          ]
+        },
+        {
+          "id": "contact_trust_test",
+          "title": "信任的代价",
+          "body": "对方坦白还有一名受伤同伴，并请求你提供补给或帮忙转移。",
+          "choices": [
+            {"kind": "advance", "id": "offer_support", "label": "准备援助", "description": "先查看伤势和撤离路线。", "next_node_id": "contact_final_offer"},
+            {"kind": "advance", "id": "set_boundary", "label": "明确边界", "description": "只提供有限帮助并保留退路。", "next_node_id": "contact_uncertain_departure"}
+          ]
+        },
+        {
+          "id": "contact_hidden_companion",
+          "title": "第二个人",
+          "body": "藏在窗后的同伴终于现身。他伤得不轻，却紧握着一份画有避难标记的旧地图。",
+          "choices": [
+            {"kind": "advance", "id": "inspect_injury", "label": "查看伤势", "description": "判断是否值得承担救援成本。", "next_node_id": "contact_final_offer"},
+            {"kind": "advance", "id": "inspect_map", "label": "核对地图", "description": "确认情报价值后再作决定。", "next_node_id": "contact_uncertain_departure"}
+          ]
+        },
+        {
+          "id": "contact_final_offer",
+          "title": "最后的请求",
+          "body": "两人愿意交出情报和随身工具，只求获得食物、治疗或一段安全护送。",
+          "choices": [
+            {"kind": "terminal", "id": "give_full_help", "label": "尽力帮助", "description": "承担成本并接受对方的回报。", "outcome_id": "help"},
+            {"kind": "terminal", "id": "decline_support", "label": "保留物资离开", "description": "无法承担援助时明确拒绝，并沿安全路线撤离。", "outcome_id": "decline"}
+          ]
+        },
+        {
+          "id": "contact_uncertain_departure",
+          "title": "难以判断",
+          "body": "远处的动静正在接近。你必须决定立即离开，还是再跟随他们确认一处藏身点。",
+          "choices": [
+            {"kind": "terminal", "id": "leave_contact", "label": "就此离开", "description": "不再承担未知风险。", "outcome_id": "decline"},
+            {"kind": "advance", "id": "follow_to_shelter", "label": "跟去藏身点", "description": "再给这次接触一次机会。", "next_node_id": "contact_shelter_truth"}
+          ]
+        },
+        {
+          "id": "contact_shelter_truth",
+          "title": "藏身点的真相",
+          "body": "狭小房间里只有几件生活用品和一份保存完好的记录。至少这一次，他们没有说谎。",
+          "choices": [
+            {"kind": "terminal", "id": "accept_story", "label": "接受请求", "description": "给予帮助并带走对方承诺的回报。", "outcome_id": "late_help"},
+            {"kind": "terminal", "id": "leave_supplies", "label": "拒绝请求并离开", "description": "不交出物资，保持距离后结束接触。", "outcome_id": "withdraw"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "road_ambush",
+      "entry_node_id": "ambush_roadblock",
+      "nodes": [
+        {
+          "id": "ambush_roadblock",
+          "title": "突然封路",
+          "body": "临时路障封死前路，废车后传来金属碰撞声。队伍已经进入对方的射界。",
+          "choices": [
+            {"kind": "advance", "id": "hold_position", "label": "稳住阵线", "description": "观察火力分布后再行动。", "next_node_id": "ambush_cover_exchange"},
+            {"kind": "advance", "id": "seek_detour", "label": "寻找绕路", "description": "趁包围尚未合拢转移。", "next_node_id": "ambush_service_road"}
+          ]
+        },
+        {
+          "id": "ambush_cover_exchange",
+          "title": "掩体后的喊话",
+          "body": "伏击者要求留下物资。废车形成了短暂掩体，侧面还有一条狭窄缺口。",
+          "choices": [
+            {"kind": "advance", "id": "negotiate", "label": "拖延谈判", "description": "争取观察包围薄弱点。", "next_node_id": "ambush_leader_signal"},
+            {"kind": "advance", "id": "move_through_gap", "label": "穿过缺口", "description": "冒险抢占侧翼位置。", "next_node_id": "ambush_flanking_route"}
+          ]
+        },
+        {
+          "id": "ambush_service_road",
+          "title": "废弃辅路",
+          "body": "辅路能绕过路障，但路面散落着新钉和一辆仍在冒烟的货车。",
+          "choices": [
+            {"kind": "advance", "id": "clear_spikes", "label": "清理路钉", "description": "稳步打开撤离通道。", "next_node_id": "ambush_flanking_route"},
+            {"kind": "advance", "id": "inspect_truck", "label": "借货车掩护", "description": "利用车体接近路障侧面。", "next_node_id": "ambush_leader_signal"}
+          ]
+        },
+        {
+          "id": "ambush_leader_signal",
+          "title": "首领的手势",
+          "body": "你看见伏击者首领向高处打出手势。屋顶射手和地面队伍之间存在短暂空档。",
+          "choices": [
+            {"kind": "advance", "id": "break_command", "label": "打断指挥", "description": "抓住空档扰乱对方。", "next_node_id": "ambush_escape_window"},
+            {"kind": "advance", "id": "use_smoke", "label": "制造烟幕", "description": "遮断视线后转移队伍。", "next_node_id": "ambush_last_blockade"}
+          ]
+        },
+        {
+          "id": "ambush_flanking_route",
+          "title": "侧翼通道",
+          "body": "侧翼只剩两名守卫，但倒塌围栏后还传来感染者的低吼。",
+          "choices": [
+            {"kind": "advance", "id": "rush_guards", "label": "冲过守卫", "description": "在尸群靠近前突破。", "next_node_id": "ambush_escape_window"},
+            {"kind": "advance", "id": "lure_infected", "label": "引来感染者", "description": "让混乱替队伍创造机会。", "next_node_id": "ambush_last_blockade"}
+          ]
+        },
+        {
+          "id": "ambush_escape_window",
+          "title": "撤离窗口",
+          "body": "包围出现缺口，队伍可以立刻撤出，也可以趁混乱夺回被截下的物资。",
+          "choices": [
+            {"kind": "terminal", "id": "escape_intact", "label": "立即撤离", "description": "优先保住人员和现有物资。", "outcome_id": "escape"},
+            {"kind": "terminal", "id": "recover_supplies", "label": "夺回物资", "description": "承担短暂风险后再撤离。", "outcome_id": "recover"}
+          ]
+        },
+        {
+          "id": "ambush_last_blockade",
+          "title": "最后一道路障",
+          "body": "主路出口仍被一辆横置卡车挡住。可以留下代价换路，也可以冒险进入车阵深处。",
+          "choices": [
+            {"kind": "terminal", "id": "pay_passage", "label": "交出部分物资", "description": "用可控损失换取离开。", "outcome_id": "pay"},
+            {"kind": "advance", "id": "enter_wrecks", "label": "闯入车阵", "description": "寻找不受控制的突破口。", "next_node_id": "ambush_wreck_escape"}
+          ]
+        },
+        {
+          "id": "ambush_wreck_escape",
+          "title": "车阵深处",
+          "body": "废车之间枪声和尸吼混在一起。前方有一条狭窄出口，旁边则散落着伏击者的补给。",
+          "choices": [
+            {"kind": "terminal", "id": "force_exit", "label": "强行突破", "description": "不再停留，冲出包围。", "outcome_id": "breakthrough"},
+            {"kind": "terminal", "id": "take_enemy_cache", "label": "带走补给", "description": "抓住最后机会反制伏击者。", "outcome_id": "counter_raid"}
+          ]
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "event_id": "thief",
+      "profile_id": "thief_pursuit",
+      "outcome_resolutions": [
+        {"outcome_id": "caught", "resolution_choice_id": "track", "resolution_outcome_id": "caught_thief"},
+        {"outcome_id": "deal", "resolution_choice_id": "track", "resolution_outcome_id": "caught_thief"},
+        {"outcome_id": "withdraw", "resolution_choice_id": "ignore", "resolution_outcome_id": null},
+        {"outcome_id": "raid", "resolution_choice_id": "track", "resolution_outcome_id": "supermarket_stash"},
+        {"outcome_id": "scavenge", "resolution_choice_id": "scavenge", "resolution_outcome_id": null}
+      ]
+    },
+    {
+      "event_id": "bank",
+      "profile_id": "scavenging_site",
+      "outcome_resolutions": [
+        {"outcome_id": "search", "resolution_choice_id": null, "resolution_outcome_id": "vault_coins"},
+        {"outcome_id": "careful", "resolution_choice_id": null, "resolution_outcome_id": "records_and_parts"},
+        {"outcome_id": "withdraw", "resolution_choice_id": null, "resolution_outcome_id": "safe_withdrawal"},
+        {"outcome_id": "deep_search", "resolution_choice_id": null, "resolution_outcome_id": "alarm_injury"},
+        {"outcome_id": "alternate_search", "resolution_choice_id": null, "resolution_outcome_id": "ledger_archive"}
+      ]
+    },
+    {
+      "event_id": "medical_pod",
+      "profile_id": "scavenging_site",
+      "outcome_resolutions": [
+        {"outcome_id": "search", "resolution_choice_id": null, "resolution_outcome_id": "full_treatment"},
+        {"outcome_id": "careful", "resolution_choice_id": null, "resolution_outcome_id": "diagnostic_scan"},
+        {"outcome_id": "withdraw", "resolution_choice_id": null, "resolution_outcome_id": "safe_disconnect"},
+        {"outcome_id": "deep_search", "resolution_choice_id": null, "resolution_outcome_id": "antidote_cache"},
+        {"outcome_id": "alternate_search", "resolution_choice_id": null, "resolution_outcome_id": "medical_data"}
+      ]
+    },
+    {
+      "event_id": "hospital",
+      "profile_id": "scavenging_site",
+      "outcome_resolutions": [
+        {"outcome_id": "search", "resolution_choice_id": null, "resolution_outcome_id": "medication_antidote"},
+        {"outcome_id": "careful", "resolution_choice_id": null, "resolution_outcome_id": "medical_bedding"},
+        {"outcome_id": "withdraw", "resolution_choice_id": null, "resolution_outcome_id": "safe_withdrawal"},
+        {"outcome_id": "deep_search", "resolution_choice_id": null, "resolution_outcome_id": "contaminated_medicine"},
+        {"outcome_id": "alternate_search", "resolution_choice_id": null, "resolution_outcome_id": "medical_records"}
+      ]
+    },
+    {
+      "event_id": "quiet_street",
+      "profile_id": "scavenging_site",
+      "outcome_resolutions": [
+        {"outcome_id": "search", "resolution_choice_id": null, "resolution_outcome_id": "backpack_supplies"},
+        {"outcome_id": "careful", "resolution_choice_id": null, "resolution_outcome_id": "safe_return"},
+        {"outcome_id": "withdraw", "resolution_choice_id": null, "resolution_outcome_id": "safe_return"},
+        {"outcome_id": "deep_search", "resolution_choice_id": null, "resolution_outcome_id": "zombie_ambush"},
+        {"outcome_id": "alternate_search", "resolution_choice_id": null, "resolution_outcome_id": "signal_route"}
+      ]
+    },
+    {
+      "event_id": "commercial_street",
+      "profile_id": "scavenging_site",
+      "outcome_resolutions": [
+        {"outcome_id": "search", "resolution_choice_id": "enter", "resolution_outcome_id": "hardware_store"},
+        {"outcome_id": "careful", "resolution_choice_id": "enter", "resolution_outcome_id": "bookstore_archive"},
+        {"outcome_id": "withdraw", "resolution_choice_id": "leave", "resolution_outcome_id": null},
+        {"outcome_id": "deep_search", "resolution_choice_id": "enter", "resolution_outcome_id": "locked_basement"},
+        {"outcome_id": "alternate_search", "resolution_choice_id": "enter", "resolution_outcome_id": "sealed_arcade"}
+      ]
+    },
+    {
+      "event_id": "skyscraper",
+      "profile_id": "scavenging_site",
+      "outcome_resolutions": [
+        {"outcome_id": "search", "resolution_choice_id": "enter", "resolution_outcome_id": "fallen_debris_coins"},
+        {"outcome_id": "careful", "resolution_choice_id": "enter", "resolution_outcome_id": "broadcast_intel"},
+        {"outcome_id": "withdraw", "resolution_choice_id": "leave", "resolution_outcome_id": null},
+        {"outcome_id": "deep_search", "resolution_choice_id": "enter", "resolution_outcome_id": "trapped_survivor"},
+        {"outcome_id": "alternate_search", "resolution_choice_id": "enter", "resolution_outcome_id": "broadcast_intel"}
+      ]
+    },
+    {
+      "event_id": "elder",
+      "profile_id": "survivor_contact",
+      "outcome_resolutions": [
+        {"outcome_id": "help", "resolution_choice_id": "help", "resolution_outcome_id": null},
+        {"outcome_id": "decline", "resolution_choice_id": "leave", "resolution_outcome_id": null},
+        {"outcome_id": "late_help", "resolution_choice_id": "help", "resolution_outcome_id": null},
+        {"outcome_id": "withdraw", "resolution_choice_id": "leave", "resolution_outcome_id": null}
+      ]
+    },
+    {
+      "event_id": "trade_route_ambush",
+      "profile_id": "road_ambush",
+      "outcome_resolutions": [
+        {"outcome_id": "escape", "resolution_choice_id": "resolve", "resolution_outcome_id": "safe_detour"},
+        {"outcome_id": "recover", "resolution_choice_id": "resolve", "resolution_outcome_id": "recover_coins"},
+        {"outcome_id": "pay", "resolution_choice_id": "resolve", "resolution_outcome_id": "pay_coins"},
+        {"outcome_id": "breakthrough", "resolution_choice_id": "resolve", "resolution_outcome_id": "minor_wound"},
+        {"outcome_id": "counter_raid", "resolution_choice_id": "resolve", "resolution_outcome_id": "recover_coins"}
+      ]
+    }
+  ]
+}

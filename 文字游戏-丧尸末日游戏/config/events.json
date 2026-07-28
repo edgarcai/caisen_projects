@@ -9,6 +9,7 @@
       "intro": "你来到一家门窗破碎的银行，柜台后仍有可以使用的旧硬币。",
       "outcomes": [
         {
+          "id": "vault_coins",
           "weight": 1,
           "result": "你撬开了半掩的保险柜，带回{coins}枚仍被聚落认可的旧金币。",
           "effects": [
@@ -16,6 +17,7 @@
           ]
         },
         {
+          "id": "alarm_injury",
           "weight": 1,
           "result": "金库警报突然复鸣，尸群撞破侧门。你负伤{damage}点，只抢出{coins}枚金币。",
           "effects": [
@@ -24,6 +26,7 @@
           ]
         },
         {
+          "id": "records_and_parts",
           "weight": 4,
           "result": "柜台里的钞票早已失去价值，但保安室地图夹着{newspapers}份灾变报纸和{parts}个门禁零件。",
           "effects": [
@@ -32,11 +35,27 @@
           ]
         },
         {
+          "id": "ambushed_loss",
           "weight": 1,
           "result": "埋伏者从柜台后举枪，你丢下{coins}枚金币才冲出大厅。",
           "effects": [
             {"target": "player.coins", "operation": "subtract", "amount": [5, 25], "token": "coins", "limit_to_available": true}
           ]
+        },
+        {
+          "id": "ledger_archive",
+          "weight": 1,
+          "result": "你放弃沉重的保险箱，只从档案柜带走{newspapers}份灾变报纸和{books}本账册。",
+          "effects": [
+            {"target": "shelter.newspapers", "operation": "add", "amount": [2, 5], "token": "newspapers"},
+            {"target": "shelter.books", "operation": "add", "amount": [1, 3], "token": "books"}
+          ]
+        },
+        {
+          "id": "safe_withdrawal",
+          "weight": 1,
+          "result": "你听见金库深处的异响，立刻沿标记路线撤离，没有再冒险。",
+          "effects": []
         }
       ]
     },
@@ -73,9 +92,47 @@
       "weight": 1,
       "title": "大型医疗仓",
       "intro": "一台应急医疗仓仍有电力，舱门上的绿灯正在闪烁。",
-      "result": "医疗仓完成了全身治疗，你的生命恢复至{health}。",
-      "effects": [
-        {"target": "player.health", "operation": "set", "amount": 100, "token": "health"}
+      "outcomes": [
+        {
+          "id": "full_treatment",
+          "weight": 1,
+          "result": "你进入医疗舱并完成全身治疗，生命恢复至{health}。",
+          "effects": [
+            {"target": "player.health", "operation": "set", "amount": 100, "token": "health"}
+          ]
+        },
+        {
+          "id": "diagnostic_scan",
+          "weight": 1,
+          "result": "你先运行低功率诊断，医疗机械修复了部分伤势，生命+{heal}。",
+          "effects": [
+            {"target": "player.health", "operation": "add", "amount": [12, 24], "token": "heal"}
+          ]
+        },
+        {
+          "id": "safe_disconnect",
+          "weight": 1,
+          "result": "舱内电流突然不稳。你切断电源并安全撤离，没有接受治疗。",
+          "effects": []
+        },
+        {
+          "id": "antidote_cache",
+          "weight": 1,
+          "result": "你冒险拆开药剂柜，找到1支解毒剂；储备输液同时恢复{heal}点生命。",
+          "effects": [
+            {"target": "player.antidotes", "operation": "add", "amount": 1, "token": "antidotes"},
+            {"target": "player.health", "operation": "add", "amount": [25, 40], "token": "heal"}
+          ]
+        },
+        {
+          "id": "medical_data",
+          "weight": 1,
+          "result": "你没有进入舱体，而是下载了设备记录，带回{newspapers}份灾变病例和{magazines}本医学期刊。",
+          "effects": [
+            {"target": "shelter.newspapers", "operation": "add", "amount": [2, 5], "token": "newspapers"},
+            {"target": "shelter.magazines", "operation": "add", "amount": [1, 3], "token": "magazines"}
+          ]
+        }
       ]
     },
     {
@@ -94,6 +151,7 @@
           "label": "追踪他们",
           "outcomes": [
             {
+              "id": "missing_trace",
               "weight": 2,
               "result": "雨水冲掉了足迹，你跟丢了他们，却在排水沟旁找到{magazines}本幸存者丢下的旧杂志。",
               "effects": [
@@ -101,6 +159,7 @@
               ]
             },
             {
+              "id": "mistaken_group",
               "weight": 1,
               "result": "你认错了一伙幸存者，被训斥后赔了{coins}枚金币，避难所活跃度-{activity}。",
               "effects": [
@@ -109,6 +168,7 @@
               ]
             },
             {
+              "id": "caught_thief",
               "weight": 1,
               "result": "你抓住了小偷，并从他们的赃物里收回{coins}枚金币。",
               "effects": [
@@ -116,6 +176,7 @@
               ]
             },
             {
+              "id": "zombie_lure",
               "weight": 1,
               "result": "小偷把你引向丧尸群，你受到了{damage}点伤害。",
               "effects": [
@@ -123,6 +184,7 @@
               ]
             },
             {
+              "id": "camp_robbery",
               "weight": 1,
               "result": "你闯进了对方的营地，被抢走{coins}枚金币并受到{damage}点伤害。",
               "effects": [
@@ -131,6 +193,7 @@
               ]
             },
             {
+              "id": "supermarket_stash",
               "weight": 1,
               "result": "你在超市堵住了他们，带回药品{medical_supplies}份、金币{coins}枚与零件{parts}个；攻击、防御、敏捷各+25，饥饿值-25，活跃度+20。",
               "effects": [
@@ -145,6 +208,7 @@
               ]
             },
             {
+              "id": "tripwire_injury",
               "weight": 1,
               "result": "你踩中了他们留下的陷阱，受到{damage}点伤害。",
               "effects": [
@@ -181,11 +245,13 @@
           "label": "设法脱身",
           "outcomes": [
             {
+              "id": "safe_detour",
               "weight": 2,
               "result": "你提前发现了路障后的反光，带队绕过断桥，所有物资都保住了。",
               "effects": []
             },
             {
+              "id": "pay_coins",
               "weight": 1,
               "result": "你用{coins}枚金币换来一条撤离通道，交易只能取消。",
               "effects": [
@@ -193,6 +259,7 @@
               ]
             },
             {
+              "id": "minor_wound",
               "weight": 1,
               "result": "交火只持续了几十秒，你仍被流弹擦伤，生命-{damage}。",
               "effects": [
@@ -200,6 +267,7 @@
               ]
             },
             {
+              "id": "lost_parts",
               "weight": 1,
               "result": "撤退时一个工具箱坠下高架，丢失{parts}个零件。",
               "effects": [
@@ -207,6 +275,7 @@
               ]
             },
             {
+              "id": "lost_food",
               "weight": 1,
               "result": "掩护队伍穿过车阵时，装粮袋被划破，丢失{food}份食物。",
               "effects": [
@@ -214,6 +283,7 @@
               ]
             },
             {
+              "id": "lost_medical",
               "weight": 1,
               "result": "伏击者夺走了急救包，损失{medical_supplies}份医疗用品。",
               "effects": [
@@ -221,6 +291,7 @@
               ]
             },
             {
+              "id": "recover_coins",
               "weight": 1,
               "result": "阳关从废车底追回{coins}枚赃款，但避难所听见交火录音后希望值下降{hope}点。",
               "effects": [
@@ -240,6 +311,7 @@
       "intro": "医院大厅满是灰尘，但药房的防盗门还没有被撬开。",
       "outcomes": [
         {
+          "id": "medication_antidote",
           "weight": 1,
           "result": "你带回{medical_supplies}份医疗用品和1支解毒剂。",
           "effects": [
@@ -248,6 +320,7 @@
           ]
         },
         {
+          "id": "medical_bedding",
           "weight": 1,
           "result": "你带回{medical_supplies}份药品和干净被褥，避难所活跃度+{activity}。",
           "effects": [
@@ -257,6 +330,7 @@
           ]
         },
         {
+          "id": "contaminated_medicine",
           "weight": 1,
           "result": "药柜受到污染，你在撤离时生命-{damage}，但仍封存了{medical_supplies}份可用药品。",
           "effects": [
@@ -265,6 +339,7 @@
           ]
         },
         {
+          "id": "medical_records",
           "weight": 5,
           "result": "病案室保存着转运路线，你带走{newspapers}份灾变记录、{books}本医疗手册和{magazines}本医学期刊。",
           "effects": [
@@ -272,6 +347,12 @@
             {"target": "shelter.books", "operation": "add", "amount": [3, 7], "token": "books"},
             {"target": "shelter.magazines", "operation": "add", "amount": [2, 5], "token": "magazines"}
           ]
+        },
+        {
+          "id": "safe_withdrawal",
+          "weight": 1,
+          "result": "走廊深处传来轮床碰撞声。你不再深入，沿已清理的楼梯安全撤离。",
+          "effects": []
         }
       ]
     },
@@ -287,6 +368,7 @@
           "label": "进入搜索",
           "outcomes": [
             {
+              "id": "falling_sign",
               "weight": 1,
               "result": "服装店招牌砸中了你，生命-{damage}；但衣物让伙伴们很开心，活跃度+{activity}，绷带恢复{heal}点生命。",
               "effects": [
@@ -296,6 +378,7 @@
               ]
             },
             {
+              "id": "hardware_store",
               "weight": 1,
               "result": "五金店仓库里还有{parts}个可用零件。",
               "effects": [
@@ -303,6 +386,7 @@
               ]
             },
             {
+              "id": "bookstore_archive",
               "weight": 5,
               "result": "你从书店带回一批读物与灾前剪报，避难所活跃度+{activity}，书本+{books}，旧报纸+{newspapers}，杂志+{magazines}。",
               "effects": [
@@ -313,6 +397,7 @@
               ]
             },
             {
+              "id": "pharmacy_cache",
               "weight": 1,
               "result": "你在药店获得了{medical_supplies}份医疗用品。",
               "effects": [
@@ -320,6 +405,7 @@
               ]
             },
             {
+              "id": "food_shop",
               "weight": 1,
               "result": "你在食品店获得了{food}份食物。",
               "effects": [
@@ -327,6 +413,7 @@
               ]
             },
             {
+              "id": "fire_equipment",
               "weight": 1,
               "result": "消防器材店的卷帘门后还有工具箱，你获得{parts}个零件，避难所防御设施伤害+{defense}。",
               "effects": [
@@ -335,6 +422,7 @@
               ]
             },
             {
+              "id": "locked_basement",
               "weight": 1,
               "result": "地下仓库的门在你身后锁死。你生命-{damage}后破门而出，带回{food}份食物与{medical_supplies}份药品。",
               "effects": [
@@ -344,6 +432,7 @@
               ]
             },
             {
+              "id": "sealed_arcade",
               "weight": 1,
               "result": "旧游戏厅里竟有一台密封主机。游戏机+{game_consoles}，这件稀罕物让希望+{hope}。",
               "effects": [
@@ -373,6 +462,7 @@
           "label": "进入大楼",
           "outcomes": [
             {
+              "id": "fallen_debris_coins",
               "weight": 2,
               "result": "坠落的重物造成{damage}点伤害，你仍找到{coins}枚金币。",
               "effects": [
@@ -381,6 +471,7 @@
               ]
             },
             {
+              "id": "broadcast_intel",
               "weight": 4,
               "result": "屋顶应急台仍能接收广播，你抄下{newspapers}份远城情报，避难所希望+{hope}。",
               "effects": [
@@ -389,6 +480,7 @@
               ]
             },
             {
+              "id": "trapped_survivor",
               "weight": 1,
               "result": "电梯井里传来求救声，你救出一名被困者。人口+{population}，但救援消耗{medical_supplies}份药品。",
               "effects": [
@@ -415,8 +507,9 @@
       "title": "寂静街区",
       "intro": "街区安静得异常，只有远处废弃广告牌的吱呀声。",
       "outcomes": [
-        {"weight": 2, "result": "你避开了游荡的丧尸，没有找到物资，但安全回到了避难所。", "effects": []},
+        {"id": "safe_return", "weight": 2, "result": "你避开了游荡的丧尸，没有找到物资，但安全回到了避难所。", "effects": []},
         {
+          "id": "backpack_supplies",
           "weight": 3,
           "result": "你在公交站后找到一个遗落背包，获得{food}份食物、{parts}个零件、{newspapers}份完整旧报纸和{magazines}本杂志。",
           "effects": [
@@ -427,6 +520,7 @@
           ]
         },
         {
+          "id": "rescued_survivor",
           "weight": 1,
           "result": "一名幸存者从封死的便利店敲窗求救。你把他带回避难所，人口+{population}，希望+{hope}。",
           "effects": [
@@ -435,6 +529,7 @@
           ]
         },
         {
+          "id": "zombie_ambush",
           "weight": 1,
           "result": "寂静是尸群的陷阱。你从包围中突围，生命-{damage}，却在路边报刊亭抓到{newspapers}份情报。",
           "effects": [
@@ -443,6 +538,7 @@
           ]
         },
         {
+          "id": "signal_route",
           "weight": 1,
           "result": "路灯突然亮起，远处有人用摩斯灯语标出了安全巷道。你获得{parts}个零件，活跃度+{activity}。",
           "effects": [

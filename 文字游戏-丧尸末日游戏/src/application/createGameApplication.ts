@@ -8,12 +8,16 @@ import v5ToV6MigrationDocument from "../../config/save_migrations/v5_to_v6.json"
 import v6ToV7MigrationDocument from "../../config/save_migrations/v6_to_v7.json";
 import v7ToV8MigrationDocument from "../../config/save_migrations/v7_to_v8.json";
 import v8ToV9MigrationDocument from "../../config/save_migrations/v8_to_v9.json";
+import v9ToV10MigrationDocument from "../../config/save_migrations/v9_to_v10.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
 import shelterLayoutDocument from "../../config/shelter_layout.json";
 import webDocument from "../../config/web_config.json";
 import { demoSystemsConfig } from "../config/demoSystemsConfig";
-import { districtExplorationTreeConfig } from "../config/districtExplorationTreeConfig";
+import {
+  expeditionBranchingEventConfig,
+  validateExpeditionBranchingEventReferences,
+} from "../config/expeditionBranchingEventConfig";
 import { createKeyItemWarehouseCatalog } from "../config/keyItemCatalog";
 import {
   createManufacturingDiscoveryItems,
@@ -46,6 +50,7 @@ import type {
   V6ToV7SaveMigrationConfig,
   V7ToV8SaveMigrationConfig,
   V8ToV9SaveMigrationConfig,
+  V9ToV10SaveMigrationConfig,
 } from "../domain/content";
 import type { SurvivalSystemsConfigDocument } from "../domain/survival-systems";
 import type {
@@ -66,6 +71,7 @@ import {
   V6ToV7SaveMigrator,
   V7ToV8SaveMigrator,
   V8ToV9SaveMigrator,
+  V9ToV10SaveMigrator,
 } from "../infrastructure";
 import { V3ToV4SaveMigrator } from "../infrastructure/V3ToV4SaveMigrator";
 import { V4ToV5SaveMigrator } from "../infrastructure/V4ToV5SaveMigrator";
@@ -79,9 +85,9 @@ import {
   CityAccessService,
   CombatService,
   DemoSystemsCoordinator,
-  DistrictExplorationTreeService,
   EquipmentService,
   EncounterBattleService,
+  ExpeditionBranchingEventService,
   ExpeditionService,
   ExplorationService,
   GameContent,
@@ -142,6 +148,7 @@ export function createGameApplication(
   const v6ToV7Migration: V6ToV7SaveMigrationConfig = v6ToV7MigrationDocument;
   const v7ToV8Migration: V7ToV8SaveMigrationConfig = v7ToV8MigrationDocument;
   const v8ToV9Migration: V8ToV9SaveMigrationConfig = v8ToV9MigrationDocument;
+  const v9ToV10Migration: V9ToV10SaveMigrationConfig = v9ToV10MigrationDocument;
   const storageConfig = webDocument.storage as unknown as StorageDocument;
   const baseSurvivalSystems = validateSurvivalSystemsConfig(survivalSystemsDocument);
   const survivalSystems = validateSurvivalSystemsConfig(
@@ -152,6 +159,10 @@ export function createGameApplication(
   );
   const shelterLayoutConfig = parseShelterLayoutConfig(shelterLayoutDocument);
   validateWorldMapConfig(game, events);
+  validateExpeditionBranchingEventReferences(
+    expeditionBranchingEventConfig,
+    events,
+  );
   const content = new GameContent(game, story, events);
   const random = options.randomSource ?? new BrowserRandomSource();
   const storage = options.storage ?? browserStorageOrMemory();
@@ -208,9 +219,8 @@ export function createGameApplication(
     equipment,
     content,
   );
-  const districtExplorationTree = new DistrictExplorationTreeService(
-    districtExplorationTreeConfig,
-    content,
+  const expeditionBranchingEvents = new ExpeditionBranchingEventService(
+    expeditionBranchingEventConfig,
   );
   const chronicle = new ChronicleService(content);
   const rules = new GameRules(content, shelter, chronicle, difficultyRules);
@@ -295,8 +305,10 @@ export function createGameApplication(
     v6ToV7Migration,
     v7ToV8Migration,
     v8ToV9Migration,
+    v9ToV10Migration,
     shelterLayoutState,
     archiveStorage,
+    expeditionBranchingEvents,
   );
   return new GameApplication(
     content,
@@ -318,7 +330,7 @@ export function createGameApplication(
     transportLoadout,
     expedition,
     settlementNetwork,
-    districtExplorationTree,
+    expeditionBranchingEvents,
     campaignProfiles,
     modeCapabilities,
     rules,
@@ -355,8 +367,10 @@ function createRepository(
   v6ToV7Migration: V6ToV7SaveMigrationConfig,
   v7ToV8Migration: V7ToV8SaveMigrationConfig,
   v8ToV9Migration: V8ToV9SaveMigrationConfig,
+  v9ToV10Migration: V9ToV10SaveMigrationConfig,
   shelterLayoutState: ShelterLayoutStateProjector,
   archiveStorage: ArchiveStorageService,
+  expeditionBranchCursor: ExpeditionBranchingEventService,
 ): SaveRepository {
   const validator = new SaveStateValidator(
     game.rules,
@@ -368,6 +382,7 @@ function createRepository(
     game.cities,
     shelterLayoutState,
     archiveStorage,
+    expeditionBranchCursor,
   );
   return new LocalStorageSaveRepository({
     storage: options.storage ?? browserStorageOrMemory(),
@@ -393,6 +408,7 @@ function createRepository(
         demoSystemsConfig.archive_storage.collections,
       ),
       new V8ToV9SaveMigrator(v8ToV9Migration),
+      new V9ToV10SaveMigrator(v9ToV10Migration),
     ],
     now: options.now,
   });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createGameApplication, type GameApplication } from "../../src/application";
+import { expeditionBranchingEventConfig } from "../../src/config/expeditionBranchingEventConfig";
 import { GameApplicationError } from "../../src/domain/errors";
 import type { GameState, PlayerState } from "../../src/domain/game-state";
 import type { RandomSource } from "../../src/domain/ports";
@@ -67,6 +68,27 @@ function requirePlayer(state: GameState, index = 0): PlayerState {
     throw new Error(`测试玩家索引 ${String(index)} 越界。`);
   }
   return player;
+}
+
+/** 沿首个满足条件的语义分支推进到终点，并返回唯一一次事件结算。 */
+function resolveExplorationBranchChain(
+  application: GameApplication,
+): ReturnType<GameApplication["resolveExplorationBranch"]> {
+  for (
+    let depth = 1;
+    depth <= expeditionBranchingEventConfig.policy.maximum_depth;
+    depth += 1
+  ) {
+    const prompt = application.explorationBranchPrompt();
+    if (prompt === null) throw new Error("测试要求存在待决探索分支。");
+    const choice = prompt.choices.find(
+      (candidate) => application.explorationBranchChoiceAvailable(candidate.id),
+    );
+    if (choice === undefined) throw new Error("探索分支没有可执行选项。");
+    const report = application.resolveExplorationBranch(choice.id);
+    if (requireState(application).pending_exploration === null) return report;
+  }
+  throw new Error("探索分支超过配置最大深度后仍未结算。");
 }
 
 describe("领域时钟与新游戏", () => {
@@ -180,7 +202,7 @@ describe("剧情、探索与首领战", () => {
     expect(state.story.key_items).toContain("grain_sample");
   });
 
-  it("持久化首次抽取的探索事件，重复打开不会免费重抽", () => {
+  it("正式整备只抽取一次事件，并由语义分支完成唯一结算", () => {
     const application = buildApplication(new QueueRandomSource([], [0, 0]));
     application.startNewGame(["白菜"], "single");
     const city = application.content.city("city_a");
@@ -188,29 +210,68 @@ describe("剧情、探索与首领战", () => {
       city.id,
       city.default_district_id,
     );
+    requirePlayer(requireState(application)).food = 10;
 
-    const first = application.prepareExploration("city_a");
-    const repeated = application.prepareExploration("city_h");
+    const first = application.prepareExpedition(
+      city.id,
+      district.id,
+      [],
+      { food: 10 },
+    );
+    const pending = requireState(application).pending_exploration;
+    if (pending === null) throw new Error("远征首个事件没有持久化。");
 
-    expect(district.event_ids).toContain(first.eventId);
-    expect(repeated.eventId).toBe(first.eventId);
+    expect(first.stateChanged).toBe(true);
+    expect(district.event_ids).toContain(pending.event_id);
     expect(requireState(application).pending_exploration).toEqual({
       city_id: "city_a",
       district_id: district.id,
-      event_id: first.eventId,
+      event_id: pending.event_id,
+      branch_node_id: application.explorationBranchPrompt()?.nodeId,
+      branch_path: [],
     });
     expect(requireState(application).turn_number).toBe(0);
 
-    const event = application.content.event(first.eventId);
-    const choiceId = event.choices?.find(
-      (choice) => (choice.requirements ?? []).length === 0,
-    )?.id ?? null;
-    const report = application.resolveExploration(first.eventId, choiceId);
+    const report = resolveExplorationBranchChain(application);
 
     expect(report.stateChanged).toBe(true);
     expect(requireState(application).pending_exploration).toBeNull();
     expect(requireState(application).turn_number).toBe(1);
     expect(application.expeditionStatus()?.eventsResolved).toBe(1);
+  });
+
+  it("盗贼终点选择夺回钱袋后不会重新随机成跟丢目标", () => {
+    const application = buildApplication(new QueueRandomSource());
+    application.startNewGame(["追踪所长"], "single");
+    const state = requireState(application);
+    const city = application.content.city("city_a");
+    const district = application.content.district(
+      city.id,
+      city.default_district_id,
+    );
+    requirePlayer(state).food = 10;
+    requirePlayer(state).coins = 50;
+    application.prepareExpedition(city.id, district.id, [], { food: 10 });
+    if (state.pending_exploration === null) throw new Error("远征事件没有生成。");
+    state.pending_exploration.event_id = "thief";
+    state.pending_exploration.branch_node_id = null;
+    state.pending_exploration.branch_path = [];
+    expect(state.pending_exploration.event_id).toBe("thief");
+
+    let finalMessages: readonly string[] = [];
+    for (const choiceId of [
+      "chase",
+      "follow_footprints",
+      "cut_tripwire",
+      "take_wallet",
+    ]) {
+      finalMessages = application.resolveExplorationBranch(choiceId).messages;
+    }
+
+    expect(state.pending_exploration).toBeNull();
+    expect(state.turn_number).toBe(1);
+    expect(finalMessages.join("\n")).toContain("抓住了小偷");
+    expect(finalMessages.join("\n")).not.toContain("跟丢");
   });
 
   it("取消探索仍应用开场代价且只消耗一个行动", () => {
@@ -228,6 +289,8 @@ describe("剧情、探索与首领战", () => {
       city_id: city.id,
       district_id: district.id,
       event_id: "thief",
+      branch_node_id: null,
+      branch_path: [],
     };
 
     const report = application.cancelExploration();

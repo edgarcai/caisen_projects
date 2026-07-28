@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { GameApplication } from "../../src/application";
-import type { GameState } from "../../src/domain/game-state";
 import { MemoryStorage } from "../../src/infrastructure";
 import {
   buildH5Harness,
   requirePlayer,
   requireState,
+  resolvePendingExplorationBranch,
 } from "../helpers/H5TestHarness";
 
 /** 创建已进入普通求生的隔离测试应用。 */
@@ -13,20 +13,6 @@ function startedApplication(): GameApplication {
   const application = buildH5Harness().application;
   application.startNewGame(["白菜"], "single");
   return application;
-}
-
-/** 使用当前事件中无前置需求的选项完成待决探索。 */
-function resolvePendingExploration(
-  application: GameApplication,
-  state: GameState,
-): void {
-  const pending = state.pending_exploration;
-  if (pending === null) throw new Error("测试要求存在待决探索事件。");
-  const event = application.content.event(pending.event_id);
-  const choiceId = event.choices?.find(
-    (choice) => (choice.requirements ?? []).length === 0,
-  )?.id ?? null;
-  application.resolveExploration(pending.event_id, choiceId);
 }
 
 describe("远征食物行动规则", () => {
@@ -86,7 +72,7 @@ describe("远征食物行动规则", () => {
       [],
       { food: 4, field_ration: 5 },
     );
-    resolvePendingExploration(application, state);
+    resolvePendingExplorationBranch(application);
     expect(application.expeditionStatus()?.remainingSteps).toBe(1);
 
     const report = application.continueExpedition();

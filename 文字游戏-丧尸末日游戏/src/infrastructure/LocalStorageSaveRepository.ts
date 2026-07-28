@@ -44,6 +44,9 @@ export interface SaveStateValidationPort {
   /** 校验当前 v9 状态的精确结构。 */
   validateRawV9?(rawState: unknown): unknown;
 
+  /** 校验当前 v10 分支游标状态的精确结构。 */
+  validateRawV10?(rawState: unknown): unknown;
+
   /** 校验已经构造完成的领域聚合。 */
   validate(state: GameState): void;
 
@@ -468,6 +471,11 @@ export class LocalStorageSaveRepository implements SaveRepository {
           throw new SaveDataError("缺少存档版本 8 的结构校验器。");
         }
         this.validator.validateRawV8(prepared.game_state);
+      } else if (version === 9) {
+        if (this.validator.validateRawV9 === undefined) {
+          throw new SaveDataError("缺少存档版本 9 的结构校验器。");
+        }
+        this.validator.validateRawV9(prepared.game_state);
       } else {
         throw new SaveDataError(`缺少存档版本 ${String(version)} 的结构校验器。`);
       }
@@ -534,6 +542,13 @@ export class LocalStorageSaveRepository implements SaveRepository {
         throw new SaveDataError("缺少当前存档版本 9 的结构校验器。");
       }
       this.validator.validateRawV9(rawState);
+      return;
+    }
+    if (this.schemaVersion === 10) {
+      if (this.validator.validateRawV10 === undefined) {
+        throw new SaveDataError("缺少当前存档版本 10 的结构校验器。");
+      }
+      this.validator.validateRawV10(rawState);
       return;
     }
     throw new SaveDataError(

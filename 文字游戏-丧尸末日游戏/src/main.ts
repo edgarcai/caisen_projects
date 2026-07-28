@@ -25,8 +25,16 @@ import { createDashboardNavigationPolicy } from "./ui/navigation/DashboardNaviga
 
 /** 浏览器测试与问题诊断可读取的最小只读接口。 */
 export interface ShelterGameDebugHandle {
+  /** 返回当前顶层页面。 */
   getCurrentScreen(): string;
+
+  /** 返回页面栈只读快照。 */
+  getRouteScreens(): readonly string[];
+
+  /** 返回最新 UI 快照。 */
   getSnapshot(): ReturnType<GameUiAdapter["getSnapshot"]>;
+
+  /** 返回指定 Laya 节点的舞台边界。 */
   getNodeBounds(nodeName: string): GameDebugNodeBounds | null;
 }
 
@@ -125,6 +133,7 @@ export async function mountGame(
 
   const debug: ShelterGameDebugHandle = Object.freeze({
     getCurrentScreen: (): string => shell.getCurrentScreen(),
+    getRouteScreens: (): readonly string[] => shell.getRouteScreens(),
     getSnapshot: () => adapter.getSnapshot(),
     getNodeBounds: (nodeName: string): GameDebugNodeBounds | null =>
       resolveNodeBounds(runtime, stage, nodeName),

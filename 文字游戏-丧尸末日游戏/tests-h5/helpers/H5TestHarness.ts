@@ -3,6 +3,7 @@ import { createGameApplication, type GameApplication } from "../../src/applicati
 import { parseWebGameConfig } from "../../src/config/configLoader";
 import type { GameState, PlayerState } from "../../src/domain/game-state";
 import type { RandomSource } from "../../src/domain/ports";
+import type { ActionReport } from "../../src/domain/reports";
 import { MemoryStorage } from "../../src/infrastructure";
 import { GameUiAdapter } from "../../src/presentation";
 
@@ -96,4 +97,32 @@ export function requirePlayer(state: GameState, index = 0): PlayerState {
     throw new Error(`测试玩家索引 ${String(index)} 越界。`);
   }
   return player;
+}
+
+/** 沿当前可用语义选择推进，直到待决远征事件完成结算。 */
+export function resolvePendingExplorationBranch(
+  application: GameApplication,
+): ActionReport {
+  if (requireState(application).pending_exploration === null) {
+    throw new Error("测试要求存在待决远征分支。");
+  }
+  const visitedNodeIds = new Set<string>();
+  let latestReport: ActionReport | null = null;
+  while (requireState(application).pending_exploration !== null) {
+    const prompt = application.explorationBranchPrompt();
+    if (prompt === null) throw new Error("远征测试分支缺少当前情境。");
+    if (visitedNodeIds.has(prompt.nodeId)) {
+      throw new Error(`远征测试分支出现循环：${prompt.nodeId}`);
+    }
+    visitedNodeIds.add(prompt.nodeId);
+    const choice = prompt.choices.find(
+      (candidate) => application.explorationBranchChoiceAvailable(candidate.id),
+    );
+    if (choice === undefined) {
+      throw new Error(`远征测试分支没有可用选择：${prompt.nodeId}`);
+    }
+    latestReport = application.resolveExplorationBranch(choice.id);
+  }
+  if (latestReport === null) throw new Error("远征测试分支未产生结算报告。");
+  return latestReport;
 }

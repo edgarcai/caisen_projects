@@ -5,6 +5,7 @@ import v5ToV6MigrationDocument from "../../config/save_migrations/v5_to_v6.json"
 import v6ToV7MigrationDocument from "../../config/save_migrations/v6_to_v7.json";
 import v7ToV8MigrationDocument from "../../config/save_migrations/v7_to_v8.json";
 import v8ToV9MigrationDocument from "../../config/save_migrations/v8_to_v9.json";
+import v9ToV10MigrationDocument from "../../config/save_migrations/v9_to_v10.json";
 import { describe, expect, it } from "vitest";
 import { createGameApplication } from "../../src/application";
 import { mergeCampaignProfileExpansion } from "../../src/config/campaignProfileExpansionAdapter";
@@ -17,6 +18,7 @@ import type {
   V6ToV7SaveMigrationConfig,
   V7ToV8SaveMigrationConfig,
   V8ToV9SaveMigrationConfig,
+  V9ToV10SaveMigrationConfig,
 } from "../../src/domain/content";
 import type { GameState } from "../../src/domain/game-state";
 import type { SaveRepository, SaveSlotSummary } from "../../src/domain/ports";
@@ -26,6 +28,7 @@ import {
   V6ToV7SaveMigrator,
   V7ToV8SaveMigrator,
   V8ToV9SaveMigrator,
+  V9ToV10SaveMigrator,
 } from "../../src/infrastructure";
 import type { V6ToV7SaveMigrationContext } from "../../src/infrastructure";
 
@@ -38,6 +41,7 @@ const migration: V5ToV6SaveMigrationConfig = v5ToV6MigrationDocument;
 const currentMigration: V6ToV7SaveMigrationConfig = v6ToV7MigrationDocument;
 const v7ToV8Migration: V7ToV8SaveMigrationConfig = v7ToV8MigrationDocument;
 const v8ToV9Migration: V8ToV9SaveMigrationConfig = v8ToV9MigrationDocument;
+const v9ToV10Migration: V9ToV10SaveMigrationConfig = v9ToV10MigrationDocument;
 
 /** 使用权威内容构造 v6→v7 迁移上下文。 */
 function createV7MigrationContext(): V6ToV7SaveMigrationContext {
@@ -164,7 +168,8 @@ describe("v5 到 v6 存档迁移", () => {
       createV7MigrationContext(),
     ).migrate(document);
     const v8 = new V7ToV8SaveMigrator(v7ToV8Migration).migrate(v7);
-    const current = new V8ToV9SaveMigrator(v8ToV9Migration).migrate(v8);
+    const v9 = new V8ToV9SaveMigrator(v8ToV9Migration).migrate(v8);
+    const current = new V9ToV10SaveMigrator(v9ToV10Migration).migrate(v9);
     expect(() => validator.parse(current.game_state)).not.toThrow();
   });
 

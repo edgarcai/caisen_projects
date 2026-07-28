@@ -5,6 +5,7 @@ import survivalSystemsDocument from "../../config/survival_systems.json";
 import v6ToV7MigrationDocument from "../../config/save_migrations/v6_to_v7.json";
 import v7ToV8MigrationDocument from "../../config/save_migrations/v7_to_v8.json";
 import v8ToV9MigrationDocument from "../../config/save_migrations/v8_to_v9.json";
+import v9ToV10MigrationDocument from "../../config/save_migrations/v9_to_v10.json";
 import { validateSurvivalSystemsConfig } from "../../src/config/survivalSystemsValidator";
 import { mergeCampaignProfileExpansion } from "../../src/config/campaignProfileExpansionAdapter";
 import { contentExpansionCatalog } from "../../src/config/contentExpansion";
@@ -14,6 +15,7 @@ import type {
   V6ToV7SaveMigrationConfig,
   V7ToV8SaveMigrationConfig,
   V8ToV9SaveMigrationConfig,
+  V9ToV10SaveMigrationConfig,
 } from "../../src/domain/content";
 import type { GameState } from "../../src/domain/game-state";
 import {
@@ -21,6 +23,7 @@ import {
   V6ToV7SaveMigrator,
   V7ToV8SaveMigrator,
   V8ToV9SaveMigrator,
+  V9ToV10SaveMigrator,
 } from "../../src/infrastructure";
 import type { V6ToV7SaveMigrationContext } from "../../src/infrastructure";
 import { buildH5Harness, requireState } from "../helpers/H5TestHarness";
@@ -33,6 +36,7 @@ const story = storyDocument as unknown as StoryConfigDocument;
 const migration: V6ToV7SaveMigrationConfig = v6ToV7MigrationDocument;
 const currentMigration: V7ToV8SaveMigrationConfig = v7ToV8MigrationDocument;
 const v8ToV9Migration: V8ToV9SaveMigrationConfig = v8ToV9MigrationDocument;
+const v9ToV10Migration: V9ToV10SaveMigrationConfig = v9ToV10MigrationDocument;
 
 /** 使用权威内容构造 v6→v7 迁移上下文。 */
 function createMigrationContext(): V6ToV7SaveMigrationContext {
@@ -132,13 +136,14 @@ function facilityLevelsOf(rawState: Record<string, unknown>): Record<string, num
   return rawState.facility_levels as Record<string, number>;
 }
 
-/** 将 v7 迁移结果提升到当前 v9 后执行完整领域校验。 */
+/** 将 v7 迁移结果提升到当前 v10 后执行完整领域校验。 */
 function validateV7AsCurrent(rawState: Record<string, unknown>): void {
   const v8 = new V7ToV8SaveMigrator(currentMigration).migrate({
     schema_version: 7,
     game_state: rawState,
   });
-  const current = new V8ToV9SaveMigrator(v8ToV9Migration).migrate(v8);
+  const v9 = new V8ToV9SaveMigrator(v8ToV9Migration).migrate(v8);
+  const current = new V9ToV10SaveMigrator(v9ToV10Migration).migrate(v9);
   createValidator().parse(current.game_state);
 }
 

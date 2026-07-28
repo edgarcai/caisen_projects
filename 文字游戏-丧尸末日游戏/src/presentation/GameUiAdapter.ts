@@ -1,7 +1,6 @@
 import type { GameApplication } from "../application";
 import { formatTemplate } from "../domain/content";
 import { readCampaignMetadataFlag } from "../domain/campaign-profile-metadata";
-import type { DistrictExplorationLayerProjection } from "../domain/district-exploration-tree";
 import type {
   ArchiveLibrarySnapshot,
   EncounterBattleCommand,
@@ -128,7 +127,6 @@ interface GamePresentationConfig {
   readonly actions: readonly GameActionPresentation[];
 }
 
-const CONTINUE_OPTION_ID = "__continue__";
 const MANAGEMENT_OPTION_SEPARATOR = "::";
 
 /**
@@ -349,19 +347,6 @@ export class GameUiAdapter implements GameUiPort {
     );
   }
 
-  /** 把区划树查询透传给应用用例，并保持 UI 不依赖具体服务实现。 */
-  public getDistrictExplorationLayer(
-    cityId: string,
-    districtId: string,
-    parentPath: readonly number[],
-  ): DistrictExplorationLayerProjection {
-    return this.application.districtExplorationLayer(
-      cityId,
-      districtId,
-      parentPath,
-    );
-  }
-
   /** 执行一个已经过判别联合约束的命令。 */
   private executeCommand(
     command: GameUiCommand,
@@ -532,21 +517,12 @@ export class GameUiAdapter implements GameUiPort {
         const report = this.application.resolveStoryChoice(prompt.sceneId, command.choiceId);
         return { accepted: report.stateChanged, report };
       }
-      case "exploration_prepare": {
-        this.application.prepareExploration(command.cityId);
-        this.syncPersistentMessages();
-        this.autoSave();
-        return { accepted: true, report: null };
-      }
       case "exploration_resolve": {
         const pending = this.requireState().pending_exploration;
         if (pending === null) {
           throw new GameApplicationError(this.application.content.text("no_pending_event"));
         }
-        const choiceId = command.choiceId === CONTINUE_OPTION_ID
-          ? null
-          : command.choiceId;
-        const report = this.application.resolveExploration(pending.event_id, choiceId);
+        const report = this.application.resolveExplorationBranch(command.choiceId);
         return { accepted: report.stateChanged, report };
       }
       case "exploration_retreat": {
@@ -1154,37 +1130,51 @@ export class GameUiAdapter implements GameUiPort {
       return null;
     }
     const event = this.application.content.event(pending.event_id);
+    const branch = this.application.explorationBranchPrompt();
+    if (branch === null) return null;
     const city = this.application.content.city(pending.city_id);
     const district = this.application.content.district(
       pending.city_id,
       pending.district_id,
     );
-    const choices = event.choices ?? [];
+    const branchIntro = formatTemplate(
+      this.webConfig.texts.exploration_branch_intro_format,
+      {
+        event_intro: event.intro,
+        situation_body: branch.body,
+      },
+    );
     return {
-      id: event.id,
-      title: event.title,
+      id: branch.nodeId,
+      title: formatTemplate(
+        this.webConfig.texts.exploration_branch_title_format,
+        {
+          event_title: event.title,
+          situation_title: branch.title,
+        },
+      ),
       body: formatTemplate(this.webConfig.texts.exploration_location_format, {
         city: city.name,
         district: [district.code, district.name].join(
           this.webConfig.texts.profile_field_separator,
         ),
-        intro: event.intro,
+        intro: branchIntro,
       }),
-      options: choices.length === 0
-        ? [{
-            id: CONTINUE_OPTION_ID,
-            label: this.webConfig.texts.continue,
-            description: "",
-            disabled: false,
-            tone: "primary",
-          }]
-        : choices.map((choice) => ({
-            id: choice.id,
-            label: choice.label,
-            description: "",
-            disabled: false,
-            tone: "primary",
-          })),
+      options: branch.choices.map((choice) => {
+        const available = this.application.explorationBranchChoiceAvailable(
+          choice.id,
+        );
+        return {
+          id: choice.id,
+          label: choice.label,
+          description: choice.description,
+          disabled: !available,
+          disabledReason: available
+            ? undefined
+            : this.application.content.text("event_requirement_failed"),
+          tone: choice.terminal ? "success" : "primary",
+        };
+      }),
     };
   }
 

@@ -3,7 +3,6 @@ import type {
   ShelterLayoutConfig,
   ShelterLayoutView,
 } from "../../domain/shelter-layout";
-import type { DistrictExplorationLayerProjection } from "../../domain/district-exploration-tree";
 import type {
   UiArchiveCollectionPageView,
   UiArchiveDocumentPageView,
@@ -27,7 +26,6 @@ export type GameScreenId =
   | "connection"
   | "dashboard"
   | "story"
-  | "exploration_city"
   | "exploration_event"
   | "battle"
   | "management_categories"
@@ -62,7 +60,6 @@ export type GameScreenId =
   | "expedition_city_detail"
   | "expedition_district_list"
   | "expedition_district_detail"
-  | "district_exploration_tree"
   | "expedition_retreat_confirm"
   | "expedition_prepare"
   | "expedition_status"
@@ -814,7 +811,6 @@ export type GameUiCommand =
   | { readonly type: "encounter_finish" }
   | { readonly type: "return_incident_choose"; readonly choiceId: string }
   | { readonly type: "story_choice"; readonly choiceId: string }
-  | { readonly type: "exploration_prepare"; readonly cityId: string }
   | { readonly type: "exploration_resolve"; readonly choiceId: string }
   | { readonly type: "exploration_retreat" }
   | { readonly type: "combat_action"; readonly actionId: string }
@@ -869,10 +865,4 @@ export interface GameUiPort {
    */
   canLoadGame(slotId?: number): MaybePromise<boolean>;
 
-  /** 按需读取一个区划当前层的稳定选项，不递归生成整棵树。 */
-  getDistrictExplorationLayer(
-    cityId: string,
-    districtId: string,
-    parentPath: readonly number[],
-  ): DistrictExplorationLayerProjection;
 }

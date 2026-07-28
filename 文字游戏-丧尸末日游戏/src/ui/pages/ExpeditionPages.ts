@@ -1,9 +1,5 @@
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
 import type { GameUiConfig } from "../../styles/GameTheme";
-import type {
-  DistrictExplorationLayerProjection,
-  DistrictExplorationOptionProjection,
-} from "../../domain/district-exploration-tree";
 import type { UiFactory } from "../components/UiFactory";
 import { formatUiTemplate } from "../formatting/formatUiTemplate";
 import type { LayaRuntimeLike } from "../laya/LayaRuntime";
@@ -72,12 +68,6 @@ export interface ExpeditionDistrictListActions {
 export interface ExpeditionDistrictDetailActions {
   readonly back: () => void;
   readonly continueToPrepare: () => void;
-}
-
-/** 区划多层选项页发出的返回与节点选择意图。 */
-export interface DistrictExplorationTreeActions {
-  readonly back: () => void;
-  readonly chooseOption: (option: DistrictExplorationOptionProjection) => void;
 }
 
 /** 创建所有城市始终可进入详情的远征城市列表页。 */
@@ -206,41 +196,6 @@ export function createExpeditionDistrictDetailPage(
     confirmDisabled: false,
     onBack: actions.back,
     onConfirm: actions.continueToPrepare,
-  });
-}
-
-/** 只渲染当前一层区划选项，使 40×20×10 的结构保持可滚动且按需生成。 */
-export function createDistrictExplorationTreePage(
-  runtime: LayaRuntimeLike,
-  factory: UiFactory,
-  config: GameUiConfig,
-  layout: ResponsiveLayout,
-  projection: DistrictExplorationLayerProjection,
-  actions: DistrictExplorationTreeActions,
-): PageView {
-  return createChoicePage(runtime, factory, config, layout, {
-    testId: "page-district-exploration-tree",
-    title: projection.title,
-    prompt: {
-      id: projection.parentNodeId ?? `${projection.districtId}-root`,
-      title: projection.title,
-      body: projection.description,
-      options: projection.options.map((option) => ({
-        id: option.nodeId,
-        label: option.label,
-        description: option.description,
-        disabled: false,
-        tone: option.terminal ? "success" : "primary",
-      })),
-    },
-    onBack: actions.back,
-    includeOptionIntelligence: false,
-    onSelect: (selected): void => {
-      const option = projection.options.find(
-        (candidate) => candidate.nodeId === selected.id,
-      );
-      if (option !== undefined) actions.chooseOption(option);
-    },
   });
 }
 

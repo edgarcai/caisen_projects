@@ -79,6 +79,8 @@ const RESTORABLE_V8_STATE_FIELDS = [
 const V8_STATE_FIELDS = [...RESTORABLE_V8_STATE_FIELDS, "checkpoint"] as const;
 const RESTORABLE_V9_STATE_FIELDS = [...RESTORABLE_V8_STATE_FIELDS] as const;
 const V9_STATE_FIELDS = [...RESTORABLE_V9_STATE_FIELDS, "checkpoint"] as const;
+const RESTORABLE_V10_STATE_FIELDS = [...RESTORABLE_V9_STATE_FIELDS] as const;
+const V10_STATE_FIELDS = [...RESTORABLE_V10_STATE_FIELDS, "checkpoint"] as const;
 const PLAYER_FIELDS = [
   "name",
   "health",
@@ -147,6 +149,11 @@ const BATTLE_FIELDS = [
 ] as const;
 const V4_PENDING_FIELDS = ["city_id", "event_id"] as const;
 const V5_PENDING_FIELDS = ["city_id", "district_id", "event_id"] as const;
+const V10_PENDING_FIELDS = [
+  ...V5_PENDING_FIELDS,
+  "branch_node_id",
+  "branch_path",
+] as const;
 const ENDING_FIELDS = ["ending_id", "outcome", "message"] as const;
 const LOG_ENTRY_FIELDS = ["survival_day", "turn_number", "clock", "message"] as const;
 const WEEKLY_ARCHIVE_FIELDS = [
@@ -260,6 +267,16 @@ export interface ArchiveCollectionProgressValidationPort {
   validatePersistentState(state: GameState): void;
 }
 
+/** 存档校验器对远征分支图重放能力依赖的最小端口。 */
+export interface ExpeditionBranchCursorValidationPort {
+  /** 重放选择路径并确认它到达持久化节点。 */
+  validateCursor(
+    eventId: string,
+    currentNodeId: string | null,
+    branchPath: readonly string[],
+  ): void;
+}
+
 /** 严格校验版本化存档的字段集合、数据类型与领域不变量。 */
 export class SaveStateValidator {
   private readonly rules: GameRuleConfig;
@@ -275,8 +292,9 @@ export class SaveStateValidator {
   private readonly homeCityIds: ReadonlySet<string>;
   private readonly shelterRoomAssignments?: ShelterRoomAssignmentValidationPort;
   private readonly archiveProgress?: ArchiveCollectionProgressValidationPort;
+  private readonly expeditionBranchCursor?: ExpeditionBranchCursorValidationPort;
 
-  /** 注入生存配置、内容目录与可选的房间领域校验端口。 */
+  /** 注入生存配置、内容目录与可选的房间、馆藏和分支校验端口。 */
   public constructor(
     rules: GameRuleConfig,
     facilities: readonly FacilityConfig[],
@@ -287,6 +305,7 @@ export class SaveStateValidator {
     cities: readonly CityConfig[],
     shelterRoomAssignments?: ShelterRoomAssignmentValidationPort,
     archiveProgress?: ArchiveCollectionProgressValidationPort,
+    expeditionBranchCursor?: ExpeditionBranchCursorValidationPort,
   ) {
     this.rules = rules;
     this.facilityIds = facilities.map((facility) => facility.facility_id);
@@ -309,6 +328,7 @@ export class SaveStateValidator {
     this.homeCityIds = new Set(rules.world_map.home_city_ids);
     this.shelterRoomAssignments = shelterRoomAssignments;
     this.archiveProgress = archiveProgress;
+    this.expeditionBranchCursor = expeditionBranchCursor;
   }
 
   /** 在迁移前验证旧 v1 生存状态的精确结构。 */
@@ -446,9 +466,29 @@ export class SaveStateValidator {
     return state;
   }
 
-  /** 从已通过 v9 结构检查的数据创建副本并验证完整状态。 */
+  /** 在构造领域对象前验证 v10 分支游标及检查点快照。 */
+  public validateRawV10(rawState: unknown): JsonObject {
+    const state = exactObject(rawState, V10_STATE_FIELDS, "v10 game_state");
+    this.validateRawV10Base(state, "v10 game_state");
+    if (state.checkpoint !== null) {
+      const checkpoint = exactObject(
+        state.checkpoint,
+        CHECKPOINT_FIELDS,
+        "v10 checkpoint",
+      );
+      const snapshot = exactObject(
+        checkpoint.snapshot,
+        RESTORABLE_V10_STATE_FIELDS,
+        "v10 checkpoint.snapshot",
+      );
+      this.validateRawV10Base(snapshot, "v10 checkpoint.snapshot");
+    }
+    return state;
+  }
+
+  /** 从已通过 v10 结构检查的数据创建副本并验证完整状态。 */
   public parse(rawState: unknown): GameState {
-    const state = structuredClone(this.validateRawV9(rawState)) as unknown as GameState;
+    const state = structuredClone(this.validateRawV10(rawState)) as unknown as GameState;
     this.validate(state);
     return state;
   }
@@ -489,6 +529,14 @@ export class SaveStateValidator {
         "pending_exploration.district_id",
       );
       requireNonEmptyString(state.pending_exploration.event_id, "pending_exploration.event_id");
+      requireNullableNonEmptyString(
+        state.pending_exploration.branch_node_id,
+        "pending_exploration.branch_node_id",
+      );
+      requireStringList(
+        state.pending_exploration.branch_path,
+        "pending_exploration.branch_path",
+      );
       const pendingDistrict = this.requireKnownDistrict(
         state.pending_exploration.city_id,
         state.pending_exploration.district_id,
@@ -499,6 +547,12 @@ export class SaveStateValidator {
           "pending_exploration.event_id 不属于所选区划事件池。",
         );
       }
+      this.validateExpeditionBranchCursor(
+        state.pending_exploration.event_id,
+        state.pending_exploration.branch_node_id,
+        state.pending_exploration.branch_path,
+        "pending_exploration",
+      );
     }
     if (state.battle !== null && !state.battle.finished && state.pending_exploration !== null) {
       throw new SaveDataError("不能同时存在进行中的首领战和待结算探索。");
@@ -518,6 +572,26 @@ export class SaveStateValidator {
       "pending_return_incident_id",
     );
     this.validateCheckpoint(state);
+  }
+
+  /** 把分支图重放错误收敛为带存档路径的校验错误。 */
+  private validateExpeditionBranchCursor(
+    eventId: string,
+    currentNodeId: string | null,
+    branchPath: readonly string[],
+    path: string,
+  ): void {
+    if (this.expeditionBranchCursor === undefined) return;
+    try {
+      this.expeditionBranchCursor.validateCursor(
+        eventId,
+        currentNodeId,
+        branchPath,
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new SaveDataError(`${path} 分支游标无效：${message}`);
+    }
   }
 
   /** 校验玩家和共享容器的 v1/v2 公共字段集合。 */
@@ -696,12 +770,70 @@ export class SaveStateValidator {
 
   /** 校验 v9 可恢复状态的墙体与研究槽精确容器。 */
   private validateRawV9Base(state: JsonObject, path: string): void {
-    this.validateRawV7Base(
+    this.validateRawV9Containers(state, path, V5_PENDING_FIELDS);
+  }
+
+  /** 校验 v10 可恢复状态的分支游标类型与嵌套字段集。 */
+  private validateRawV10Base(state: JsonObject, path: string): void {
+    this.validateRawV9Containers(state, path, V10_PENDING_FIELDS);
+    if (state.pending_exploration === null) return;
+    const pending = state.pending_exploration as JsonObject;
+    requireNullableNonEmptyString(
+      pending.branch_node_id,
+      `${path}.pending_exploration.branch_node_id`,
+    );
+    requireStringList(
+      pending.branch_path,
+      `${path}.pending_exploration.branch_path`,
+    );
+    requireNonEmptyString(
+      pending.event_id,
+      `${path}.pending_exploration.event_id`,
+    );
+    this.validateExpeditionBranchCursor(
+      pending.event_id,
+      pending.branch_node_id,
+      pending.branch_path,
+      `${path}.pending_exploration`,
+    );
+  }
+
+  /** 复用 v9 的墙体、研究与 v8 扩展容器校验。 */
+  private validateRawV9Containers(
+    state: JsonObject,
+    path: string,
+    pendingFields: readonly string[],
+  ): void {
+    this.validateRawSurvivalBase(
       state,
       path,
+      V5_EXPEDITION_FIELDS,
+      pendingFields,
+      V6_PLAYER_FIELDS,
       V9_SHELTER_FIELDS,
+      V6_COMPANION_FIELDS,
+      V7_INVENTORY_FIELDS,
       V9_RESEARCH_FIELDS,
     );
+    exactObject(state.campaign, CAMPAIGN_FIELDS, `${path}.campaign`);
+    const inventory = state.inventory as JsonObject;
+    requireArray(
+      inventory.equipped_transport_ids,
+      `${path}.inventory.equipped_transport_ids`,
+    );
+    const usage = requireObject(
+      state.management_cycle_usage,
+      `${path}.management_cycle_usage`,
+    );
+    for (const [usageId, entry] of Object.entries(usage)) {
+      requireNonEmptyString(usageId, `${path}.management_cycle_usage 的键`);
+      exactObject(
+        entry,
+        MANAGEMENT_CYCLE_USAGE_FIELDS,
+        `${path}.management_cycle_usage.${usageId}`,
+      );
+    }
+    this.validateRawExpeditionFailure(state, path);
     this.validateRawV8Extensions(state, path);
     const research = state.research as JsonObject;
     requireNullableNonEmptyString(
@@ -1839,6 +1971,14 @@ function requireUniqueStringList(value: unknown, path: string): asserts value is
   const list = requireArray(value, path);
   for (const item of list) requireNonEmptyString(item, path);
   requireUnique(list as string[], path);
+}
+
+/** 要求值是允许为空、但每个元素均为非空字符串的列表。 */
+function requireStringList(value: unknown, path: string): asserts value is string[] {
+  const list = requireArray(value, path);
+  for (const [index, item] of list.entries()) {
+    requireNonEmptyString(item, `${path}[${String(index)}]`);
+  }
 }
 
 /** 要求对象是非空字符串到非空字符串的映射。 */

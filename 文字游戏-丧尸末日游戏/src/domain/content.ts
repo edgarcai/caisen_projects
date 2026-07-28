@@ -616,6 +616,7 @@ export interface StoryConfigDocument {
 }
 
 export interface EventOutcomeConfig {
+  id?: string;
   weight?: number;
   result: string;
   effects?: readonly NumericEffectConfig[];
@@ -755,6 +756,17 @@ export interface V8ToV9SaveMigrationConfig {
   };
   wall_distribution: {
     inner_wall_percent: number;
+  };
+}
+
+/** v9 → v10 存档为待决探索增加可持久分支游标时使用的迁移配置。 */
+export interface V9ToV10SaveMigrationConfig {
+  schema_version: number;
+  from_version: number;
+  to_version: number;
+  state_defaults: {
+    branch_node_id: null;
+    branch_path: readonly string[];
   };
 }
 

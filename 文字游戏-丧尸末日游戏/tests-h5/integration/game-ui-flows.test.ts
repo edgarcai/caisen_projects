@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import gameConfigDocument from "../../config/game_config.json";
+import { expeditionBranchingEventConfig } from "../../src/config/expeditionBranchingEventConfig";
 import type { GameUiSnapshot, UiOptionView } from "../../src/ui/ports/GameUiPort";
 import {
   buildH5Harness,
@@ -21,6 +22,29 @@ function requireAction(snapshot: GameUiSnapshot, actionId: string): UiOptionView
     if (action !== undefined) return action;
   }
   throw new Error(`快照缺少行动 ${actionId}。`);
+}
+
+/** 连续选择当前首个可用分支，直到第 4～5 层完成真实探索结算。 */
+function resolveExplorationBranchChain(
+  harness: ReturnType<typeof buildH5Harness>,
+): GameUiSnapshot {
+  for (
+    let depth = 1;
+    depth <= expeditionBranchingEventConfig.policy.maximum_depth;
+    depth += 1
+  ) {
+    const prompt = harness.adapter.getSnapshot().explorationPrompt;
+    if (prompt === null) return harness.adapter.getSnapshot();
+    const option = prompt.options.find((candidate) => !candidate.disabled);
+    if (option === undefined) throw new Error("探索分支没有可执行选项。");
+    const result = harness.adapter.execute({
+      type: "exploration_resolve",
+      choiceId: option.id,
+    });
+    const snapshot = requireSnapshot(result.snapshot);
+    if (snapshot.explorationPrompt === null) return snapshot;
+  }
+  throw new Error("探索分支超过配置最大深度后仍未结算。");
 }
 
 describe("H5 剧情、战斗与探索命令流", () => {
@@ -117,54 +141,62 @@ describe("H5 剧情、战斗与探索命令流", () => {
     const random = new ScriptedRandomSource([90, 50], [0, 4]);
     const writer = buildH5Harness({ random });
     writer.adapter.execute({ type: "start_game", mode: "single", playerNames: ["白菜"] });
+    const writerState = requireState(writer.application);
+    const city = writer.application.content.city("city_a");
+    const district = writer.application.content.district(
+      city.id,
+      city.default_district_id,
+    );
+    requirePlayer(writerState).food = 10;
 
-    const first = writer.adapter.execute({ type: "exploration_prepare", cityId: "city_a" });
+    const first = writer.adapter.execute({
+      type: "expedition_begin",
+      cityId: city.id,
+      districtId: district.id,
+      companionIds: [],
+      carriedItems: { food: 10 },
+    });
     const firstSnapshot = requireSnapshot(first.snapshot);
     const originalCity = firstSnapshot.cities.find((city) => city.id === "city_a");
     const otherCity = firstSnapshot.cities.find((city) => city.id === "city_h");
-    const pending = requireState(writer.application).pending_exploration;
+    const pending = writerState.pending_exploration;
     if (pending === null) throw new Error("探索事件没有持久化。");
-    const defaultDistrict = writer.application.content.district(
-      pending.city_id,
-      pending.district_id,
-    );
 
     expect(first.accepted).toBe(true);
-    expect(defaultDistrict.event_ids).toContain(pending.event_id);
-    expect(firstSnapshot.explorationPrompt?.id).toBe(pending.event_id);
-    const firstOption = firstSnapshot.explorationPrompt?.options.find(
-      (option) => option.id === "leave",
-    ) ?? firstSnapshot.explorationPrompt?.options.find(
-      (option) => !option.disabled,
-    );
-    if (firstOption === undefined) throw new Error("探索事件没有可执行选项。");
+    expect(district.event_ids).toContain(pending.event_id);
+    const rootNodeId = firstSnapshot.explorationPrompt?.id;
+    expect(rootNodeId).toBe(pending.branch_node_id);
     expect(originalCity).toMatchObject({ disabled: false });
     expect(originalCity?.disabledReason).toBeUndefined();
     expect(otherCity).toMatchObject({ disabled: true });
     expect(random.weightedChoiceCalls).toBe(1);
 
-    const forgedRepeat = writer.adapter.execute({
-      type: "exploration_prepare",
-      cityId: "city_h",
-    });
-    expect(requireSnapshot(forgedRepeat.snapshot).explorationPrompt?.id).toBe(
-      pending.event_id,
+    const firstChoice = firstSnapshot.explorationPrompt?.options.find(
+      (option) => !option.disabled,
     );
+    if (firstChoice === undefined) throw new Error("探索入口没有可执行分支。");
+    const advanced = writer.adapter.execute({
+      type: "exploration_resolve",
+      choiceId: firstChoice.id,
+    });
+    const advancedNodeId = requireSnapshot(advanced.snapshot).explorationPrompt?.id;
+    expect(advancedNodeId).not.toBe(rootNodeId);
+    expect(writerState.pending_exploration?.branch_path).toEqual([firstChoice.id]);
+    expect(writerState.turn_number).toBe(0);
     expect(random.weightedChoiceCalls).toBe(1);
     writer.adapter.execute({ type: "save_game" });
 
     const readerRandom = new ScriptedRandomSource([], [7]);
     const reader = buildH5Harness({ storage: writer.storage, random: readerRandom });
     const loaded = reader.adapter.execute({ type: "load_game" });
-    expect(requireSnapshot(loaded.snapshot).explorationPrompt?.id).toBe(pending.event_id);
+    expect(requireSnapshot(loaded.snapshot).explorationPrompt?.id).toBe(advancedNodeId);
+    expect(requireState(reader.application).pending_exploration?.branch_path).toEqual([
+      firstChoice.id,
+    ]);
     expect(readerRandom.weightedChoiceCalls).toBe(0);
 
-    const resolved = reader.adapter.execute({
-      type: "exploration_resolve",
-      choiceId: firstOption.id,
-    });
-    expect(resolved.accepted).toBe(true);
-    expect(requireSnapshot(resolved.snapshot).explorationPrompt).toBeNull();
+    const resolvedSnapshot = resolveExplorationBranchChain(reader);
+    expect(resolvedSnapshot.explorationPrompt).toBeNull();
     expect(requireState(reader.application).turn_number).toBe(1);
   });
 });

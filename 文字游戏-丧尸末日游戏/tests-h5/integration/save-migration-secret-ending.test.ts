@@ -117,7 +117,7 @@ describe("H5 v1 存档迁移", () => {
       schema_version: number;
       game_state: Record<string, unknown>;
     };
-    expect(envelope.schema_version).toBe(9);
+    expect(envelope.schema_version).toBe(10);
     expect(envelope.game_state).toHaveProperty("story");
     expect(envelope.game_state).toHaveProperty("campaign");
     expect(envelope.game_state).not.toHaveProperty("ended");

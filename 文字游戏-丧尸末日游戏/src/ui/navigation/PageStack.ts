@@ -24,7 +24,6 @@ export interface GameRouteContext {
   readonly cityId?: string;
   readonly districtId?: string;
   readonly outpostId?: string;
-  readonly districtExplorationPath?: readonly number[];
   readonly document?: UiDocumentView;
 }
 

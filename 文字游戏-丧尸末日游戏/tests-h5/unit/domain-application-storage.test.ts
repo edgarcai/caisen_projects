@@ -63,12 +63,22 @@ function legacyShelter(state: GameState): Record<string, unknown> {
   return legacy;
 }
 
-describe("浏览器 v9 存档", () => {
+describe("浏览器 v10 存档", () => {
   it("以 snake_case 信封往返完整待探索状态", () => {
     const storage = new MemoryStorage();
     const writer = buildApplication(storage);
     writer.startNewGame(["白菜"], "single");
-    writer.prepareExploration("city_a");
+    const writerState = requireState(writer);
+    const city = writer.content.city("city_a");
+    const district = writer.content.district(city.id, city.default_district_id);
+    const player = writerState.players[0];
+    if (player === undefined) throw new Error("测试玩家不存在。");
+    player.food = 10;
+    writer.prepareExpedition(city.id, district.id, [], { food: 10 });
+    const entry = writer.explorationBranchPrompt();
+    const firstChoice = entry?.choices[0];
+    if (firstChoice === undefined) throw new Error("测试分支入口没有选项。");
+    writer.resolveExplorationBranch(firstChoice.id);
 
     writer.saveGame();
     const serialized = storage.getItem(STORAGE_KEY);
@@ -78,7 +88,7 @@ describe("浏览器 v9 存档", () => {
       saved_at: string;
       game_state: Record<string, unknown>;
     };
-    expect(envelope.schema_version).toBe(9);
+    expect(envelope.schema_version).toBe(10);
     expect(envelope.saved_at).toBe("2166-02-03T04:05:06.000Z");
     expect(envelope.game_state).toHaveProperty("active_player_index");
     expect(envelope.game_state).toHaveProperty("pending_exploration");
@@ -89,6 +99,7 @@ describe("浏览器 v9 存档", () => {
 
     expect(report.stateChanged).toBe(true);
     expect(reader.state).toEqual(writer.state);
+    expect(reader.state?.pending_exploration?.branch_path).toEqual([firstChoice.id]);
   });
 
   it("主档损坏时按新到旧顺序恢复可信备份", () => {
@@ -109,7 +120,7 @@ describe("浏览器 v9 存档", () => {
     expect(requireState(reader).players[0]?.hunger).toBe(0);
   });
 
-  it("读取 v1 后连续迁移并可再次保存为 v9", () => {
+  it("读取 v1 后连续迁移并可再次保存为 v10", () => {
     const storage = new MemoryStorage();
     const source = buildApplication(new MemoryStorage());
     source.startNewGame(["旧所长甲", "旧所长乙"], "multiplayer");
@@ -148,7 +159,7 @@ describe("浏览器 v9 存档", () => {
       schema_version: number;
       game_state: Record<string, unknown>;
     };
-    expect(envelope.schema_version).toBe(9);
+    expect(envelope.schema_version).toBe(10);
     expect(envelope.game_state).toHaveProperty("campaign");
     expect(envelope.game_state).not.toHaveProperty("ended");
     expect(envelope.game_state).not.toHaveProperty("ending_message");

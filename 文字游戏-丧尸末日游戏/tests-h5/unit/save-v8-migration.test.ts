@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import gameDocument from "../../config/game_config.json";
 import v7ToV8MigrationDocument from "../../config/save_migrations/v7_to_v8.json";
 import v8ToV9MigrationDocument from "../../config/save_migrations/v8_to_v9.json";
+import v9ToV10MigrationDocument from "../../config/save_migrations/v9_to_v10.json";
 import shelterLayoutDocument from "../../config/shelter_layout.json";
 import storyDocument from "../../config/story.json";
 import survivalSystemsDocument from "../../config/survival_systems.json";
@@ -14,6 +15,7 @@ import type {
   StoryConfigDocument,
   V7ToV8SaveMigrationConfig,
   V8ToV9SaveMigrationConfig,
+  V9ToV10SaveMigrationConfig,
 } from "../../src/domain/content";
 import type { EncounterBattleState } from "../../src/domain/demo-systems";
 import type { GameState } from "../../src/domain/game-state";
@@ -24,6 +26,7 @@ import {
   SaveStateValidator,
   V7ToV8SaveMigrator,
   V8ToV9SaveMigrator,
+  V9ToV10SaveMigrator,
 } from "../../src/infrastructure";
 import {
   ArchiveStorageService,
@@ -39,6 +42,7 @@ const game = mergeCampaignProfileExpansion(
 const story = storyDocument as unknown as StoryConfigDocument;
 const migration: V7ToV8SaveMigrationConfig = v7ToV8MigrationDocument;
 const v9Migration: V8ToV9SaveMigrationConfig = v8ToV9MigrationDocument;
+const v10Migration: V9ToV10SaveMigrationConfig = v9ToV10MigrationDocument;
 const STORAGE_KEY = "v8-migration-test";
 const shelterLayout = new ShelterLayoutService(
   parseShelterLayoutConfig(shelterLayoutDocument),
@@ -82,18 +86,22 @@ function createRepository(
   return new LocalStorageSaveRepository({
     storage,
     storageKey: STORAGE_KEY,
-    schemaVersion: 9,
+    schemaVersion: 10,
     slotCount,
     backupSlots: 0,
     validator: createValidator(),
-    migrators: [createMigrator(), new V8ToV9SaveMigrator(v9Migration)],
+    migrators: [
+      createMigrator(),
+      new V8ToV9SaveMigrator(v9Migration),
+      new V9ToV10SaveMigrator(v10Migration),
+    ],
   });
 }
 
 /** 将完整 v8 状态包装为可直接写入本地存储的文档。 */
 function createSaveDocument(state: GameState): string {
   return JSON.stringify({
-    schema_version: 9,
+    schema_version: 10,
     saved_at: "2166-01-10T06:00:00.000Z",
     game_state: state,
   });

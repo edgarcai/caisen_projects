@@ -70,7 +70,6 @@ import {
   createReturnIncidentPage,
 } from "./pages/DemoSystemsPages";
 import {
-  createDistrictExplorationTreePage,
   createExpeditionCityDetailPage,
   createExpeditionCityListPage,
   createExpeditionDistrictDetailPage,
@@ -313,6 +312,11 @@ export class GameShell {
     return this.navigation.current().screen;
   }
 
+  /** 返回页面栈稳定标识副本，供自动化验证事件推进不会重复压页。 */
+  public getRouteScreens(): readonly GameScreenId[] {
+    return this.navigation.entries().map((route) => route.screen);
+  }
+
   /**
    * 接收端口推送的新快照并刷新当前页面。
    */
@@ -519,8 +523,6 @@ export class GameShell {
         return this.createDashboard(layout, snapshot);
       case "story":
         return this.createStory(layout, snapshot);
-      case "exploration_city":
-        return this.createExplorationCities(layout, snapshot);
       case "exploration_event":
         return this.createExplorationEvent(layout, snapshot);
       case "battle":
@@ -575,8 +577,6 @@ export class GameShell {
         return this.createExpeditionDistrictList(route, layout, snapshot);
       case "expedition_district_detail":
         return this.createExpeditionDistrictDetail(route, layout, snapshot);
-      case "district_exploration_tree":
-        return this.createDistrictExplorationTree(route, layout, snapshot);
       case "expedition_retreat_confirm":
         return this.createExpeditionRetreatConfirm(layout);
       case "expedition_prepare":
@@ -917,36 +917,6 @@ export class GameShell {
   }
 
   /**
-   * 创建城市选择页。
-   */
-  private createExplorationCities(
-    layout: ResponsiveLayout,
-    snapshot: GameUiSnapshot,
-  ): PageView {
-    const prompt: UiPromptView = {
-      id: "exploration-cities",
-      title: this.navigationLabel("explore"),
-      body: snapshot.mission?.objective ?? "",
-      options: snapshot.cities,
-    };
-    return createChoicePage(
-      this.runtime,
-      this.factory,
-      this.config,
-      layout,
-      {
-        testId: "page-exploration-city",
-        title: this.navigationLabel("explore"),
-        prompt,
-        onBack: this.goBack,
-        onSelect: (option): void => {
-          void this.prepareExploration(option.id);
-        },
-      },
-    );
-  }
-
-  /**
    * 创建已经持久化抽取结果的探索事件页。
    */
   private createExplorationEvent(
@@ -963,9 +933,7 @@ export class GameShell {
         testId: "page-exploration-event",
         title: prompt.title,
         prompt,
-        onBack: (): void => {
-          void this.retreatExploration();
-        },
+        onBack: this.openExpeditionRetreatConfirm,
         onSelect: (option): void => {
           void this.resolveExploration(option.id);
         },
@@ -1770,65 +1738,6 @@ export class GameShell {
     );
   }
 
-  /** 按路由路径只读取并展示区划探索树当前一层。 */
-  private createDistrictExplorationTree(
-    route: GameRoute,
-    layout: ResponsiveLayout,
-    snapshot: GameUiSnapshot,
-  ): PageView {
-    const status = snapshot.expeditionStatus;
-    const city = this.expeditionCity(
-      snapshot,
-      route.context?.cityId ?? status?.cityId,
-    );
-    const district = city === null
-      ? null
-      : resolveExpeditionDistrict(
-          city,
-          route.context?.districtId ?? status?.districtId ?? null,
-        );
-    if (
-      city === null
-      || district === null
-      || status === null
-      || snapshot.explorationPrompt === null
-      || city.id !== status.cityId
-      || district.id !== status.districtId
-    ) {
-      return this.createMissingExpeditionSelection(layout);
-    }
-    const projection = this.port.getDistrictExplorationLayer(
-      city.id,
-      district.id,
-      route.context?.districtExplorationPath ?? [],
-    );
-    return createDistrictExplorationTreePage(
-      this.runtime,
-      this.factory,
-      this.config,
-      layout,
-      projection,
-      {
-        back: (): void => { this.backFromDistrictExplorationTree(route); },
-        chooseOption: (option): void => {
-          if (option.terminal) {
-            this.navigation.replace({ screen: "exploration_event" });
-          } else {
-            this.navigation.push({
-              screen: "district_exploration_tree",
-              context: {
-                cityId: city.id,
-                districtId: district.id,
-                districtExplorationPath: option.address.path,
-              },
-            });
-          }
-          this.render();
-        },
-      },
-    );
-  }
-
   /** 为失效路由提供可返回的安全页面，避免旧草稿导致渲染崩溃。 */
   private createMissingExpeditionSelection(layout: ResponsiveLayout): PageView {
     return this.createMissingSelectionPage(
@@ -1837,15 +1746,11 @@ export class GameShell {
     );
   }
 
-  /** 区划事件深层返回上一层，根层返回则先要求确认远征撤离。 */
-  private backFromDistrictExplorationTree(route: GameRoute): void {
-    if ((route.context?.districtExplorationPath?.length ?? 0) > 0) {
-      this.goBack();
-      return;
-    }
+  /** 在唯一探索事件栏上叠加有代价撤离确认，不允许返回撤销已作决定。 */
+  private readonly openExpeditionRetreatConfirm = (): void => {
     this.navigation.push({ screen: "expedition_retreat_confirm" });
     this.render();
-  }
+  };
 
   /** 创建会明确说明行动代价的远征撤离二次确认页。 */
   private createExpeditionRetreatConfirm(layout: ResponsiveLayout): PageView {
@@ -2687,22 +2592,15 @@ export class GameShell {
     this.render();
   }
 
-  /** 把远征状态作为底页，并仅在出发成功时叠加开场事件栏。 */
-  private routeToExpeditionOpeningEvent(snapshot: GameUiSnapshot): boolean {
+  /** 恢复远征状态底页，并在有待决事件时只叠加唯一事件栏。 */
+  private routeToExpeditionContext(snapshot: GameUiSnapshot): boolean {
     const status = snapshot.expeditionStatus;
-    if (status === null || snapshot.explorationPrompt === null) {
-      return false;
-    }
+    if (status === null) return false;
     this.navigation.reset({ screen: "dashboard" });
     this.navigation.push({ screen: "expedition_status" });
-    this.navigation.push({
-      screen: "district_exploration_tree",
-      context: {
-        cityId: status.cityId,
-        districtId: status.districtId,
-        districtExplorationPath: [],
-      },
-    });
+    if (snapshot.explorationPrompt !== null) {
+      this.navigation.push({ screen: "exploration_event" });
+    }
     return true;
   }
 
@@ -2849,15 +2747,18 @@ export class GameShell {
       if (!this.mounted || this.navigation.current().screen !== "connection") {
         return;
       }
+      const snapshot = this.requireSnapshot();
       this.navigation.reset({ screen: "dashboard" });
-      if (this.requireSnapshot().ended) {
+      if (snapshot.ended) {
         this.navigation.push({ screen: "ending" });
-      } else if (this.requireSnapshot().expeditionFailure !== null) {
+      } else if (snapshot.expeditionFailure !== null) {
         this.navigation.push({ screen: "expedition_failure" });
-      } else if (this.requireSnapshot().returnIncident !== null) {
+      } else if (snapshot.returnIncident !== null) {
         this.navigation.push({ screen: "return_incident" });
-      } else if (this.requireSnapshot().encounterBattle !== null) {
+      } else if (snapshot.encounterBattle !== null) {
         this.navigation.push({ screen: "encounter_battle" });
+      } else if (this.routeToExpeditionContext(snapshot)) {
+        // 远征页面栈已经由统一恢复函数建立。
       } else if (showTutorial) {
         this.navigation.push({ screen: "tutorial" });
       }
@@ -3021,22 +2922,18 @@ export class GameShell {
   }
 
   /**
-   * 抽取并锁定城市探索事件。
-   */
-  private async prepareExploration(cityId: string): Promise<void> {
-    await this.execute(
-      { type: "exploration_prepare", cityId },
-      (): void => { this.navigation.replace({ screen: "exploration_event" }); },
-    );
-  }
-
-  /**
    * 结算探索事件选择。
    */
   private async resolveExploration(choiceId: string): Promise<void> {
     await this.execute(
       { type: "exploration_resolve", choiceId },
-      (): void => { this.navigateAfterExpeditionProgress(); },
+      (): void => {
+        if (this.requireSnapshot().explorationPrompt !== null) {
+          this.navigation.replace({ screen: "exploration_event" });
+          return;
+        }
+        this.navigateAfterExpeditionProgress();
+      },
     );
   }
 
@@ -3304,7 +3201,7 @@ export class GameShell {
   /** 出发成功后先弹出一次区划开场事件，强制返程则走通用结算。 */
   private navigateAfterExpeditionBegin(): void {
     const snapshot = this.requireSnapshot();
-    if (this.routeToExpeditionOpeningEvent(snapshot)) {
+    if (this.routeToExpeditionContext(snapshot)) {
       return;
     }
     this.navigateAfterExpeditionProgress();
@@ -3534,11 +3431,7 @@ export class GameShell {
       return;
     }
     if (screen === "exploration_event") {
-      void this.retreatExploration();
-      return;
-    }
-    if (screen === "district_exploration_tree") {
-      this.backFromDistrictExplorationTree(route);
+      this.openExpeditionRetreatConfirm();
       return;
     }
     if (screen === "return_incident") {

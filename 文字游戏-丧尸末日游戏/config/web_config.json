@@ -566,7 +566,7 @@
     "settings_schema_version": 2,
     "achievement_key": "shelter-embers-achievements-v1",
     "achievement_schema_version": 1,
-    "schema_version": 9,
+    "schema_version": 10,
     "auto_save": true,
     "backup_slots": 2,
     "save_slot_count": 6
@@ -857,6 +857,8 @@
     "expedition_begin": "确认出发",
     "expedition_status_title": "远征状态",
     "expedition_status_format": "目的地：{city}\n探索区划：{district}\n剩余携带食物：{remaining}份（可支撑{remaining}次行动）\n已处理事件：{events}\n同行伙伴：{companions}\n携带物：{items}",
+    "exploration_branch_title_format": "{event_title} · {situation_title}",
+    "exploration_branch_intro_format": "{event_intro}\n\n{situation_body}",
     "exploration_location_format": "目标：{city} · {district}\n\n{intro}",
     "expedition_loot_format": "战利品：{loot}",
     "expedition_continue": "继续深入",
