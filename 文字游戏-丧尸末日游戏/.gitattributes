@@ -1,0 +1,3 @@
+# Preserve the byte-exact upstream LayaAir runtime and declaration artifacts.
+public/vendor/layaair/3.4.0/*.js -whitespace
+types/LayaAir.d.ts -whitespace

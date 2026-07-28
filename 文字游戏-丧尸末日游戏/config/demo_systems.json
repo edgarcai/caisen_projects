@@ -1,0 +1,510 @@
+{
+  "schema_version": 1,
+  "content_requirements": {
+    "minimum_return_incidents": 10,
+    "minimum_incident_choices": 2,
+    "minimum_archive_collections": 2,
+    "minimum_documents_per_collection": 8
+  },
+  "encounter_battle": {
+    "rules": {
+      "maximum_party_size": 4,
+      "minimum_damage": 1,
+      "maximum_log_entries": 160,
+      "basic_attack_power_percent": 100,
+      "critical_roll_range": [1, 100],
+      "critical_chance_percent": 12,
+      "critical_damage_percent": 160,
+      "guard_damage_reduction_percent": 55,
+      "back_row_damage_received_percent": 80,
+      "retreat_roll_range": [1, 100],
+      "retreat_base_chance_percent": 28,
+      "retreat_agility_bonus_percent_per_point": 2,
+      "retreat_maximum_chance_percent": 82
+    },
+    "preparation": {
+      "minimum_attribute": 1,
+      "treatment_cost": 3,
+      "treatment_heal": 30,
+      "roles": [
+        {
+          "role_id": "containment",
+          "label": "牵制",
+          "description": "站在前排吸引威胁，为队友创造安全窗口。",
+          "row": "front",
+          "attack_percent": 80,
+          "defense_percent": 145,
+          "agility_percent": 90
+        },
+        {
+          "role_id": "assault",
+          "label": "攻击",
+          "description": "集中火力快速突破敌方前排，但自身承压能力会下降。",
+          "row": "front",
+          "attack_percent": 140,
+          "defense_percent": 80,
+          "agility_percent": 100
+        },
+        {
+          "role_id": "skirmish",
+          "label": "游走",
+          "description": "留在后排寻找侧翼路线，提高撤离与抢先行动能力。",
+          "row": "back",
+          "attack_percent": 95,
+          "defense_percent": 90,
+          "agility_percent": 145
+        },
+        {
+          "role_id": "medic",
+          "label": "救护",
+          "description": "携带急救装备在后排支援，以部分输出换取更稳妥的生存能力。",
+          "row": "back",
+          "attack_percent": 85,
+          "defense_percent": 120,
+          "agility_percent": 110
+        }
+      ]
+    },
+    "texts": {
+      "battle_start": "【遭遇战】{encounter_name}。敌人的行动意图已经暴露，依次为小队成员下达指令。",
+      "round_start": "—— 第 {round} 回合 ——",
+      "basic_attack_label": "攻击",
+      "basic_attack_description": "对可触及的单个敌人发动普通攻击。前排敌人存活时无法直击后排。",
+      "guard_label": "防御",
+      "guard_description": "本轮承受的伤害降低，适合应对敌人的强攻意图。",
+      "retreat_label": "撤退",
+      "retreat_description": "尝试带领全队脱离接触；失败会浪费本次行动。",
+      "item_action_description": "消耗 1 份库存：{description}",
+      "actor_not_pending": "该队员本轮已经行动或无法行动。",
+      "cooldown_remaining": "技能尚需冷却 {rounds} 回合。",
+      "item_unavailable": "战斗库存中没有这种物品。",
+      "no_valid_target": "当前没有符合站位规则的目标。",
+      "attack": "{actor_name} 攻击 {target_name}，造成 {damage} 点伤害。",
+      "critical_attack": "{actor_name} 抓住破绽重击 {target_name}，造成 {damage} 点暴击伤害！",
+      "guard": "{actor_name} 压低重心，做好了承受冲击的准备。",
+      "skill_damage": "{actor_name} 使用【{ability_name}】，对 {target_name} 造成 {damage} 点伤害。",
+      "skill_heal": "{actor_name} 使用【{ability_name}】，令 {target_name} 恢复 {amount} 点生命。",
+      "item_damage": "{actor_name} 使用【{ability_name}】，造成 {damage} 点伤害。",
+      "item_heal": "{actor_name} 使用【{ability_name}】，令 {target_name} 恢复 {amount} 点生命。",
+      "enemy_attack": "{enemy_name} 按照【{intent_name}】行动，{target_name} 受到 {damage} 点伤害。",
+      "enemy_attack_all": "{enemy_name} 发动【{intent_name}】，全队共承受 {damage} 点伤害。",
+      "enemy_defend": "{enemy_name} 执行【{intent_name}】，下轮将获得防御姿态。",
+      "enemy_defeated": "{enemy_name} 倒下了。",
+      "member_defeated": "{member_name} 失去战斗能力。",
+      "victory": "威胁已经肃清，小队赢得遭遇战。",
+      "defeat": "最后一名队员也倒下了。撤离组只能在通讯静默中等待。",
+      "retreat_success": "{actor_name} 找到撤离缺口，小队成功脱离战斗。",
+      "retreat_failed": "撤离路线被封死，{actor_name} 的本次行动落空。",
+      "battle_finished": "这场遭遇战已经结束。",
+      "battle_in_progress": "已有一场遭遇战正在进行，请先完成或撤离。",
+      "no_active_battle": "当前没有可操作的遭遇战。",
+      "battle_closed": "战斗记录已归档，小队返回避难所待命。",
+      "unknown_encounter": "未知遭遇战：{encounter_id}。",
+      "unknown_actor": "未知或失去战斗能力的队员：{actor_id}。",
+      "unknown_target": "目标无效或当前无法触及：{target_id}。",
+      "unknown_ability": "未知战斗能力：{ability_id}。",
+      "invalid_party": "遭遇战小队人数、属性或稳定 ID 无效。",
+      "invalid_supply": "遭遇战携带物品数量无效。",
+      "preparation_missing_role": "必须为每名参战单位分配职责后才能开始战斗。",
+      "preparation_unknown_role": "整备方案引用了未知职责：{role_id}。",
+      "preparation_unknown_member": "整备方案引用了未知单位：{member_id}。",
+      "preparation_duplicate_treatment": "同一名单位不能重复安排战前治疗：{member_id}。",
+      "preparation_treatment_not_needed": "{member_name} 的生命已满，不需要消耗医疗用品。",
+      "preparation_medical_shortage": "战前治疗需要 {required} 份医疗用品，当前只有 {available} 份。",
+      "preparation_ready": "战前整备完成，职责与补给方案已经锁定。",
+      "preparation_role_assignment": "{member_name} 担任【{role_name}】。",
+      "preparation_treated": "{member_name} 消耗 {cost} 份医疗用品，恢复 {amount} 点生命。"
+    },
+    "skills": [
+      {
+        "skill_id": "crushing_blow",
+        "name": "破阵重击",
+        "description": "以更大的动作幅度攻击单个敌人，适合尽快击穿前排。",
+        "kind": "damage",
+        "target_scope": "enemy_single",
+        "power_percent": 175,
+        "fixed_amount": 0,
+        "cooldown_rounds": 2
+      },
+      {
+        "skill_id": "suppressive_fire",
+        "name": "压制射击",
+        "description": "扫射敌方同一纵深的全部目标，伤害较低但能快速清理尸群。",
+        "kind": "damage",
+        "target_scope": "enemy_all",
+        "power_percent": 72,
+        "fixed_amount": 0,
+        "cooldown_rounds": 3
+      },
+      {
+        "skill_id": "field_first_aid",
+        "name": "战地急救",
+        "description": "为一名仍有意识的队员止血并恢复生命。",
+        "kind": "heal",
+        "target_scope": "ally_single",
+        "power_percent": 25,
+        "fixed_amount": 12,
+        "cooldown_rounds": 2
+      },
+      {
+        "skill_id": "catch_breath",
+        "name": "调整呼吸",
+        "description": "短暂稳定自己的伤势，恢复少量生命。",
+        "kind": "heal",
+        "target_scope": "self",
+        "power_percent": 18,
+        "fixed_amount": 6,
+        "cooldown_rounds": 1
+      }
+    ],
+    "items": [
+      {
+        "item_id": "trauma_kit",
+        "name": "创伤急救包",
+        "description": "立刻为一名队员恢复大量生命。",
+        "kind": "heal",
+        "target_scope": "ally_single",
+        "power_percent": 0,
+        "fixed_amount": 38,
+        "starting_quantity": 2
+      },
+      {
+        "item_id": "field_ration",
+        "name": "行军口粮",
+        "description": "让使用者恢复少量体力。",
+        "kind": "heal",
+        "target_scope": "self",
+        "power_percent": 0,
+        "fixed_amount": 18,
+        "starting_quantity": 2
+      },
+      {
+        "item_id": "incendiary_bottle",
+        "name": "燃烧瓶",
+        "description": "向敌群投掷燃烧物，对所有敌人造成固定伤害。",
+        "kind": "damage",
+        "target_scope": "enemy_all",
+        "power_percent": 0,
+        "fixed_amount": 24,
+        "starting_quantity": 1
+      }
+    ],
+    "encounters": [
+      {
+        "encounter_id": "parking_horde",
+        "name": "停车楼围猎",
+        "description": "汽车警报在混凝土楼层间反复回响，游荡者从坡道上下同时逼近。",
+        "enemies": [
+          {
+            "enemy_id": "parking_brute",
+            "name": "撞门者",
+            "row": "front",
+            "maximum_health": 96,
+            "attack": 19,
+            "defense": 8,
+            "agility": 4,
+            "intents": [
+              {"intent_id": "brute_slam", "label": "砸击", "description": "将重击前排单个目标。", "kind": "attack_single", "power_percent": 145, "weight": 3},
+              {"intent_id": "brute_guard", "label": "护住头部", "description": "蜷缩身体，下轮进入防御姿态。", "kind": "defend", "power_percent": 0, "weight": 1}
+            ]
+          },
+          {
+            "enemy_id": "parking_runner",
+            "name": "疾行感染者",
+            "row": "front",
+            "maximum_health": 54,
+            "attack": 14,
+            "defense": 3,
+            "agility": 12,
+            "intents": [
+              {"intent_id": "runner_bite", "label": "扑咬", "description": "快速攻击一名可触及队员。", "kind": "attack_single", "power_percent": 100, "weight": 4},
+              {"intent_id": "runner_screech", "label": "尖啸冲撞", "description": "冲击整支小队。", "kind": "attack_all", "power_percent": 42, "weight": 1}
+            ]
+          },
+          {
+            "enemy_id": "parking_howler",
+            "name": "回声嚎叫者",
+            "row": "back",
+            "maximum_health": 47,
+            "attack": 16,
+            "defense": 2,
+            "agility": 7,
+            "intents": [
+              {"intent_id": "howler_wave", "label": "震荡嚎叫", "description": "对全队造成一次较轻伤害。", "kind": "attack_all", "power_percent": 50, "weight": 3},
+              {"intent_id": "howler_hide", "label": "藏入车后", "description": "利用废车构筑防御姿态。", "kind": "defend", "power_percent": 0, "weight": 1}
+            ]
+          }
+        ]
+      },
+      {
+        "encounter_id": "metro_ambush",
+        "name": "地铁检修道伏击",
+        "description": "应急灯逐盏熄灭，前方的脚步与身后的刮擦声形成了合围。",
+        "enemies": [
+          {
+            "enemy_id": "metro_crawler",
+            "name": "断腿爬行者",
+            "row": "front",
+            "maximum_health": 64,
+            "attack": 13,
+            "defense": 5,
+            "agility": 5,
+            "intents": [
+              {"intent_id": "crawler_drag", "label": "拖拽", "description": "咬住前排目标并猛烈拉扯。", "kind": "attack_single", "power_percent": 120, "weight": 4},
+              {"intent_id": "crawler_cover", "label": "钻入管线", "description": "躲入管线，下轮进入防御姿态。", "kind": "defend", "power_percent": 0, "weight": 1}
+            ]
+          },
+          {
+            "enemy_id": "metro_spore",
+            "name": "孢囊感染者",
+            "row": "back",
+            "maximum_health": 78,
+            "attack": 18,
+            "defense": 4,
+            "agility": 3,
+            "intents": [
+              {"intent_id": "spore_burst", "label": "孢雾喷发", "description": "让整支小队承受伤害。", "kind": "attack_all", "power_percent": 58, "weight": 3},
+              {"intent_id": "spore_lunge", "label": "突进", "description": "攻击一名可触及队员。", "kind": "attack_single", "power_percent": 110, "weight": 2}
+            ]
+          }
+        ]
+      },
+      {
+        "encounter_id": "warehouse_nest",
+        "name": "冷库巢穴",
+        "description": "冷凝水从锈蚀管道滴落，成群感染者围绕一只仍在搏动的巨大肉囊。",
+        "enemies": [
+          {
+            "enemy_id": "nest_guardian",
+            "name": "巢穴卫士",
+            "row": "front",
+            "maximum_health": 132,
+            "attack": 22,
+            "defense": 11,
+            "agility": 3,
+            "intents": [
+              {"intent_id": "guardian_crush", "label": "碾压", "description": "对前排目标发动沉重攻击。", "kind": "attack_single", "power_percent": 150, "weight": 3},
+              {"intent_id": "guardian_shell", "label": "骨甲闭合", "description": "下轮进入强韧防御姿态。", "kind": "defend", "power_percent": 0, "weight": 2}
+            ]
+          },
+          {
+            "enemy_id": "nest_pod",
+            "name": "搏动肉囊",
+            "row": "back",
+            "maximum_health": 105,
+            "attack": 20,
+            "defense": 6,
+            "agility": 1,
+            "intents": [
+              {"intent_id": "pod_pulse", "label": "感染脉冲", "description": "向整支小队释放冲击。", "kind": "attack_all", "power_percent": 62, "weight": 4},
+              {"intent_id": "pod_fold", "label": "肉膜收缩", "description": "下轮进入防御姿态。", "kind": "defend", "power_percent": 0, "weight": 1}
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "return_incidents": {
+    "trigger_roll_range": [1, 100],
+    "trigger_chance_percent": 68,
+    "state_bounds": [
+      {"target": "player.health", "minimum": 0, "maximum": 100},
+      {"target": "player.food", "minimum": 0, "maximum": null},
+      {"target": "player.medical_supplies", "minimum": 0, "maximum": null},
+      {"target": "player.coins", "minimum": 0, "maximum": null},
+      {"target": "player.parts", "minimum": 0, "maximum": null},
+      {"target": "shelter.population", "minimum": 1, "maximum": null},
+      {"target": "shelter.hope", "minimum": 0, "maximum": 100},
+      {"target": "shelter.health", "minimum": 0, "maximum": 600},
+      {"target": "shelter.activity", "minimum": 0, "maximum": 299},
+      {"target": "shelter.group_hunger", "minimum": 0, "maximum": null},
+      {"target": "shelter.newspapers", "minimum": 0, "maximum": null},
+      {"target": "shelter.books", "minimum": 0, "maximum": null}
+    ],
+    "texts": {
+      "no_eligible_incident": "避难所今晚没有需要所长裁决的新事项。",
+      "unknown_incident": "未知归来事项：{incident_id}。",
+      "unknown_choice": "事项 {incident_id} 不包含选择 {choice_id}。",
+      "choice_unavailable": "当前条件不足，无法执行这个决定。",
+      "resolution_prefix": "【{incident_title}】{result}",
+      "invalid_configuration": "探索归来事项配置无效。"
+    },
+    "incidents": [
+      {
+        "incident_id": "quarantine_knock",
+        "title": "隔离门外的三声敲击",
+        "description": "一名浑身雨水的测绘员站在隔离门外。他能说出附近尸群的迁徙时间，却拒绝解释袖口上的血。",
+        "weight": 8,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "accept", "label": "执行检疫后接纳", "description": "消耗食物建立信任，并承担接纳陌生人的风险。", "requirements": [{"target": "player.food", "operator": "gte", "value": 4, "unavailable_text": "至少需要 4 份食物完成隔离观察。"}], "effects": [{"target": "player.food", "operation": "subtract", "amount": 4, "token": "food", "limit_to_available": true}, {"target": "shelter.population", "operation": "add", "amount": 1}, {"target": "shelter.hope", "operation": "add", "amount": [4, 7], "token": "hope"}, {"target": "shelter.activity", "operation": "add", "amount": 3}], "result": "测绘员通过了两轮检疫。他在墙上补全三条安全巷道，避难所希望 +{hope}。"},
+          {"choice_id": "refuse", "label": "不开门", "description": "将未知风险留在门外。", "requirements": [], "effects": [{"target": "shelter.hope", "operation": "subtract", "amount": 3, "limit_to_available": true}, {"target": "shelter.activity", "operation": "subtract", "amount": 2, "limit_to_available": true}], "result": "敲击声在半夜停止。守夜的人没有交谈，所有人都在猜他最后去了哪里。"}
+        ]
+      },
+      {
+        "incident_id": "burst_pipe",
+        "title": "生活区管线爆裂",
+        "description": "回水管在你归来后突然崩开。积水正向仓库渗去，维修组要求立即决定。",
+        "weight": 10,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "repair", "label": "彻夜抢修", "description": "投入零件彻底更换腐蚀管段。", "requirements": [{"target": "player.parts", "operator": "gte", "value": 5, "unavailable_text": "抢修至少需要 5 个零件。"}], "effects": [{"target": "player.parts", "operation": "subtract", "amount": 5, "limit_to_available": true}, {"target": "shelter.health", "operation": "add", "amount": [6, 12], "token": "health"}, {"target": "shelter.activity", "operation": "add", "amount": 3}], "result": "维修组换掉了整段管线，并顺手加固墙脚。避难所耐久 +{health}。"},
+          {"choice_id": "divert", "label": "临时改道", "description": "保住零件，但生活区会短时停水。", "requirements": [], "effects": [{"target": "shelter.group_hunger", "operation": "add", "amount": [4, 8], "token": "hunger"}, {"target": "shelter.activity", "operation": "subtract", "amount": 4, "limit_to_available": true}], "result": "积水被引入排污渠，饮水配给却被迫缩减。群体饥饿 +{hunger}。"}
+        ]
+      },
+      {
+        "incident_id": "workshop_dispute",
+        "title": "工坊里的扳手",
+        "description": "两名维修员为一块能否拆解的发电机转子争执不休，一把扳手被砸在地上。",
+        "weight": 9,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "mediate", "label": "让双方共同试验", "description": "所长亲自协调一轮可逆拆装。", "requirements": [], "effects": [{"target": "shelter.activity", "operation": "add", "amount": [4, 7], "token": "activity"}, {"target": "shelter.hope", "operation": "add", "amount": 2}], "result": "两人最终证明彼此都只对了一半。新的拆装规程让活跃度 +{activity}。"},
+          {"choice_id": "seize", "label": "直接征用转子", "description": "优先满足避难所短期物资需求。", "requirements": [], "effects": [{"target": "player.parts", "operation": "add", "amount": [5, 9], "token": "parts"}, {"target": "shelter.hope", "operation": "subtract", "amount": 4, "limit_to_available": true}], "result": "转子被拆成了 {parts} 个可用零件，但工坊此后一整天没人说笑。"}
+        ]
+      },
+      {
+        "incident_id": "childrens_gallery",
+        "title": "墙上的太阳",
+        "description": "孩子们趁大人忙碌，在旧宿舍墙上画满从未见过的蓝天和太阳。有人认为这是浪费颜料。",
+        "weight": 7,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "keep", "label": "保留并办一次展览", "description": "让所有人停工片刻，看看孩子眼中的世界。", "requirements": [], "effects": [{"target": "shelter.hope", "operation": "add", "amount": [6, 10], "token": "hope"}, {"target": "shelter.activity", "operation": "add", "amount": 5}], "result": "短短二十分钟，没有人谈论尸群。希望 +{hope}，那面墙被称作“明天”。"},
+          {"choice_id": "clean", "label": "恢复宿舍整洁", "description": "维持严格的生活区纪律。", "requirements": [], "effects": [{"target": "shelter.activity", "operation": "subtract", "amount": 3, "limit_to_available": true}, {"target": "shelter.hope", "operation": "subtract", "amount": 2, "limit_to_available": true}], "result": "墙面很快恢复灰白，但负责清洗的人始终避开孩子们的眼睛。"}
+        ]
+      },
+      {
+        "incident_id": "midnight_broadcast",
+        "title": "午夜点歌台",
+        "description": "无线电员偶然接入一个微弱频道。陌生女人正在清唱一首灾变前的老歌，并邀请听众报出名字。",
+        "weight": 8,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "respond", "label": "报出避难所呼号", "description": "承担暴露方位的风险，让对方知道这里仍有人活着。", "requirements": [], "effects": [{"target": "shelter.hope", "operation": "add", "amount": [5, 9], "token": "hope"}, {"target": "shelter.activity", "operation": "add", "amount": 2}], "result": "频道另一端沉默很久，然后逐一念出值夜者的名字。希望 +{hope}。"},
+          {"choice_id": "listen", "label": "保持静默并记录", "description": "不发送信号，只记录频率与歌词里的地名。", "requirements": [], "effects": [{"target": "shelter.newspapers", "operation": "add", "amount": 1}, {"target": "shelter.hope", "operation": "add", "amount": 2}], "result": "歌曲结束前出现了一串旧城区地名。记录被整理成一份新的报纸档案。"}
+        ]
+      },
+      {
+        "incident_id": "hidden_stash",
+        "title": "床板下的铁盒",
+        "description": "宿舍清点时发现一个藏有旧金币和罐头的铁盒，盒盖内侧写着一名失踪者的名字。",
+        "weight": 7,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "public", "label": "登记为公共物资", "description": "公开清点并并入仓库。", "requirements": [], "effects": [{"target": "player.food", "operation": "add", "amount": [3, 6], "token": "food"}, {"target": "player.coins", "operation": "add", "amount": [6, 12], "token": "coins"}, {"target": "shelter.activity", "operation": "add", "amount": 3}], "result": "铁盒在所有人面前打开：食物 +{food}，金币 +{coins}。公开流程平息了猜疑。"},
+          {"choice_id": "family", "label": "交还失踪者家属", "description": "不追问铁盒来源，将它交给仍在等待的人。", "requirements": [], "effects": [{"target": "shelter.hope", "operation": "add", "amount": [5, 8], "token": "hope"}, {"target": "shelter.activity", "operation": "add", "amount": 2}], "result": "家属没有打开铁盒，只把它放在空床边。希望 +{hope}。"}
+        ]
+      },
+      {
+        "incident_id": "fever_alarm",
+        "title": "体温计上的红线",
+        "description": "一名外勤队员高烧不退。症状可能只是伤口感染，也可能意味着整个生活区必须封锁。",
+        "weight": 10,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "treat", "label": "使用完整疗程", "description": "消耗医疗用品进行隔离治疗。", "requirements": [{"target": "player.medical_supplies", "operator": "gte", "value": 5, "unavailable_text": "至少需要 5 份医疗用品。"}], "effects": [{"target": "player.medical_supplies", "operation": "subtract", "amount": 5, "limit_to_available": true}, {"target": "shelter.hope", "operation": "add", "amount": 4}, {"target": "shelter.activity", "operation": "add", "amount": 3}], "result": "两天后体温下降。化验确认只是细菌感染，整个生活区爆发出如释重负的欢呼。"},
+          {"choice_id": "seal", "label": "封锁观察室", "description": "不消耗药物，但严格封锁会造成恐慌。", "requirements": [], "effects": [{"target": "shelter.hope", "operation": "subtract", "amount": [4, 8], "token": "hope", "limit_to_available": true}, {"target": "shelter.activity", "operation": "subtract", "amount": 4, "limit_to_available": true}], "result": "观察窗后的影子熬过了高烧，门外的人却在恐惧中失去 {hope} 点希望。"}
+        ]
+      },
+      {
+        "incident_id": "rooftop_smoke",
+        "title": "北方屋顶的烟",
+        "description": "瞭望员发现远处连续升起三短一长的烟柱，像是灾前救援队的集合信号。",
+        "weight": 6,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "signal", "label": "点燃回应火盆", "description": "消耗少量食物和燃料，向远方幸存者回应。", "requirements": [{"target": "player.food", "operator": "gte", "value": 3, "unavailable_text": "至少需要 3 份食物维持来访者接待。"}], "effects": [{"target": "player.food", "operation": "subtract", "amount": 3, "limit_to_available": true}, {"target": "shelter.population", "operation": "add", "amount": [1, 2], "token": "people"}, {"target": "shelter.hope", "operation": "add", "amount": 5}], "result": "黄昏时有 {people} 名幸存者循烟抵达，他们带来了沿途的尸群情报。"},
+          {"choice_id": "observe", "label": "只记录方位", "description": "保持隐蔽，将信号规律归档。", "requirements": [], "effects": [{"target": "shelter.newspapers", "operation": "add", "amount": 1}, {"target": "shelter.activity", "operation": "add", "amount": 1}], "result": "烟柱在入夜前消失。方位和节奏被整理为一份新报纸档案。"}
+        ]
+      },
+      {
+        "incident_id": "ration_festival",
+        "title": "罐头节提案",
+        "description": "厨房组想把临期罐头做成一次集体晚餐。有人赞成，有人担心下周的配给。",
+        "weight": 9,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "celebrate", "label": "批准集体晚餐", "description": "用食物换取一次久违的共同生活。", "requirements": [{"target": "player.food", "operator": "gte", "value": 7, "unavailable_text": "举办晚餐至少需要 7 份食物。"}], "effects": [{"target": "player.food", "operation": "subtract", "amount": 7, "limit_to_available": true}, {"target": "shelter.group_hunger", "operation": "subtract", "amount": [8, 14], "token": "hunger", "limit_to_available": true}, {"target": "shelter.hope", "operation": "add", "amount": 7}, {"target": "shelter.activity", "operation": "add", "amount": 9}], "result": "厨房把不同标签的罐头煮成一锅。群体饥饿 -{hunger}，人们唱歌到熄灯。"},
+          {"choice_id": "save", "label": "继续严格配给", "description": "保存物资，接受大家的失望。", "requirements": [], "effects": [{"target": "shelter.activity", "operation": "subtract", "amount": 5, "limit_to_available": true}, {"target": "shelter.hope", "operation": "subtract", "amount": 2, "limit_to_available": true}], "result": "临期罐头被重新封存。饭厅里没人反对，也没人多留一分钟。"}
+        ]
+      },
+      {
+        "incident_id": "generator_overload",
+        "title": "发电机过载",
+        "description": "主发电机绕组发出焦糊味。继续供电可能烧毁核心，停电则会影响所有人的休息。",
+        "weight": 9,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "rewire", "label": "更换绕组", "description": "投入零件完成永久维修。", "requirements": [{"target": "player.parts", "operator": "gte", "value": 6, "unavailable_text": "更换绕组至少需要 6 个零件。"}], "effects": [{"target": "player.parts", "operation": "subtract", "amount": 6, "limit_to_available": true}, {"target": "shelter.health", "operation": "add", "amount": [5, 9], "token": "health"}, {"target": "shelter.activity", "operation": "add", "amount": 2}], "result": "新绕组撑过负载测试，额外加固令避难所耐久 +{health}。"},
+          {"choice_id": "blackout", "label": "分区停电", "description": "保留零件，让生活区在黑暗中熬过一夜。", "requirements": [], "effects": [{"target": "shelter.activity", "operation": "subtract", "amount": [4, 7], "token": "activity", "limit_to_available": true}, {"target": "shelter.hope", "operation": "subtract", "amount": 2, "limit_to_available": true}], "result": "黑暗中每一次管道声都像尸群撞门，活跃度 -{activity}。"}
+        ]
+      },
+      {
+        "incident_id": "stray_dog",
+        "title": "通风井里的狗",
+        "description": "一只瘦得能看见肋骨的黄狗钻进通风井。孩子们已经给它取名“火星”。",
+        "weight": 7,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "adopt", "label": "留下火星", "description": "消耗食物喂养它，让它成为巡夜伙伴。", "requirements": [{"target": "player.food", "operator": "gte", "value": 3, "unavailable_text": "至少需要 3 份食物完成驱虫和喂养。"}], "effects": [{"target": "player.food", "operation": "subtract", "amount": 3, "limit_to_available": true}, {"target": "shelter.hope", "operation": "add", "amount": [6, 9], "token": "hope"}, {"target": "shelter.activity", "operation": "add", "amount": 4}], "result": "火星在门口睡下，当晚第一次警报是它提前发现的。希望 +{hope}。"},
+          {"choice_id": "release", "label": "带到远处放生", "description": "不增加长期口粮压力。", "requirements": [], "effects": [{"target": "shelter.hope", "operation": "subtract", "amount": 4, "limit_to_available": true}, {"target": "shelter.activity", "operation": "subtract", "amount": 2, "limit_to_available": true}], "result": "第二天，孩子在通风井边留下了半块自己的早餐。"}
+        ]
+      },
+      {
+        "incident_id": "anonymous_ledger",
+        "title": "没有署名的账本",
+        "description": "你的桌上出现一本手抄账本，记录着数次仓库盘点的误差，最后一页写着：别相信夜班名单。",
+        "weight": 5,
+        "requirements": [],
+        "choices": [
+          {"choice_id": "audit", "label": "秘密复核夜班", "description": "投入时间和少量金币设置诱饵。", "requirements": [{"target": "player.coins", "operator": "gte", "value": 4, "unavailable_text": "设置盘点诱饵至少需要 4 枚金币。"}], "effects": [{"target": "player.coins", "operation": "subtract", "amount": 4, "limit_to_available": true}, {"target": "player.food", "operation": "add", "amount": [4, 8], "token": "food"}, {"target": "shelter.activity", "operation": "subtract", "amount": 2, "limit_to_available": true}], "result": "诱饵揭开一处假夹层，找回 {food} 份食物。偷拿者却早已逃出避难所。"},
+          {"choice_id": "publish", "label": "公开账本", "description": "让全体成员共同核查，不秘密指控任何人。", "requirements": [], "effects": [{"target": "shelter.activity", "operation": "add", "amount": [3, 6], "token": "activity"}, {"target": "shelter.hope", "operation": "add", "amount": 2}, {"target": "shelter.books", "operation": "add", "amount": 1}], "result": "大家用一夜重建了双人复核制度，活跃度 +{activity}；账本被收入书籍档案。"}
+        ]
+      }
+    ]
+  },
+  "archive_storage": {
+    "texts": {
+      "locked_title": "未解锁文献 #{required_copies}",
+      "locked_summary": "再收集文献即可读取这份内容。",
+      "unknown_collection": "未知文献分类：{collection_id}。",
+      "unknown_document": "分类 {collection_id} 中不存在文献 {document_id}。",
+      "document_locked": "需要收集 {required_copies} 份【{collection_label}】才能阅读这份文献。"
+    },
+    "collections": [
+      {
+        "collection_id": "newspapers",
+        "label": "旧报纸",
+        "description": "按发现顺序整理的城市新闻、广播抄本与灾变调查。每新增一份报纸解锁一篇。",
+        "state_target": "shelter.newspapers",
+        "documents": [
+          {"document_id": "newspaper_01", "required_copies": 1, "title": "《澄江晚报》2166 年 3 月 2 日：急诊室外的长队", "summary": "最初被当作季节性流感处理的异常病例。", "body": "市卫生署称不明高热仍处于“可追踪、可控制”阶段，建议市民避免前往中心医院。记者在急诊室外看到数十名伤者，他们大多声称遭到陌生人撕咬。院方拒绝解释为何保安开始佩戴防刺护具。版面角落有一则被红笔圈出的寻人启事：失踪者最后出现于旧地铁三号线。"},
+          {"document_id": "newspaper_02", "required_copies": 2, "title": "《城市交通报》：末班地铁没有抵达", "summary": "三号线封闭前最后一班列车的失踪记录。", "body": "3 月 5 日 23 时 40 分，三号线末班列车离开北站后失去信号。控制中心曾短暂收到司机呼叫：隧道里有人逆向行走，数量无法确认。翌日官方宣布线路因电力故障停运，但维修队名单显示十七人进入隧道，只有两人返回。报纸背面画着一条手绘检修通道，并写有“不要开白灯”。"},
+          {"document_id": "newspaper_03", "required_copies": 3, "title": "《晨线特刊》：十二小时疏散令", "summary": "城市秩序崩溃当天仓促发布的撤离路线。", "body": "市应急委员会要求 A、B、C 三个区居民在十二小时内向西部体育场转移。公告同时强调不得携带大型行李，不得自行驾车，不得接近出现攻击行为的亲属。印刷过程中广播大楼停电，后半版只剩大片空白。有人用打字机补上一行：体育场已经满了，去防空洞。"},
+          {"document_id": "newspaper_04", "required_copies": 4, "title": "手抄广播稿《七码头仍在呼叫》", "summary": "一支民间船队在海湾维持了六天撤离线。", "body": "呼号“七码头”的船队每天清晨和黄昏各发送一次潮位、风向与可用泊位。他们拒绝运送携带咬伤的人，却会把药品抛上岸。第六天的广播只有海浪和持续四十七秒的金属碰撞声。最后一句能够辨认的话是：岛上也不安全，它们会在水里等。"},
+          {"document_id": "newspaper_05", "required_copies": 5, "title": "《联合观察》：感染者为何集群迁徙", "summary": "幸存研究者对尸群运动规律的早期推测。", "body": "观察表明感染者并非完全随机游荡。低频噪声、持续光源和某些尚未识别的气味会让它们形成数百只规模的迁徙带。文章提出“领群个体”假说：少数保留方向感的变异体会带动整个群落。作者建议避难所不要连续三晚使用同一发电机排气口，并在雨后立即检查下风口。"},
+          {"document_id": "newspaper_06", "required_copies": 6, "title": "无日期墙报《第七码头幸存者证词》", "summary": "一名船员讲述岛屿航线覆灭的真正原因。", "body": "船员声称岛屿并非被游泳的感染者攻破。撤离船在靠岸前收到伪造灯语，码头仓库里有人故意关掉探照灯。感染者被藏在运粮集装箱中，开箱后同时袭击海陆两端。证词最后列出两项抵达孤岛的条件：能在海面接应的船，以及能绕过废弃港口的飞行载具。"},
+          {"document_id": "newspaper_07", "required_copies": 7, "title": "地下印刷物《余烬互助公约》", "summary": "多个小型避难所尝试建立的交易规则。", "body": "公约规定交易每七天进行一次，双方必须提前公布护送人数、货物重量与替代路线。任何一方失联，其他成员只能等待二十四小时，不得沿原路搜救，以免落入针对商队的连环伏击。页边记录了七种常见抢劫手法，其中“假伤员”和“断桥税”被连续画了两个警告符号。"},
+          {"document_id": "newspaper_08", "required_copies": 8, "title": "《没有发行的最后一期》：首领在听", "summary": "报社编辑留在印刷机旁的最终调查。", "body": "编辑汇总城内八处尸群后发现，它们的迁徙路线最终都避开同一座旧数据中心。无人机拍到一只异常高大的感染者站在屋顶，周围个体会随它抬手同时转向。稿件认为所谓丧尸首领并非最强壮的个体，而是仍能理解城市广播系统的个体。最后一页只有一句铅字：如果你看到这份报纸，请先切断天线，再去找它。"}
+        ]
+      },
+      {
+        "collection_id": "books",
+        "label": "旧书",
+        "description": "技术手册、私人日记和幸存者整理的长篇记录。每新增一本书解锁一篇。",
+        "state_target": "shelter.books",
+        "documents": [
+          {"document_id": "book_01", "required_copies": 1, "title": "《防空洞维护手册》第四版", "summary": "避难所墙体、通风和排水系统的基础维护规程。", "body": "手册要求每日检查主门铰链、通风压差与回水阀，每七天进行一次全区停机听音。最重要的批注来自前任管理员：结构损坏往往不是突然发生，先出现的是粉尘、异味和居民不愿报告的小麻烦。任何设施总等级达到当前区域容量前，都应先扩张可维护空间，而不是继续向同一条管线叠加负荷。"},
+          {"document_id": "book_02", "required_copies": 2, "title": "《战地急救：没有医院的前四小时》", "summary": "在资源有限条件下判断、止血和转运伤员。", "body": "作者把伤员分为能行走、需立即干预、可延后和无法救治四类，并反复强调先保证施救者安全。书中夹着一张手写卡片：发热不是感染的充分证据，隐瞒伤口才是避难所真正的危险。每一次隔离都必须说明期限、观察指标和复核人，否则医学措施会迅速变成恐惧。"},
+          {"document_id": "book_03", "required_copies": 3, "title": "《小队站位与狭窄空间战斗》", "summary": "民防教官留下的前后排协同训练笔记。", "body": "前排负责封住接触面，后排负责观察、治疗和压制；只要前排仍能站立，后排就不应为了追求视野擅自越位。面对公开蓄力的敌人，防御并不是浪费回合，而是在为下一次集中攻击保留队伍。笔记建议每名队员至少掌握攻击、防御和撤退手势，并在出发前明确谁有权使用最后一份急救包。"},
+          {"document_id": "book_04", "required_copies": 4, "title": "《轮值宿舍管理记录》", "summary": "关于性别分区、作息和人际冲突的实际记录。", "body": "记录将男女宿舍分开设置，并给临时医疗观察者保留独立床位。管理员发现，单纯按战斗能力安排房间会让矛盾在夜间放大：有人厌恶爱说梦话的室友，有人必须和信任的人同住才能睡着。合理规划应同时考虑性别、房间容量、岗位距离以及喜欢或讨厌的对象，并在冲突发生前解释调整原因。"},
+          {"document_id": "book_05", "required_copies": 5, "title": "《低技术发电与净水》", "summary": "从废墟材料重建能源和饮水循环的方法。", "body": "本书把净水分为沉淀、粗滤、活性介质和最终消毒四段，任何一段都不能用“看起来清澈”代替检测。发电章节建议优先维持通信、医疗与泵房，娱乐供电应通过活动排班协商。多处批注指出，能源中心与净水设施必须建立在扩张后的独立区域，否则噪声、热量和污水会同时威胁宿舍。"},
+          {"document_id": "book_06", "required_copies": 6, "title": "《沿海与岛屿避险航行》", "summary": "海上航线、潮汐窗口及空中接应的联合规划。", "body": "废弃港口比开阔海面更危险：缆绳、沉船和岸上尸群会把单一船只困在固定航道。因此抵达孤立岛屿不能只依赖海上载具，还需要飞行载具侦察码头、投放信标或完成紧急转移。书中用粗线划掉“附近岛屿”一词，并注明：孤岛没有传统意义的邻城，所有往返都应视为独立远征。"},
+          {"document_id": "book_07", "required_copies": 7, "title": "《领群行为实验日志》", "summary": "一组危险实验揭示了尸群对指令信号的反应。", "body": "实验者以不同频率脉冲播放灾前疏散广播，发现普通感染者只对声量有反应，领群个体却会等待句子结束再改变方向。第十九次实验后，一只从未靠近围栏的变异体面向摄像机，重复敲击了实验员每天使用的三短一长暗号。日志到此中断，封底写着：我们一直以为自己在训练它们。"},
+          {"document_id": "book_08", "required_copies": 8, "title": "所长前任的日记《余烬之后》", "summary": "避难所建立者关于希望、牺牲和最终目标的私人记录。", "body": "最后一篇日记没有物资数字。前任写道，避难所不是一扇更厚的门，而是人们愿意为彼此留下的位置；希望也不是让所有人相信会得救，而是在知道明天可能更糟时，仍愿意认真安排今晚谁睡在哪个房间。末页夹着数据中心的旧门禁卡复印件，以及一句给后来所长的话：斩杀首领只能结束一场围困，别让胜利结束你们成为人的努力。"}
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "engine_name": "LayaAir",
+  "engine_version": "3.4.0",
+  "release_url": "https://github.com/layabox/LayaAir/releases/tag/v3.4.0",
+  "archive_sha256": "a21b787b7d5cea92013e8903be1fe766e0c25573f2ae67f3078dfe60f72cfed9",
+  "scripts": [
+    {
+      "path": "laya.core.js",
+      "integrity": "sha256-SM+pdv2cvIsSx0VpIdh2qMt8X+/1UeEhu9QeO2eL0Bo="
+    },
+    {
+      "path": "laya.webgl_2D.js",
+      "integrity": "sha256-lAohiH5eTHaYBzRSVwkRM6N4ih/t0V7tE7rSd4P3br4="
+    },
+    {
+      "path": "laya.ui.js",
+      "integrity": "sha256-V/pjgplB9RfxOFwtf5CRhb31oG7a99DWjRQcJjdUhUk="
+    }
+  ]
+}

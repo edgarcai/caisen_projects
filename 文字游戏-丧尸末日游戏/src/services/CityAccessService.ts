@@ -1,0 +1,205 @@
+import type { CityConfig } from "../domain/content";
+import type { GameState } from "../domain/game-state";
+import type { SurvivalSystemsConfigDocument } from "../domain/survival-systems";
+import type { GameContent } from "./GameContent";
+
+/** 城市相对出生地的稳定关系。 */
+export type CityTravelRelation = "home" | "neighbor" | "remote";
+
+/** 城市按钮和远征领域共同消费的通行判定。 */
+export interface CityAccessDecision {
+  readonly city: CityConfig;
+  readonly relation: CityTravelRelation;
+  readonly travelStepCost: number;
+  readonly accessible: boolean;
+  readonly reason: string;
+  readonly accessSummary: string;
+}
+
+/** 远城侦察解锁规则的倒置端口。 */
+export interface RemoteCityUnlockPolicy {
+  /** 判断指定远城是否已经完成一周侦察。 */
+  isUnlocked(state: GameState, cityId: string): boolean;
+
+  /** 返回未解锁远城的配置化阻断原因。 */
+  lockedReason(cityId: string): string;
+}
+
+/** 依据城市拓扑、报纸情报、路径道具和已装备载具判定通行。 */
+export class CityAccessService {
+  private readonly content: GameContent;
+  private readonly survivalSystems: SurvivalSystemsConfigDocument;
+  private readonly remoteUnlockPolicy: RemoteCityUnlockPolicy | null;
+
+  /** 注入唯一的城市内容源和仓库物品目录。 */
+  public constructor(
+    content: GameContent,
+    survivalSystems: SurvivalSystemsConfigDocument,
+    remoteUnlockPolicy: RemoteCityUnlockPolicy | null = null,
+  ) {
+    this.content = content;
+    this.survivalSystems = survivalSystems;
+    this.remoteUnlockPolicy = remoteUnlockPolicy;
+  }
+
+  /** 计算指定城市当前是否可达以及出发时需要扣除的步数。 */
+  public evaluate(state: GameState, cityId: string): CityAccessDecision {
+    const city = this.content.city(cityId);
+    const homeCity = this.content.city(state.campaign.home_city_id);
+    const relation = this.relation(homeCity, city);
+    const travelStepCost = this.travelStepCost(relation);
+    if (relation === "home") {
+      return this.allowed(city, relation, travelStepCost, "city_access_home");
+    }
+    if (relation === "neighbor") {
+      return this.allowed(city, relation, travelStepCost, "city_access_neighbor");
+    }
+    if (
+      this.remoteUnlockPolicy !== null
+      && !this.remoteUnlockPolicy.isUnlocked(state, city.id)
+    ) {
+      return {
+        city,
+        relation,
+        travelStepCost,
+        accessible: false,
+        reason: this.remoteUnlockPolicy.lockedReason(city.id),
+        accessSummary: this.accessSummary(city, relation, travelStepCost),
+      };
+    }
+    const hasIntelligence =
+      state.shelter.newspapers >= city.intelligence_newspapers_required;
+    const hasPath = city.allow_path_items
+      && city.path_item_ids.some((itemId) => this.ownsItem(state, itemId));
+    const hasTransport = this.transportRequirementSatisfied(state, city);
+    const accessible = hasIntelligence && (hasPath || hasTransport);
+    const reason = accessible
+      ? this.content.text("city_access_remote_ready", { actions: travelStepCost })
+      : this.remoteLockedReason(
+        city,
+        hasIntelligence,
+        hasPath,
+        hasTransport,
+      );
+    return {
+      city,
+      relation,
+      travelStepCost,
+      accessible,
+      reason,
+      accessSummary: this.accessSummary(city, relation, travelStepCost),
+    };
+  }
+
+  /** 返回出生地、邻城或远城的拓扑关系。 */
+  private relation(homeCity: CityConfig, city: CityConfig): CityTravelRelation {
+    if (homeCity.id === city.id) return "home";
+    if (
+      homeCity.neighbor_ids.includes(city.id)
+      || city.neighbor_ids.includes(homeCity.id)
+    ) {
+      return "neighbor";
+    }
+    return "remote";
+  }
+
+  /** 从规则配置读取三种关系对应的出发步数。 */
+  private travelStepCost(relation: CityTravelRelation): number {
+    const travel = this.content.game.rules.city_travel;
+    if (relation === "home") return travel.home_step_cost;
+    if (relation === "neighbor") return travel.neighbor_step_cost;
+    return travel.remote_step_cost;
+  }
+
+  /** 构造无需额外物资即可通行的判定。 */
+  private allowed(
+    city: CityConfig,
+    relation: CityTravelRelation,
+    travelStepCost: number,
+    textKey: string,
+  ): CityAccessDecision {
+    return {
+      city,
+      relation,
+      travelStepCost,
+      accessible: true,
+      reason: this.content.text(textKey, { actions: travelStepCost }),
+      accessSummary: this.accessSummary(city, relation, travelStepCost),
+    };
+  }
+
+  /** 组合地貌、城区、简介和路费，供悬停与移动端正文展示。 */
+  private accessSummary(
+    city: CityConfig,
+    relation: CityTravelRelation,
+    travelStepCost: number,
+  ): string {
+    return this.content.text("city_access_summary", {
+      district: city.district,
+      terrain: this.content.text(`city_terrain_${city.terrain}`),
+      relation: this.content.text(`city_relation_${relation}`),
+      actions: travelStepCost,
+      description: city.description,
+    });
+  }
+
+  /** 解释远城被锁定的是情报还是路径与交通工具。 */
+  private remoteLockedReason(
+    city: CityConfig,
+    hasIntelligence: boolean,
+    hasPath: boolean,
+    hasTransport: boolean,
+  ): string {
+    if (!hasIntelligence) {
+      return this.content.text("city_access_need_intelligence", {
+        required: city.intelligence_newspapers_required,
+      });
+    }
+    if (!hasPath && !hasTransport && city.transport_match === "all") {
+      const itemNames = city.transport_item_ids.map(
+        (itemId) => this.configuredItemName(itemId),
+      );
+      return this.content.text("city_access_need_all_transports", {
+        items: itemNames.join(this.content.text("city_access_item_separator")),
+      });
+    }
+    if (!hasPath && !hasTransport) {
+      const itemNames = [
+        ...city.path_item_ids,
+        ...city.transport_item_ids,
+      ].map((itemId) => this.configuredItemName(itemId));
+      return this.content.text("city_access_need_route", {
+        items: itemNames.join(this.content.text("city_access_item_separator")),
+      });
+    }
+    return this.content.text("city_access_unavailable");
+  }
+
+  /** 判断制作物或剧情关键物品中是否持有指定路线道具。 */
+  private ownsItem(state: GameState, itemId: string): boolean {
+    return (state.inventory.crafted_items[itemId] ?? 0) > 0
+      || state.story.key_items.includes(itemId);
+  }
+
+  /** 按城市匹配策略判断需要的载具是否已经真实装备。 */
+  private transportRequirementSatisfied(
+    state: GameState,
+    city: CityConfig,
+  ): boolean {
+    const equippedIds = new Set(state.inventory.equipped_transport_ids);
+    if (city.transport_match === "all") {
+      return city.transport_item_ids.length > 0
+        && city.transport_item_ids.every((itemId) => equippedIds.has(itemId));
+    }
+    return city.transport_item_ids.some((itemId) => equippedIds.has(itemId));
+  }
+
+  /** 从仓库配置解析通行物品中文名。 */
+  private configuredItemName(itemId: string): string {
+    const items = [
+      ...this.survivalSystems.warehouse.resource_items,
+      ...this.survivalSystems.warehouse.crafted_items,
+    ];
+    return items.find((item) => item.item_id === itemId)?.name ?? itemId;
+  }
+}

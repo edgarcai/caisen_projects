@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "from_version": 8,
+  "to_version": 9,
+  "state_defaults": {
+    "research_slotted_item_id": null
+  },
+  "wall_distribution": {
+    "inner_wall_percent": 50
+  }
+}

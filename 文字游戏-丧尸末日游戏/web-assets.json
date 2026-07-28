@@ -1,0 +1,188 @@
+{
+  "schema_version": 2,
+  "managed_roots": [
+    "public/assets"
+  ],
+  "removals": [
+    "public/assets/cover_art.png",
+    "public/assets/cover_art.webp",
+    "public/assets/ui/menu_button_idle.png",
+    "public/assets/ui/menu_button_hover.png",
+    "public/assets/ui/menu_button_pressed.png",
+    "public/assets/ui/menu_button_disabled.png"
+  ],
+  "copies": [
+    {
+      "source": "assets/cover_art_2k.png",
+      "target": "public/assets/cover_art_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 1152,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 2500000
+      }
+    },
+    {
+      "source": "assets/cover_art_2k.webp",
+      "target": "public/assets/cover_art_2k.webp",
+      "image_policy": {
+        "format": "webp",
+        "width": 2048,
+        "height": 1152,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
+    },
+    {
+      "source": "assets/covers/cover_theme_bunker_gate_2k.png",
+      "target": "public/assets/covers/cover_theme_bunker_gate_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 1152,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 2500000
+      }
+    },
+    {
+      "source": "assets/covers/cover_theme_bunker_gate_2k.webp",
+      "target": "public/assets/covers/cover_theme_bunker_gate_2k.webp",
+      "image_policy": {
+        "format": "webp",
+        "width": 2048,
+        "height": 1152,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
+    },
+    {
+      "source": "assets/covers/cover_theme_bunker_gate_mobile_2k.png",
+      "target": "public/assets/covers/cover_theme_bunker_gate_mobile_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 1152,
+        "height": 2048,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 2500000
+      }
+    },
+    {
+      "source": "assets/covers/cover_theme_bunker_gate_mobile_2k.webp",
+      "target": "public/assets/covers/cover_theme_bunker_gate_mobile_2k.webp",
+      "image_policy": {
+        "format": "webp",
+        "width": 1152,
+        "height": 2048,
+        "alpha": false,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
+    },
+    {
+      "source": "assets/ui/menu_button_idle_2k.png",
+      "target": "public/assets/ui/menu_button_idle_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 384,
+        "alpha": true,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
+    },
+    {
+      "source": "assets/ui/menu_button_hover_2k.png",
+      "target": "public/assets/ui/menu_button_hover_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 384,
+        "alpha": true,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
+    },
+    {
+      "source": "assets/ui/menu_button_pressed_2k.png",
+      "target": "public/assets/ui/menu_button_pressed_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 384,
+        "alpha": true,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
+    },
+    {
+      "source": "assets/ui/menu_button_disabled_2k.png",
+      "target": "public/assets/ui/menu_button_disabled_2k.png",
+      "image_policy": {
+        "format": "png",
+        "width": 2048,
+        "height": 384,
+        "alpha": true,
+        "metadata_stripped": true,
+        "max_bytes": 250000
+      }
+    },
+    {
+      "source": "config/game_config.json",
+      "target": "public/config/game_config.json"
+    },
+    {
+      "source": "config/story.json",
+      "target": "public/config/story.json"
+    },
+    {
+      "source": "config/events.json",
+      "target": "public/config/events.json"
+    },
+    {
+      "source": "config/save_migrations/v1_to_v2.json",
+      "target": "public/config/save_migrations/v1_to_v2.json"
+    },
+    {
+      "source": "config/save_migrations/v2_to_v3.json",
+      "target": "public/config/save_migrations/v2_to_v3.json"
+    },
+    {
+      "source": "config/save_migrations/v3_to_v4.json",
+      "target": "public/config/save_migrations/v3_to_v4.json"
+    },
+    {
+      "source": "config/save_migrations/v4_to_v5.json",
+      "target": "public/config/save_migrations/v4_to_v5.json"
+    },
+    {
+      "source": "config/save_migrations/v5_to_v6.json",
+      "target": "public/config/save_migrations/v5_to_v6.json"
+    },
+    {
+      "source": "config/save_migrations/v6_to_v7.json",
+      "target": "public/config/save_migrations/v6_to_v7.json"
+    },
+    {
+      "source": "config/save_migrations/v7_to_v8.json",
+      "target": "public/config/save_migrations/v7_to_v8.json"
+    },
+    {
+      "source": "config/save_migrations/v8_to_v9.json",
+      "target": "public/config/save_migrations/v8_to_v9.json"
+    },
+    {
+      "source": "config/web_config.json",
+      "target": "public/config/web_config.json"
+    },
+    {
+      "source": "assets/favicon.svg",
+      "target": "public/assets/favicon.svg"
+    }
+  ]
+}

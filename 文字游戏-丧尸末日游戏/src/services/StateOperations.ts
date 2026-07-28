@@ -1,0 +1,303 @@
+import type { NumericEffectConfig, NumericAmount } from "../domain/content";
+import { StateOperationError } from "../domain/errors";
+import {
+  findCompanion,
+  type GameState,
+  type PlayerState,
+} from "../domain/game-state";
+import type { RandomSource } from "../domain/ports";
+import { isStateOperationFieldAllowed } from "../domain/state-operation-targets";
+import {
+  damageShelterWalls,
+  synchronizeShelterHealth,
+} from "../domain/shelter-fortification";
+
+/** 配置化数值写入成功后可订阅的最小观察者端口。 */
+export interface StateMutationObserver {
+  /** 接收一次已通过白名单校验的整数变化。 */
+  stateChanged(
+    target: string,
+    previousValue: number,
+    currentValue: number,
+    state: GameState,
+  ): void;
+}
+
+/** 集中执行配置化数值读写，防止 JSON 越权修改状态。 */
+export class StateOperations {
+  private readonly random: RandomSource;
+  private readonly observers: readonly StateMutationObserver[];
+
+  /** 注入可替换的随机源与可选数值变化观察者。 */
+  public constructor(
+    random: RandomSource,
+    observers: readonly StateMutationObserver[] = [],
+  ) {
+    this.random = random;
+    this.observers = [...observers];
+  }
+
+  /** 读取允许公开给配置的整数状态或派生计数。 */
+  public read(
+    target: string,
+    state: GameState,
+    playerIndex: number = state.active_player_index,
+  ): number {
+    if (target === "story.key_item_count") {
+      return state.story.key_items.length;
+    }
+    if (target === "story.active_companion_count") {
+      return state.companions.filter((companion) => companion.status === "active").length;
+    }
+    if (target === "story.average_trust") {
+      const trusts = state.companions
+        .filter((companion) => companion.status === "active")
+        .map((companion) => companion.trust);
+      return trusts.length === 0
+        ? 0
+        : Math.floor(trusts.reduce((sum, trust) => sum + trust, 0) / trusts.length);
+    }
+    if (target === "story.total_companion_trust") {
+      return state.companions
+        .filter((companion) => companion.status === "active")
+        .reduce((sum, companion) => sum + companion.trust, 0);
+    }
+    if (target === "story.boss_count") {
+      return Object.keys(state.story.boss_outcomes).length;
+    }
+
+    const parts = target.split(".");
+    if (parts.length === 2) {
+      const [root, field] = parts;
+      if (root === "player" && field !== undefined) {
+        this.requireAllowed(root, field, target);
+        return this.readNumericField(this.playerAt(state, playerIndex), field, target);
+      }
+      if (root === "shelter" && field !== undefined) {
+        this.requireAllowed(root, field, target);
+        if (field === "health") {
+          return state.shelter.inner_wall_health + state.shelter.outer_wall_health;
+        }
+        return this.readNumericField(state.shelter, field, target);
+      }
+      if (root === "story" && field !== undefined) {
+        this.requireAllowed(root, field, target);
+        return this.readNumericField(state.story, field, target);
+      }
+      if (root === "facility" && field !== undefined) {
+        const value = state.facility_levels[field];
+        if (value === undefined) {
+          throw new StateOperationError(`未知设施目标：${target}`);
+        }
+        return value;
+      }
+    }
+    if (parts.length === 3 && parts[0] === "companion" && parts[2] === "trust") {
+      const companionId = parts[1];
+      const companion = companionId === undefined ? undefined : findCompanion(state, companionId);
+      if (companion === undefined) {
+        throw new StateOperationError(`伙伴尚未加入：${target}`);
+      }
+      return companion.trust;
+    }
+    throw new StateOperationError(`未知状态目标：${target}`);
+  }
+
+  /** 更新允许由配置修改的整数状态。 */
+  public write(
+    target: string,
+    value: number,
+    state: GameState,
+    playerIndex: number = state.active_player_index,
+  ): void {
+    if (!Number.isInteger(value)) {
+      throw new StateOperationError(`状态目标必须写入整数：${target}`);
+    }
+    const parts = target.split(".");
+    if (parts.length === 2) {
+      const [root, field] = parts;
+      if (root === "player" && field !== undefined) {
+        this.requireAllowed(root, field, target);
+        this.writeObservedNumericField(
+          this.playerAt(state, playerIndex),
+          field,
+          value,
+          target,
+          state,
+        );
+        return;
+      }
+      if (root === "shelter" && field !== undefined) {
+        this.requireAllowed(root, field, target);
+        if (field === "health") {
+          this.writeShelterTotalHealth(value, target, state);
+          return;
+        }
+        if (field === "inner_wall_health" || field === "outer_wall_health") {
+          const previousValue = state.shelter[field];
+          state.shelter[field] = Math.max(0, value);
+          synchronizeShelterHealth(state.shelter);
+          this.notifyObservers(target, previousValue, state.shelter[field], state);
+          return;
+        }
+        this.writeObservedNumericField(state.shelter, field, value, target, state);
+        return;
+      }
+      if (root === "story" && field !== undefined) {
+        this.requireAllowed(root, field, target);
+        this.writeObservedNumericField(state.story, field, value, target, state);
+        return;
+      }
+      if (root === "facility" && field !== undefined && state.facility_levels[field] !== undefined) {
+        const previousValue = state.facility_levels[field];
+        state.facility_levels[field] = value;
+        this.notifyObservers(target, previousValue, value, state);
+        return;
+      }
+    }
+    if (parts.length === 3 && parts[0] === "companion" && parts[2] === "trust") {
+      const companionId = parts[1];
+      const companion = companionId === undefined ? undefined : findCompanion(state, companionId);
+      if (companion === undefined) {
+        throw new StateOperationError(`伙伴尚未加入：${target}`);
+      }
+      const previousValue = companion.trust;
+      companion.trust = value;
+      this.notifyObservers(target, previousValue, value, state);
+      return;
+    }
+    throw new StateOperationError(`状态目标不可写：${target}`);
+  }
+
+  /** 兼容旧内容对总耐久的写入：损伤先落外墙，修复先落内墙。 */
+  private writeShelterTotalHealth(
+    value: number,
+    target: string,
+    state: GameState,
+  ): void {
+    const previousValue = state.shelter.health;
+    if (value < previousValue) {
+      damageShelterWalls(state.shelter, previousValue - value);
+    } else {
+      state.shelter.inner_wall_health += value - previousValue;
+      synchronizeShelterHealth(state.shelter);
+    }
+    this.notifyObservers(target, previousValue, state.shelter.health, state);
+  }
+
+  /** 依次应用数值效果，并收集结果文案需要的变量。 */
+  public applyEffects(
+    effects: readonly NumericEffectConfig[],
+    state: GameState,
+    playerIndex: number = state.active_player_index,
+  ): Record<string, number> {
+    const tokens: Record<string, number> = {};
+    for (const effect of effects) {
+      let amount = this.rollAmount(effect.amount);
+      const current = this.read(effect.target, state, playerIndex);
+      if (effect.operation === "subtract" && effect.limit_to_available === true) {
+        amount = Math.min(amount, current);
+      }
+      const nextValue = this.applyOperation(current, effect.operation, amount);
+      this.write(effect.target, nextValue, state, playerIndex);
+      if (effect.token !== undefined) {
+        tokens[effect.token] = amount;
+      }
+    }
+    return tokens;
+  }
+
+  /** 读取固定数值或从闭区间抽取整数。 */
+  public rollAmount(amount: NumericAmount): number {
+    if (typeof amount === "number") {
+      if (!Number.isInteger(amount)) {
+        throw new StateOperationError("效果固定 amount 必须是整数。");
+      }
+      return amount;
+    }
+    const [minimum, maximum] = amount;
+    if (!Number.isInteger(minimum) || !Number.isInteger(maximum)) {
+      throw new StateOperationError("效果随机 amount 边界必须是整数。");
+    }
+    return this.random.randint(minimum, maximum);
+  }
+
+  /** 对当前数值应用配置化加、减或设置操作。 */
+  private applyOperation(
+    current: number,
+    operation: NumericEffectConfig["operation"],
+    amount: number,
+  ): number {
+    if (operation === "add") {
+      return current + amount;
+    }
+    if (operation === "subtract") {
+      return current - amount;
+    }
+    return amount;
+  }
+
+  /** 从已通过白名单检查的对象读取整数字段。 */
+  private readNumericField(owner: object, field: string, target: string): number {
+    const value = Reflect.get(owner, field) as unknown;
+    if (typeof value !== "number" || !Number.isInteger(value)) {
+      throw new StateOperationError(`目标不是整数属性：${target}`);
+    }
+    return value;
+  }
+
+  /** 向已通过白名单检查的对象写入整数字段。 */
+  private writeNumericField(
+    owner: object,
+    field: string,
+    value: number,
+    target: string,
+  ): void {
+    const current = Reflect.get(owner, field) as unknown;
+    if (typeof current !== "number" || !Number.isInteger(current)) {
+      throw new StateOperationError(`目标不是整数属性：${target}`);
+    }
+    Reflect.set(owner, field, value);
+  }
+
+  /** 写入一个整数字段并在成功后通知全部观察者。 */
+  private writeObservedNumericField(
+    owner: object,
+    field: string,
+    value: number,
+    target: string,
+    state: GameState,
+  ): void {
+    const previousValue = this.readNumericField(owner, field, target);
+    this.writeNumericField(owner, field, value, target);
+    this.notifyObservers(target, previousValue, value, state);
+  }
+
+  /** 依次通知已注入观察者，并保持确定的调用顺序。 */
+  private notifyObservers(
+    target: string,
+    previousValue: number,
+    currentValue: number,
+    state: GameState,
+  ): void {
+    for (const observer of this.observers) {
+      observer.stateChanged(target, previousValue, currentValue, state);
+    }
+  }
+
+  /** 要求目标字段位于配置可访问白名单中。 */
+  private requireAllowed(root: string, field: string, target: string): void {
+    if (!isStateOperationFieldAllowed(root, field)) {
+      throw new StateOperationError(`状态目标未列入白名单：${target}`);
+    }
+  }
+
+  /** 返回指定索引的所长，拒绝远征存档中的越界领导者索引。 */
+  private playerAt(state: GameState, playerIndex: number): PlayerState {
+    const player = state.players[playerIndex];
+    if (player === undefined) {
+      throw new StateOperationError(`所长索引越界：${String(playerIndex)}`);
+    }
+    return player;
+  }
+}

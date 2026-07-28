@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "from_version": 6,
+  "to_version": 7,
+  "compatibility": {
+    "home_city_replacements": {
+      "city_h": "city_g"
+    },
+    "capacity_facility_id": "shelter_expansion"
+  },
+  "state_defaults": {
+    "equipped_transport_ids": [],
+    "facility_levels": {
+      "shelter_expansion": 0,
+      "water_purification": 0,
+      "energy_center": 0
+    },
+    "management_cycle_usage": {}
+  }
+}

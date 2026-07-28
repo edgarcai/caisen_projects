@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="192" viewBox="0 0 1024 192">
+  <defs>
+    <linearGradient id="hover-fill" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0" stop-color="#efa05b"/>
+      <stop offset="0.48" stop-color="#d8873f"/>
+      <stop offset="1" stop-color="#9f4f22"/>
+    </linearGradient>
+    <linearGradient id="hover-edge" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0" stop-color="#ffd783"/>
+      <stop offset="1" stop-color="#f0aa63"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-30%" width="120%" height="170%">
+      <feDropShadow dx="0" dy="9" stdDeviation="10" flood-color="#d57a36" flood-opacity="0.33"/>
+    </filter>
+  </defs>
+  <path d="M74 12H1010L950 180H14Z" fill="#020608" opacity="0.72" filter="url(#shadow)"/>
+  <path d="M62 4H1016L950 172H4Z" fill="#d8873f" stroke="#ffd783" stroke-width="7"/>
+  <path d="M75 20H980L970 45H65Z" fill="#ffffff" opacity="0.12"/>
+  <path d="M20 153H948L943 166H15Z" fill="#5f2916" opacity="0.34"/>
+  <path d="M88 52H940M70 82H928M52 112H916" stroke="#5f2916" stroke-width="2" opacity="0.12"/>
+  <path d="M982 20L950 104L918 104L950 20Z" fill="#10171a" opacity="0.86"/>
+  <path d="M947 113L932 151" stroke="#10171a" stroke-width="6" opacity="0.62"/>
+</svg>

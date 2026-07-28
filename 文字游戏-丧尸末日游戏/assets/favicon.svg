@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="避难所入口">
+  <rect width="64" height="64" rx="12" fill="#071014"/>
+  <path d="M14 54V29C14 18 22 10 32 10s18 8 18 19v25z" fill="#18272d" stroke="#dfc36f" stroke-width="3"/>
+  <path d="M21 54V30c0-7 5-13 11-13s11 6 11 13v24z" fill="#0b151a" stroke="#d8873f" stroke-width="2"/>
+  <circle cx="38" cy="36" r="2.5" fill="#efa05b"/>
+  <path d="M25 23h14" stroke="#f4f5ef" stroke-width="3" stroke-linecap="round"/>
+</svg>
