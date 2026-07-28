@@ -45,7 +45,7 @@ import type {
   UiCompanionView,
   UiCraftingRecipeView,
   UiExpeditionCarryItemView,
-  UiExpeditionCompanionView,
+  UiExpeditionCompanionLoadoutView,
   UiExpeditionFailureView,
   UiExpeditionStatusView,
   UiHistoryEntryView,
@@ -188,9 +188,10 @@ export class GameUiAdapter implements GameUiPort {
       ? null
       : this.returnIncidentView();
     const cities = state === null ? [] : this.cityViews(state);
+    const companions = state === null ? [] : this.companionViews(state);
     const expeditionCompanions = state === null
       ? []
-      : this.expeditionCompanionViews();
+      : this.expeditionCompanionViews(companions);
     const settlementNetwork = state === null
       ? buildEmptySettlementNetworkUiProjection(this.application)
       : buildSettlementNetworkUiProjection(
@@ -239,7 +240,7 @@ export class GameUiAdapter implements GameUiPort {
       explorationPrompt: state === null ? null : this.explorationPromptView(state),
       battle: state === null ? null : this.battleView(state),
       managementCategories: state === null ? [] : this.managementCategoryViews(state),
-      companions: state === null ? [] : this.companionViews(state),
+      companions,
       shelterLayoutConfig: this.application.shelterLayoutConfig(),
       shelterLayout,
       shelterRoomAssignmentOptions,
@@ -1457,14 +1458,24 @@ export class GameUiAdapter implements GameUiPort {
     };
   }
 
-  /** 把可用伙伴投影为远征准备选项。 */
-  private expeditionCompanionViews(): UiExpeditionCompanionView[] {
+  /** 复用本次快照的角色档案，把可用伙伴投影为远征配装选项。 */
+  private expeditionCompanionViews(
+    loadouts: readonly UiCompanionView[],
+  ): UiExpeditionCompanionLoadoutView[] {
+    const loadoutById = new Map(loadouts.map((companion) => [
+      companion.id,
+      companion,
+    ]));
     return this.application.expeditionCompanions().map((companion) => ({
       id: companion.companionId,
       name: companion.name,
       traitName: companion.traitName,
       trust: companion.trust,
       stepBonus: companion.stepBonus,
+      equippedWeaponName:
+        loadoutById.get(companion.companionId)?.equippedWeapon?.name ?? null,
+      equippedArmorName:
+        loadoutById.get(companion.companionId)?.equippedArmor?.name ?? null,
     }));
   }
 

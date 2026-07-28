@@ -569,6 +569,13 @@ export interface UiExpeditionCompanionView {
   readonly stepBonus: number;
 }
 
+/** 远征整备页在基础伙伴摘要上追加的当前配装。 */
+export interface UiExpeditionCompanionLoadoutView
+  extends UiExpeditionCompanionView {
+  readonly equippedWeaponName: string | null;
+  readonly equippedArmorName: string | null;
+}
+
 /**
  * 远征准备页中的可携带物资选项。
  */
@@ -710,7 +717,7 @@ export interface GameUiSnapshot {
   readonly researchWorkbench: UiResearchWorkbenchView | null;
   readonly researchProjects: readonly UiResearchProjectView[];
   readonly craftingRecipes: readonly UiCraftingRecipeView[];
-  readonly expeditionCompanions: readonly UiExpeditionCompanionView[];
+  readonly expeditionCompanions: readonly UiExpeditionCompanionLoadoutView[];
   readonly expeditionCarryItems: readonly UiExpeditionCarryItemView[];
   readonly expeditionStatus: UiExpeditionStatusView | null;
   readonly expeditionFailure: UiExpeditionFailureView | null;

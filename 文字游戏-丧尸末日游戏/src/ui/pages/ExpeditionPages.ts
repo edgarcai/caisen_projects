@@ -11,6 +11,7 @@ import type {
   UiCityDistrictView,
   UiCityView,
   UiExpeditionCarryItemView,
+  UiExpeditionCompanionLoadoutView,
   UiExpeditionCompanionView,
   UiExpeditionFailureView,
   UiExpeditionStatusView,
@@ -275,7 +276,7 @@ export function createExpeditionPreparePage(
   factory: UiFactory,
   config: GameUiConfig,
   layout: ResponsiveLayout,
-  companions: readonly UiExpeditionCompanionView[],
+  companions: readonly UiExpeditionCompanionLoadoutView[],
   carryItems: readonly UiExpeditionCarryItemView[],
   draft: ExpeditionDraft,
   actions: ExpeditionPrepareActions,
@@ -354,7 +355,7 @@ function renderCompanionSection(
   config: GameUiConfig,
   layout: ResponsiveLayout,
   page: PageScaffold,
-  companions: readonly UiExpeditionCompanionView[],
+  companions: readonly UiExpeditionCompanionLoadoutView[],
   draft: ExpeditionDraft,
   actions: ExpeditionPrepareActions,
   startY: number,
@@ -371,15 +372,7 @@ function renderCompanionSection(
     const selected = draft.companionIds.has(companion.id);
     return {
       id: companion.id,
-      label: formatUiTemplate(config.texts.expedition_companion_format, {
-        name: companion.name,
-        trait: companion.traitName,
-        trust: companion.trust,
-        bonus: companion.stepBonus,
-        status: selected
-          ? config.texts.expedition_selected
-          : config.texts.expedition_unselected,
-      }),
+      label: buildExpeditionCompanionLabel(config, companion, selected),
       selected,
       disabled: false,
       onClick: (): void => { actions.toggleCompanion(companion.id); },
@@ -394,6 +387,25 @@ function renderCompanionSection(
     labels,
     titleBottom + layout.sectionGap,
   );
+}
+
+/** 用配置模板生成伙伴状态与当前武器、防具摘要。 */
+export function buildExpeditionCompanionLabel(
+  config: GameUiConfig,
+  companion: UiExpeditionCompanionLoadoutView,
+  selected: boolean,
+): string {
+  return formatUiTemplate(config.texts.expedition_companion_format, {
+    name: companion.name,
+    trait: companion.traitName,
+    trust: companion.trust,
+    bonus: companion.stepBonus,
+    status: selected
+      ? config.texts.expedition_selected
+      : config.texts.expedition_unselected,
+    weapon: companion.equippedWeaponName ?? config.texts.companion_empty_slot,
+    armor: companion.equippedArmorName ?? config.texts.companion_empty_slot,
+  });
 }
 
 /** 绘制带独立加减按钮的携带物区域。 */
@@ -427,7 +439,7 @@ function renderCarryItemSection(
   );
 }
 
-/** 使用库存信息绘制可触控的携带物加减网格。 */
+/** 使用库存信息绘制“减号、数量、加号”三段式携带物网格。 */
 function renderCarryItemGrid(
   factory: UiFactory,
   config: GameUiConfig,
@@ -447,6 +459,11 @@ function renderCarryItemGrid(
 
   items.forEach((item, index) => {
     const quantity = draft.carriedItems[item.id] ?? 0;
+    const presentation = buildExpeditionCarryItemPresentation(
+      config,
+      item,
+      quantity,
+    );
     const column = index % columns;
     const row = Math.floor(index / columns);
     const x = column * (itemWidth + gap);
@@ -461,45 +478,63 @@ function renderCarryItemGrid(
     });
     factory.text(panel, {
       testId: `page-expedition-item-${item.id}-label`,
-      text: formatUiTemplate(config.texts.expedition_item_format, {
-        name: item.name,
-        quantity,
-        available: item.availableQuantity,
-        bonus: item.stepBonusPerUnit,
-      }),
-      x: 0,
+      text: presentation.label,
+      x: controlWidth + gap,
       y: 0,
       width: labelWidth,
       height: itemHeight,
       fontSize: config.typography.caption_size,
+      align: "center",
       valign: "middle",
       wordWrap: true,
     });
     factory.button(panel, {
       testId: `page-expedition-item-${item.id}-decrease`,
       label: config.texts.expedition_item_decrease,
-      x: labelWidth + gap,
+      x: 0,
       y: 0,
       width: controlWidth,
       height: itemHeight,
-      disabled: quantity <= 0,
+      disabled: presentation.decreaseDisabled,
       onClick: (): void => { actions.decreaseItem(item.id); },
     });
     factory.button(panel, {
       testId: `page-expedition-item-${item.id}-increase`,
       label: config.texts.expedition_item_increase,
-      x: labelWidth + controlWidth + gap * 2,
+      x: itemWidth - controlWidth,
       y: 0,
       width: controlWidth,
       height: itemHeight,
       tone: quantity > 0 ? "primary" : "default",
-      disabled: quantity >= item.availableQuantity,
+      disabled: presentation.increaseDisabled,
       onClick: (): void => { actions.increaseItem(item.id); },
     });
   });
 
   const rows = Math.ceil(items.length / columns);
   return startY + rows * (itemHeight + gap) + layout.sectionGap;
+}
+
+/** 将一项携带物的数量与库存边界转换为纯展示状态。 */
+export function buildExpeditionCarryItemPresentation(
+  config: GameUiConfig,
+  item: UiExpeditionCarryItemView,
+  quantity: number,
+): {
+  readonly label: string;
+  readonly decreaseDisabled: boolean;
+  readonly increaseDisabled: boolean;
+} {
+  return {
+    label: formatUiTemplate(config.texts.expedition_item_format, {
+      name: item.name,
+      quantity,
+      available: item.availableQuantity,
+      bonus: item.stepBonusPerUnit,
+    }),
+    decreaseDisabled: quantity <= 0,
+    increaseDisabled: quantity >= item.availableQuantity,
+  };
 }
 
 /** 绘制一个配置字号的整备分区标题。 */

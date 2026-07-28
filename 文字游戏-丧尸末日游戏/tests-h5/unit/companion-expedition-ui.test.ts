@@ -12,6 +12,8 @@ import {
 } from "../../src/ui/pages/DashboardPage";
 import {
   buildExpeditionCityListPrompt,
+  buildExpeditionCompanionLabel,
+  buildExpeditionCarryItemPresentation,
   buildExpeditionFailureBody,
   buildExpeditionStatusBody,
 } from "../../src/ui/pages/ExpeditionPages";
@@ -229,6 +231,24 @@ describe("角色档案与配装 UI 契约", () => {
     expect(equipped.snapshot?.companions.find(
       (companion) => companion.id === "haocai",
     )?.equippedWeapon?.id).toBe("pipe_rifle");
+    const expeditionHaocai = equipped.snapshot?.expeditionCompanions.find(
+      (companion) => companion.id === "haocai",
+    );
+    if (expeditionHaocai === undefined) {
+      throw new Error("远征伙伴投影缺少豪菜。");
+    }
+    expect(expeditionHaocai).toMatchObject({
+      equippedWeaponName: "管式步枪",
+      equippedArmorName: null,
+    });
+    const expeditionLabel = buildExpeditionCompanionLabel(
+      webConfig,
+      expeditionHaocai,
+      true,
+    );
+    expect(expeditionLabel).toContain("武器：管式步枪");
+    expect(expeditionLabel).toContain("防具：空位");
+    expect(expeditionLabel).toContain(webConfig.texts.expedition_selected);
 
     const hopeBefore = state.shelter.hope;
     const interaction = adapter.execute({
@@ -243,6 +263,28 @@ describe("角色档案与配装 UI 契约", () => {
     );
     expect(interactedCompanion?.interaction_count).toBe(1);
     expect(interactedCompanion?.interaction_cooldown_turns).toBeGreaterThan(0);
+  });
+
+  it("携带物加减展示在零值与库存上限正确禁用", () => {
+    const item = {
+      id: "food",
+      name: "密封食物",
+      availableQuantity: 3,
+      stepBonusPerUnit: 1,
+    };
+    const empty = buildExpeditionCarryItemPresentation(webConfig, item, 0);
+    const full = buildExpeditionCarryItemPresentation(webConfig, item, 3);
+
+    expect(empty).toMatchObject({
+      label: "密封食物 ×0/3",
+      decreaseDisabled: true,
+      increaseDisabled: false,
+    });
+    expect(full).toMatchObject({
+      label: "密封食物 ×3/3",
+      decreaseDisabled: false,
+      increaseDisabled: true,
+    });
   });
 
   it("档案与远征候选同时排除 locked 和 dead 角色", () => {

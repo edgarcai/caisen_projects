@@ -845,7 +845,7 @@
     "expedition_companion_title": "同行伙伴",
     "expedition_item_title": "携带物资",
     "expedition_city_format": "{name}｜{status}\n{relation} · {terrain} · 出发消耗{actions}份食物",
-    "expedition_companion_format": "{name}｜{trait}｜信任{trust}｜{status}",
+    "expedition_companion_format": "{name}｜{trait}｜信任{trust}｜{status}\n武器：{weapon}｜防具：{armor}",
     "expedition_item_format": "{name} ×{quantity}/{available}",
     "expedition_item_increase": "＋",
     "expedition_item_decrease": "－",

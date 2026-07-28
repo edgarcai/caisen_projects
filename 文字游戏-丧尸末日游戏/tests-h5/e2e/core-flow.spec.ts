@@ -308,6 +308,30 @@ async function readLayaNodeBounds(
   nodeName);
 }
 
+/** 断言携带物的减号、数量与加号按从左到右顺序分离显示。 */
+async function expectExpeditionCarryControlGeometry(
+  page: Page,
+  itemId: string,
+): Promise<void> {
+  const prefix = `page-expedition-item-${itemId}`;
+  const [row, decrease, label, increase] = await Promise.all([
+    readLayaNodeBounds(page, prefix),
+    readLayaNodeBounds(page, `${prefix}-decrease`),
+    readLayaNodeBounds(page, `${prefix}-label`),
+    readLayaNodeBounds(page, `${prefix}-increase`),
+  ]);
+  if (row === null || decrease === null || label === null || increase === null) {
+    throw new Error(`携带物 ${itemId} 缺少三段式数量控件。`);
+  }
+  expect(decrease.width).toBeGreaterThan(0);
+  expect(label.width).toBeGreaterThan(0);
+  expect(increase.width).toBeGreaterThan(0);
+  expect(decrease.x).toBeGreaterThanOrEqual(row.x);
+  expect(decrease.x + decrease.width).toBeLessThanOrEqual(label.x);
+  expect(label.x + label.width).toBeLessThanOrEqual(increase.x);
+  expect(increase.x + increase.width).toBeLessThanOrEqual(row.x + row.width);
+}
+
 /** 验证 ESC 四项顺序、同尺寸，以及竖屏直列或宽屏阶梯的响应式契约。 */
 async function expectFunctionMenuGeometry(page: Page): Promise<void> {
   const optionNames = [
@@ -1428,6 +1452,7 @@ test("远征从整备、事件、安全返程到归来事项完成闭环", async
   ) * survivalSystemsConfigDocument.expedition.food_units_per_action;
   await carryExpeditionFood(page, requiredFood);
   const foodItemId = survivalSystemsConfigDocument.expedition.action_food_item_id;
+  await expectExpeditionCarryControlGeometry(page, foodItemId);
   await clickScrollableLayaNode(
     page,
     `page-expedition-item-${foodItemId}-increase`,
