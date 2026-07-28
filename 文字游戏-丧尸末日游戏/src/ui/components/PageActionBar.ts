@@ -16,6 +16,7 @@ export interface PageActionSpec {
   readonly disabled?: boolean;
   readonly shape?: ButtonSpec["shape"];
   readonly skin?: ButtonSkinSpec;
+  readonly accentOnHover?: boolean;
   readonly onClick: () => void;
 }
 
@@ -111,6 +112,7 @@ export function createPageActionBar(
       disabled: action.disabled,
       shape: action.shape,
       skin: action.skin,
+      accentOnHover: action.accentOnHover,
       onClick: action.onClick,
     });
   });

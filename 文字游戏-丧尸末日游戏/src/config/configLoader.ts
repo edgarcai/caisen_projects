@@ -7,6 +7,7 @@ import type {
   ControlConfig,
   DashboardNavigationConfig,
   EngineConfig,
+  EscMenuLayoutVariantConfig,
   GuidedTutorialConfig,
   LayoutConfig,
   ManagementCategoryShortcutConfig,
@@ -52,6 +53,7 @@ const HORIZONTAL_ALIGNMENTS = ["left", "center", "right"] as const;
 const VERTICAL_ALIGNMENTS = ["top", "middle", "bottom"] as const;
 const COVER_SETTINGS_BUTTON_ANCHORS = ["left", "right"] as const;
 const HEADER_NAVIGATION_ANCHORS = ["left", "right"] as const;
+const ESC_MENU_BUTTON_SHAPES = ["rectangle", "parallelogram"] as const;
 const FRAME_MODES = ["fast", "slow", "mouse", "sleep"] as const;
 const NAVIGATION_PLACEMENTS = [
   "mobile_bottom",
@@ -216,6 +218,11 @@ const PAGE_LAYOUT_KEYS = [
   "option_gap",
   "desktop_option_columns",
   "mobile_option_columns",
+] as const;
+const ESC_MENU_LAYOUT_NUMBER_KEYS = [
+  "button_width",
+  "button_row_gap",
+  "button_row_step_x",
 ] as const;
 const SETTLEMENT_NETWORK_TEXT_KEYS = [
   "settlement_network_title",
@@ -1393,12 +1400,44 @@ function parseCoverMenuLayout(
   };
 }
 
+/** 解析一个 ESC 菜单响应式变体，并校验形状与皮肤开关。 */
+function parseEscMenuLayoutVariant(
+  value: unknown,
+  path: string,
+): EscMenuLayoutVariantConfig {
+  const source = expectObject(value, path);
+  const buttonShape = expectEnum(
+    source.button_shape,
+    ESC_MENU_BUTTON_SHAPES,
+    `${path}.button_shape`,
+  );
+  const useCoverButtonSkin = expectBoolean(
+    source.use_cover_button_skin,
+    `${path}.use_cover_button_skin`,
+  );
+  if (buttonShape === "rectangle" && useCoverButtonSkin) {
+    throw new WebConfigError(
+      `${path} 的直角按钮不能启用会覆盖形状的封面斜切皮肤`,
+    );
+  }
+  return {
+    ...readNumberFields(source, ESC_MENU_LAYOUT_NUMBER_KEYS, path),
+    button_shape: buttonShape,
+    use_cover_button_skin: useCoverButtonSkin,
+    accent_on_hover: expectBoolean(
+      source.accent_on_hover,
+      `${path}.accent_on_hover`,
+    ),
+  };
+}
+
 /** 解析封面、桌面、移动与二级页布局标尺。 */
 function parseLayout(value: unknown): LayoutConfig {
   const source = expectObject(value, "layout");
   const coverSource = expectObject(source.cover, "layout.cover");
   const desktopSource = expectObject(source.desktop, "layout.desktop");
   const mobileSource = expectObject(source.mobile, "layout.mobile");
+  const escMenuSource = expectObject(source.esc_menu, "layout.esc_menu");
   return {
     cover: {
       desktop: parseCoverMenuLayout(
@@ -1448,6 +1487,28 @@ function parseLayout(value: unknown): LayoutConfig {
       PAGE_LAYOUT_KEYS,
       "layout.page",
     ),
+    esc_menu: {
+      desktop: parseEscMenuLayoutVariant(
+        escMenuSource.desktop,
+        "layout.esc_menu.desktop",
+      ),
+      compact_portrait: parseEscMenuLayoutVariant(
+        escMenuSource.compact_portrait,
+        "layout.esc_menu.compact_portrait",
+      ),
+      compact_landscape: parseEscMenuLayoutVariant(
+        escMenuSource.compact_landscape,
+        "layout.esc_menu.compact_landscape",
+      ),
+      mobile_portrait: parseEscMenuLayoutVariant(
+        escMenuSource.mobile_portrait,
+        "layout.esc_menu.mobile_portrait",
+      ),
+      mobile_landscape: parseEscMenuLayoutVariant(
+        escMenuSource.mobile_landscape,
+        "layout.esc_menu.mobile_landscape",
+      ),
+    },
   };
 }
 

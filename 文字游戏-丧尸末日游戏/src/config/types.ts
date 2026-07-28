@@ -452,12 +452,32 @@ export interface PageLayoutConfig {
   readonly mobile_option_columns: number;
 }
 
+/** ESC 功能菜单单个响应式变体的按钮布局与外观策略。 */
+export interface EscMenuLayoutVariantConfig {
+  readonly button_width: number;
+  readonly button_row_gap: number;
+  readonly button_row_step_x: number;
+  readonly button_shape: "rectangle" | "parallelogram";
+  readonly use_cover_button_skin: boolean;
+  readonly accent_on_hover: boolean;
+}
+
+/** ESC 功能菜单在各响应式场景下的独立布局配置。 */
+export interface EscMenuLayoutConfig {
+  readonly desktop: EscMenuLayoutVariantConfig;
+  readonly compact_portrait: EscMenuLayoutVariantConfig;
+  readonly compact_landscape: EscMenuLayoutVariantConfig;
+  readonly mobile_portrait: EscMenuLayoutVariantConfig;
+  readonly mobile_landscape: EscMenuLayoutVariantConfig;
+}
+
 /** H5 全局布局配置。 */
 export interface LayoutConfig {
   readonly cover: CoverLayoutConfig;
   readonly desktop: DesktopLayoutConfig;
   readonly mobile: MobileLayoutConfig;
   readonly page: PageLayoutConfig;
+  readonly esc_menu: EscMenuLayoutConfig;
 }
 
 /** 浏览器本地存档策略。 */

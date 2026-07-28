@@ -1,9 +1,11 @@
 import type { ResponsiveLayout } from "../../styles/ResponsiveLayout";
-import type { GameUiConfig } from "../../styles/GameTheme";
+import type {
+  EscMenuLayoutVariantTokens,
+  GameUiConfig,
+} from "../../styles/GameTheme";
 import { PointerTooltip } from "../components/PointerTooltip";
 import type { ButtonSkinSpec, UiFactory } from "../components/UiFactory";
 import type { LayaRuntimeLike } from "../laya/LayaRuntime";
-import { resolveCoverMenuLayout } from "../models/CoverMenuModel";
 import type { UiOptionView, UiPromptView } from "../ports/GameUiPort";
 import { PageScaffold } from "./PageView";
 
@@ -22,6 +24,13 @@ export interface EscMenuGeometry {
   readonly contentHeight: number;
 }
 
+/** ESC 菜单按钮统一使用的形状与可选皮肤。 */
+export interface EscMenuButtonPresentation {
+  readonly shape: "rectangle" | "parallelogram";
+  readonly skin?: ButtonSkinSpec;
+  readonly accentOnHover?: boolean;
+}
+
 /** ESC 菜单需要的页面级交互。 */
 export interface EscMenuPageSpec {
   readonly prompt: UiPromptView;
@@ -30,7 +39,53 @@ export interface EscMenuPageSpec {
 }
 
 /**
- * 复用封面菜单标尺计算 ESC 按钮，保证桌面斜向阶梯与手机居中长方形一致。
+ * 根据设备等级和方向选择 ESC 菜单自己的响应式配置，避免与封面耦合。
+ */
+export function resolveEscMenuLayout(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+): EscMenuLayoutVariantTokens {
+  if (layout.kind === "mobile") {
+    return layout.isLandscape
+      ? config.layout.esc_menu.mobile_landscape
+      : config.layout.esc_menu.mobile_portrait;
+  }
+  if (layout.kind === "compact") {
+    return layout.isLandscape
+      ? config.layout.esc_menu.compact_landscape
+      : config.layout.esc_menu.compact_portrait;
+  }
+  return config.layout.esc_menu.desktop;
+}
+
+/**
+ * 解析主选项和底部继续键共用的按钮外观，确保形状不会被 PNG 皮肤覆盖。
+ */
+export function resolveEscMenuButtonPresentation(
+  config: GameUiConfig,
+  layout: ResponsiveLayout,
+): EscMenuButtonPresentation {
+  const menuLayout = resolveEscMenuLayout(config, layout);
+  if (!menuLayout.use_cover_button_skin) {
+    return {
+      shape: menuLayout.button_shape,
+      accentOnHover: menuLayout.accent_on_hover,
+    };
+  }
+  return {
+    shape: menuLayout.button_shape,
+    accentOnHover: menuLayout.accent_on_hover,
+    skin: {
+      idle: config.assets.skins.cover_button_idle,
+      hover: config.assets.skins.cover_button_hover,
+      pressed: config.assets.skins.cover_button_pressed,
+      disabled: config.assets.skins.cover_button_disabled,
+    },
+  };
+}
+
+/**
+ * 使用 ESC 专属标尺计算按钮，保证窄竖屏直向排列且宽屏保持阶梯布局。
  */
 export function resolveEscMenuGeometry(
   config: GameUiConfig,
@@ -38,10 +93,10 @@ export function resolveEscMenuGeometry(
   contentWidth: number,
   itemCount: number,
 ): EscMenuGeometry {
-  const menuLayout = resolveCoverMenuLayout(config, layout);
+  const menuLayout = resolveEscMenuLayout(config, layout);
   const safeItemCount = Math.max(0, itemCount);
-  const buttonWidth = Math.min(menuLayout.menu_width, contentWidth);
-  const requestedStep = layout.kind === "mobile" ? 0 : menuLayout.menu_row_step_x;
+  const buttonWidth = Math.min(menuLayout.button_width, contentWidth);
+  const requestedStep = menuLayout.button_row_step_x;
   const availableDrift = Math.max(0, contentWidth - buttonWidth);
   const totalRequestedDrift = Math.abs(requestedStep) * Math.max(0, safeItemCount - 1);
   const driftScale = totalRequestedDrift > 0
@@ -53,21 +108,19 @@ export function resolveEscMenuGeometry(
   const groupLeft = Math.max(0, (contentWidth - groupWidth) / 2);
   const firstButtonX = totalDrift < 0 ? groupLeft - totalDrift : groupLeft;
   const startY = config.layout.page.option_gap;
-  const rowHeight = config.controls.button_height + menuLayout.menu_row_gap;
+  const rowHeight = config.controls.button_height + menuLayout.button_row_gap;
   const buttons = Array.from({ length: safeItemCount }, (_value, index) => ({
     x: firstButtonX + rowStepX * index,
     y: startY + rowHeight * index,
     width: buttonWidth,
     height: config.controls.button_height,
-    shape: layout.kind === "mobile"
-      ? "rectangle" as const
-      : "parallelogram" as const,
+    shape: menuLayout.button_shape,
   }));
   const contentHeight = safeItemCount === 0
     ? startY
     : startY
       + safeItemCount * config.controls.button_height
-      + Math.max(0, safeItemCount - 1) * menuLayout.menu_row_gap
+      + Math.max(0, safeItemCount - 1) * menuLayout.button_row_gap
       + config.layout.page.option_gap;
   return { buttons, contentHeight };
 }
@@ -80,7 +133,7 @@ export function createEscMenuPage(
   layout: ResponsiveLayout,
   spec: EscMenuPageSpec,
 ): PageScaffold {
-  const skin = resolveEscMenuSkin(config, layout);
+  const presentation = resolveEscMenuButtonPresentation(config, layout);
   const page = new PageScaffold(
     runtime,
     factory,
@@ -95,8 +148,7 @@ export function createEscMenuPage(
         testId: "function-menu-continue",
         label: config.texts.continue,
         tone: "primary",
-        shape: layout.kind === "mobile" ? "rectangle" : "parallelogram",
-        skin,
+        ...presentation,
         onClick: spec.onClose,
       },
     ],
@@ -118,7 +170,7 @@ export function createEscMenuPage(
       tone: option.tone,
       disabled: option.disabled,
       hoverableWhenDisabled: true,
-      skin,
+      ...presentation,
       onClick: (): void => { spec.onSelect(option); },
     });
     const description = option.disabledReason ?? option.description;
@@ -132,20 +184,6 @@ export function createEscMenuPage(
   });
   page.scroll.setContentHeight(geometry.contentHeight);
   return page;
-}
-
-/** 所有电脑布局返回封面同款 2K PNG 四态皮肤，手机使用轻量长方形。 */
-function resolveEscMenuSkin(
-  config: GameUiConfig,
-  layout: ResponsiveLayout,
-): ButtonSkinSpec | undefined {
-  if (layout.kind === "mobile") return undefined;
-  return {
-    idle: config.assets.skins.cover_button_idle,
-    hover: config.assets.skins.cover_button_hover,
-    pressed: config.assets.skins.cover_button_pressed,
-    disabled: config.assets.skins.cover_button_disabled,
-  };
 }
 
 /** 为桌面 ESC 按钮创建延迟跟随简介，手机端不创建悬停层。 */

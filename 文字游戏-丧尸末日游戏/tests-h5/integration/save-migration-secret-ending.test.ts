@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+
+// 十三幕路线会构造三场完整首领战，全量并行套件下需要独立的稳定超时预算。
+const SECRET_ENDING_ROUTE_TIMEOUT_MS = 30_000;
 import type { GameUiSnapshot } from "../../src/ui/ports/GameUiPort";
 import {
   buildH5Harness,
@@ -191,5 +194,5 @@ describe("H5 秘密结局", () => {
     expect(victories).toBe(3);
     expect(state.ending?.ending_id).toBe("rekindled_dawn");
     expect(harness.adapter.getSnapshot().ending?.title).toBe("再燃黎明");
-  });
+  }, SECRET_ENDING_ROUTE_TIMEOUT_MS);
 });

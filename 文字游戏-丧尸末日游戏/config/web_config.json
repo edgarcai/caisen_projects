@@ -516,6 +516,48 @@
       "option_gap": 16,
       "desktop_option_columns": 2,
       "mobile_option_columns": 1
+    },
+    "esc_menu": {
+      "desktop": {
+        "button_width": 300,
+        "button_row_gap": 16,
+        "button_row_step_x": 24,
+        "button_shape": "parallelogram",
+        "use_cover_button_skin": true,
+        "accent_on_hover": false
+      },
+      "compact_portrait": {
+        "button_width": 300,
+        "button_row_gap": 16,
+        "button_row_step_x": 0,
+        "button_shape": "rectangle",
+        "use_cover_button_skin": false,
+        "accent_on_hover": true
+      },
+      "compact_landscape": {
+        "button_width": 300,
+        "button_row_gap": 16,
+        "button_row_step_x": 24,
+        "button_shape": "parallelogram",
+        "use_cover_button_skin": true,
+        "accent_on_hover": false
+      },
+      "mobile_portrait": {
+        "button_width": 340,
+        "button_row_gap": 18,
+        "button_row_step_x": 0,
+        "button_shape": "rectangle",
+        "use_cover_button_skin": false,
+        "accent_on_hover": true
+      },
+      "mobile_landscape": {
+        "button_width": 340,
+        "button_row_gap": 14,
+        "button_row_step_x": 0,
+        "button_shape": "rectangle",
+        "use_cover_button_skin": false,
+        "accent_on_hover": true
+      }
     }
   },
   "storage": {

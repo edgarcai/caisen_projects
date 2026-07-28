@@ -51,6 +51,8 @@ export interface ButtonSpec {
   readonly lockedAppearance?: boolean;
   readonly shape?: "rectangle" | "parallelogram";
   readonly skin?: ButtonSkinSpec;
+  /** 无图片皮肤时，悬停与按压阶段使用主题强调色。 */
+  readonly accentOnHover?: boolean;
   readonly fontSize?: number;
   readonly wordWrap?: boolean;
   readonly hoverableWhenDisabled?: boolean;
@@ -250,7 +252,11 @@ export class UiFactory {
      * 根据当前交互状态重绘按钮。
      */
     const renderButton = (): void => {
-      const colors = this.resolveButtonColors(spec.tone ?? "default", state);
+      const colors = this.resolveButtonColors(
+        spec.tone ?? "default",
+        state,
+        spec.accentOnHover === true,
+      );
       const fillColor = usesLockedAppearance
         ? this.theme.background_soft
         : colors.fill;
@@ -523,7 +529,17 @@ export class UiFactory {
   private resolveButtonColors(
     tone: UiTone,
     state: "idle" | "hover" | "pressed",
+    accentOnHover: boolean,
   ): { readonly fill: string; readonly text: string; readonly border: string } {
+    if (accentOnHover && state !== "idle") {
+      return {
+        fill: state === "pressed"
+          ? this.theme.primary_pressed
+          : this.theme.primary_hover,
+        text: this.theme.on_primary,
+        border: this.theme.border_active,
+      };
+    }
     if (tone === "primary") {
       const fill = state === "pressed"
         ? this.theme.primary_pressed

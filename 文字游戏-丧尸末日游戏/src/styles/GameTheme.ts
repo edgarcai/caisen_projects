@@ -318,6 +318,25 @@ export interface PageLayoutTokens {
   readonly mobile_option_columns: number;
 }
 
+/** ESC 功能菜单单个响应式变体的按钮布局与外观 token。 */
+export interface EscMenuLayoutVariantTokens {
+  readonly button_width: number;
+  readonly button_row_gap: number;
+  readonly button_row_step_x: number;
+  readonly button_shape: "rectangle" | "parallelogram";
+  readonly use_cover_button_skin: boolean;
+  readonly accent_on_hover: boolean;
+}
+
+/** ESC 功能菜单各设备方向的独立响应式 token。 */
+export interface EscMenuLayoutTokens {
+  readonly desktop: EscMenuLayoutVariantTokens;
+  readonly compact_portrait: EscMenuLayoutVariantTokens;
+  readonly compact_landscape: EscMenuLayoutVariantTokens;
+  readonly mobile_portrait: EscMenuLayoutVariantTokens;
+  readonly mobile_landscape: EscMenuLayoutVariantTokens;
+}
+
 /**
  * UI 使用的完整布局配置。
  */
@@ -326,6 +345,7 @@ export interface GameLayoutTokens {
   readonly desktop: DesktopLayoutTokens;
   readonly mobile: MobileLayoutTokens;
   readonly page: PageLayoutTokens;
+  readonly esc_menu: EscMenuLayoutTokens;
 }
 
 /**

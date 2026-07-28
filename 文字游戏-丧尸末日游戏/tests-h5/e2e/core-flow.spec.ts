@@ -308,6 +308,56 @@ async function readLayaNodeBounds(
   nodeName);
 }
 
+/** 验证 ESC 四项顺序、同尺寸，以及竖屏直列或宽屏阶梯的响应式契约。 */
+async function expectFunctionMenuGeometry(page: Page): Promise<void> {
+  const optionNames = [
+    "page-function-menu-option-save",
+    "page-function-menu-option-settings",
+    "page-function-menu-option-rollback",
+    "page-function-menu-option-exit",
+  ] as const;
+  const optionBounds = await Promise.all(
+    optionNames.map(async (name) => readLayaNodeBounds(page, name)),
+  );
+  if (optionBounds.some((bounds) => bounds === null)) {
+    throw new Error("ESC 功能菜单缺少主选项节点。");
+  }
+  const resolvedBounds = optionBounds as DebugNodeBounds[];
+  const firstBounds = resolvedBounds[0];
+  if (firstBounds === undefined) {
+    throw new Error("ESC 功能菜单没有可比较的主选项。");
+  }
+  expect(resolvedBounds.every((bounds) => (
+    bounds.width === firstBounds.width && bounds.height === firstBounds.height
+  ))).toBe(true);
+  for (let index = 1; index < resolvedBounds.length; index += 1) {
+    const previous = resolvedBounds[index - 1];
+    const current = resolvedBounds[index];
+    if (previous === undefined || current === undefined) {
+      throw new Error("ESC 功能菜单选项顺序不完整。");
+    }
+    expect(current.y).toBeGreaterThan(previous.y);
+  }
+  const usesStraightColumn = await page.evaluate(() => (
+    document.body.dataset.gameLayout === "mobile"
+      || (
+        document.body.dataset.gameLayout === "compact"
+        && window.innerHeight > window.innerWidth
+      )
+  ));
+  if (usesStraightColumn) {
+    expect(new Set(resolvedBounds.map((bounds) => bounds.x)).size).toBe(1);
+  } else {
+    for (let index = 1; index < resolvedBounds.length; index += 1) {
+      const previous = resolvedBounds[index - 1];
+      const current = resolvedBounds[index];
+      if (previous === undefined || current === undefined) continue;
+      expect(current.x).toBeGreaterThan(previous.x);
+    }
+  }
+  expect(await readLayaNodeBounds(page, "function-menu-continue")).not.toBeNull();
+}
+
 /** 将 Laya 舞台边界换算为浏览器 CSS 像素边界。 */
 async function readCssNodeBounds(
   page: Page,
@@ -1302,7 +1352,7 @@ test("Escape 功能菜单叠加在二级页上并逐层返回", async ({ page })
   await page.keyboard.press("Escape");
   await waitForScreen(page, "function_menu");
   expect(await readLayaNodeBounds(page, "page-settings")).not.toBeNull();
-  expect(await readLayaNodeBounds(page, "function-menu-continue")).not.toBeNull();
+  await expectFunctionMenuGeometry(page);
   await page.keyboard.press("Escape");
   await waitForScreen(page, "settings");
   await clickLayaNode(page, "page-settings-back");
