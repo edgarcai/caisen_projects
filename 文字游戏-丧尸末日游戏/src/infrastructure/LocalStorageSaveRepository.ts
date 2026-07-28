@@ -71,6 +71,16 @@ interface ParsedSaveCandidate {
   readonly savedAt: string | null;
 }
 
+/** 主档原位墓碑的稳定协议判别值。 */
+const SAVE_SLOT_TOMBSTONE_RECORD_KIND = "slot_tombstone";
+
+/** 覆盖主档后阻止旧备份复活的最小持久化记录。 */
+interface SaveSlotTombstone {
+  readonly record_kind: typeof SAVE_SLOT_TOMBSTONE_RECORD_KIND;
+  readonly schema_version: number;
+  readonly slot_id: number;
+}
+
 /** 用版本化 JSON、配置化手动槽位和逐槽滚动备份实现浏览器本地存档。 */
 export class LocalStorageSaveRepository implements SaveRepository {
   private readonly storage: StorageLike;
@@ -148,8 +158,11 @@ export class LocalStorageSaveRepository implements SaveRepository {
       ? this.allSlotIds()
       : [this.requireSlotId(slotId)];
     try {
-      return slotIds.some((candidateSlotId) => this.candidateKeys(candidateSlotId)
-        .some((key) => this.storage.getItem(key) !== null));
+      return slotIds.some((candidateSlotId) => {
+        if (this.hasTombstone(candidateSlotId)) return false;
+        return this.candidateKeys(candidateSlotId)
+          .some((key) => this.storage.getItem(key) !== null);
+      });
     } catch (error: unknown) {
       throw this.wrapStorageError("无法检查本地存档", error);
     }
@@ -173,6 +186,14 @@ export class LocalStorageSaveRepository implements SaveRepository {
       const serialized = JSON.stringify(document);
       const primaryKey = this.slotKey(targetSlotId);
       const current = this.storage.getItem(primaryKey);
+      if (
+        current !== null
+        && this.isSerializedTombstone(current, targetSlotId)
+      ) {
+        throw new SaveDataError(
+          `存档槽 ${String(targetSlotId)} 正在完成删除，无法写入。`,
+        );
+      }
       if (current !== null && this.isValidSerialized(current)) {
         this.rotateBackups(current, targetSlotId);
       }
@@ -191,15 +212,35 @@ export class LocalStorageSaveRepository implements SaveRepository {
   /** 从目标槽主档与新到旧的备份中返回第一个完整有效状态。 */
   public load(slotId?: number): GameState {
     const targetSlotId = this.resolveTargetSlot(slotId);
+    const primaryKey = this.slotKey(targetSlotId);
+    let primarySerialized: string | null;
+    try {
+      primarySerialized = this.storage.getItem(primaryKey);
+    } catch (error: unknown) {
+      throw this.wrapStorageError(
+        `无法读取存档槽 ${String(targetSlotId)} 的主档`,
+        error,
+      );
+    }
+    if (
+      primarySerialized !== null
+      && this.isSerializedTombstone(primarySerialized, targetSlotId)
+    ) {
+      throw new SaveDataError(`本地存档槽 ${String(targetSlotId)} 不存在。`);
+    }
     const errors: string[] = [];
     let found = false;
-    for (const key of this.candidateKeys(targetSlotId)) {
+    for (const [index, key] of this.candidateKeys(targetSlotId).entries()) {
       let serialized: string | null;
-      try {
-        serialized = this.storage.getItem(key);
-      } catch (error: unknown) {
-        errors.push(`${key}：${this.errorMessage(error)}`);
-        continue;
+      if (index === 0) {
+        serialized = primarySerialized;
+      } else {
+        try {
+          serialized = this.storage.getItem(key);
+        } catch (error: unknown) {
+          errors.push(`${key}：${this.errorMessage(error)}`);
+          continue;
+        }
       }
       if (serialized === null) continue;
       found = true;
@@ -225,6 +266,45 @@ export class LocalStorageSaveRepository implements SaveRepository {
   /** 返回当前活动槽 ID。 */
   public activeSlot(): number {
     return this.activeSlotId;
+  }
+
+  /** 原子覆盖目标主档为墓碑，使任何旧备份立即不可恢复。 */
+  public markSlotForDeletion(slotId?: number): void {
+    const targetSlotId = this.resolveTargetSlot(slotId);
+    try {
+      this.ensureTombstone(targetSlotId);
+    } catch (error: unknown) {
+      if (
+        error instanceof SaveDataError
+        && error.message.startsWith("无法标记存档槽")
+      ) {
+        throw error;
+      }
+      throw this.wrapStorageError(
+        `无法标记存档槽 ${String(targetSlotId)} 为待删除`,
+        error,
+      );
+    }
+  }
+
+  /** 幂等逻辑删除目标槽，物理清理失败时保留墓碑防止备份复活。 */
+  public deleteSlot(slotId?: number): void {
+    const targetSlotId = this.resolveTargetSlot(slotId);
+    this.markSlotForDeletion(targetSlotId);
+    this.purgeTombstonedSlot(targetSlotId);
+  }
+
+  /** 应用启动时扫描主档墓碑，并幂等重试上次中断的物理清理。 */
+  public reconcilePendingDeletions(): void {
+    for (const slotId of this.allSlotIds()) {
+      let tombstoned = false;
+      try {
+        tombstoned = this.hasTombstone(slotId);
+      } catch {
+        // 存储暂时不可读时不阻断启动，后续读操作仍会保持失败关闭。
+      }
+      if (tombstoned) this.purgeTombstonedSlot(slotId);
+    }
   }
 
   /** 返回指定手动槽的稳定主键；一号槽继续使用旧版主键。 */
@@ -313,6 +393,9 @@ export class LocalStorageSaveRepository implements SaveRepository {
     for (const [index, key] of keys.entries()) {
       const serialized = this.storage.getItem(key);
       if (serialized === null) continue;
+      if (index === 0 && this.isSerializedTombstone(serialized, slotId)) {
+        return this.emptySummary(slotId, "empty");
+      }
       found = true;
       try {
         const candidate = this.parseSerializedCandidate(serialized);
@@ -403,6 +486,80 @@ export class LocalStorageSaveRepository implements SaveRepository {
     try {
       this.parseSerialized(serialized);
       return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 从原子序列化字符串识别由本仓库写入的槽位墓碑。 */
+  private isSerializedTombstone(serialized: string, slotId: number): boolean {
+    try {
+      const document = JSON.parse(serialized) as unknown;
+      if (
+        typeof document !== "object"
+        || document === null
+        || Array.isArray(document)
+        || Object.keys(document).length !== 3
+      ) {
+        return false;
+      }
+      const candidate = document as {
+        readonly record_kind?: unknown;
+        readonly schema_version?: unknown;
+        readonly slot_id?: unknown;
+      };
+      return candidate.record_kind === SAVE_SLOT_TOMBSTONE_RECORD_KIND
+        && typeof candidate.schema_version === "number"
+        && Number.isInteger(candidate.schema_version)
+        && candidate.schema_version >= 1
+        && candidate.slot_id === slotId;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 读取目标主档并判断其是否已由墓碑锁定。 */
+  private hasTombstone(slotId: number): boolean {
+    const serialized = this.storage.getItem(this.slotKey(slotId));
+    return serialized !== null && this.isSerializedTombstone(serialized, slotId);
+  }
+
+  /** 在目标主档上幂等写入并回读确认持久墓碑。 */
+  private ensureTombstone(slotId: number): void {
+    if (this.hasTombstone(slotId)) return;
+    const tombstone: SaveSlotTombstone = {
+      record_kind: SAVE_SLOT_TOMBSTONE_RECORD_KIND,
+      schema_version: this.schemaVersion,
+      slot_id: slotId,
+    };
+    this.storage.setItem(this.slotKey(slotId), JSON.stringify(tombstone));
+    if (!this.hasTombstone(slotId)) {
+      throw new SaveDataError(
+        `无法标记存档槽 ${String(slotId)} 为待删除：墓碑回读失败。`,
+      );
+    }
+  }
+
+  /** 先清理全部备份再删除主档墓碑，任何失败都保持逻辑删除。 */
+  private purgeTombstonedSlot(slotId: number): boolean {
+    const backupKeys = this.candidateKeys(slotId).slice(1);
+    for (const key of backupKeys) {
+      try {
+        this.storage.removeItem(key);
+      } catch {
+        // 继续尝试剩余备份，验证阶段决定是否可移除墓碑。
+      }
+    }
+    for (const key of backupKeys) {
+      try {
+        if (this.storage.getItem(key) !== null) return false;
+      } catch {
+        return false;
+      }
+    }
+    try {
+      this.storage.removeItem(this.slotKey(slotId));
+      return this.storage.getItem(this.slotKey(slotId)) === null;
     } catch {
       return false;
     }

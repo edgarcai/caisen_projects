@@ -42,6 +42,29 @@ class PassThroughSaveValidator implements SaveStateValidationPort {
   }
 }
 
+/** 按键注入删除异常，用于验证墓碑在部分清理失败时仍然可靠。 */
+class RemoveFaultStorage extends MemoryStorage {
+  private readonly failedRemoveKeys = new Set<string>();
+
+  /** 让指定键的后续删除调用抛出可预期异常。 */
+  public failRemovalFor(key: string): void {
+    this.failedRemoveKeys.add(key);
+  }
+
+  /** 恢复指定键的正常删除能力。 */
+  public restoreRemovalFor(key: string): void {
+    this.failedRemoveKeys.delete(key);
+  }
+
+  /** 按故障集合决定抛错或委托内存存储完成删除。 */
+  public override removeItem(key: string): void {
+    if (this.failedRemoveKeys.has(key)) {
+      throw new Error(`注入的删除失败：${key}`);
+    }
+    super.removeItem(key);
+  }
+}
+
 interface StateOptions {
   readonly mode?: GameMode;
   readonly playerNames?: readonly string[];
@@ -308,6 +331,110 @@ describe("LocalStorageSaveRepository 配置化手动槽位", () => {
     expect(repository.activeSlot()).toBe(2);
   });
 
+  it("只删除活动槽主档与全部备份，并保留其他槽和无关数据", () => {
+    const storage = new MemoryStorage();
+    const repository = createRepository(storage);
+    repository.save(createState({ survivalDays: 5 }), 1);
+    repository.save(createState({ survivalDays: 10 }), 2);
+    repository.save(createState({ survivalDays: 20 }), 2);
+    repository.save(createState({ survivalDays: 30 }), 2);
+    storage.setItem("settings-meta", "preserved");
+
+    repository.deleteSlot();
+
+    expect(repository.activeSlot()).toBe(2);
+    expect(repository.exists(2)).toBe(false);
+    expect(repository.listSlots()[1]?.status).toBe("empty");
+    expect(storage.getItem(repository.slotKey(2))).toBeNull();
+    expect(storage.getItem(repository.backupKey(1, 2))).toBeNull();
+    expect(storage.getItem(repository.backupKey(2, 2))).toBeNull();
+    expect(repository.load(1).survival_days).toBe(5);
+    expect(storage.getItem("settings-meta")).toBe("preserved");
+    expect(() => {
+      repository.deleteSlot(2);
+    }).not.toThrow();
+  });
+
+  it("失败槽写入主档原位墓碑后不再暴露主档或备份", () => {
+    const storage = new MemoryStorage();
+    const repository = createRepository(storage);
+    repository.save(createState({ survivalDays: 8 }), 1);
+    repository.save(createState({ survivalDays: 18 }), 1);
+    repository.save(createState({ survivalDays: 28 }), 2);
+
+    repository.markSlotForDeletion(1);
+
+    expect(JSON.parse(storage.getItem(repository.slotKey(1)) ?? "null")).toMatchObject({
+      record_kind: "slot_tombstone",
+      schema_version: 3,
+      slot_id: 1,
+    });
+    expect(storage.getItem(repository.backupKey(1, 1))).not.toBeNull();
+    expect(repository.exists(1)).toBe(false);
+    expect(repository.listSlots()[0]?.status).toBe("empty");
+    expect(() => repository.load(1)).toThrow("不存在");
+    expect(() => {
+      repository.save(createState({ survivalDays: 38 }), 1);
+    })
+      .toThrow("正在完成删除");
+    expect(repository.load(2).survival_days).toBe(28);
+  });
+
+  it("拒绝把槽位不匹配的伪墓碑当作删除凭据", () => {
+    const storage = new MemoryStorage();
+    const repository = createRepository(storage);
+    repository.save(createState({ survivalDays: 6 }), 1);
+    repository.save(createState({ survivalDays: 16 }), 1);
+    const backupBeforeReconcile = storage.getItem(repository.backupKey(1, 1));
+    storage.setItem(repository.slotKey(1), JSON.stringify({
+      record_kind: "slot_tombstone",
+      schema_version: 3,
+      slot_id: 2,
+    }));
+
+    repository.reconcilePendingDeletions();
+
+    expect(storage.getItem(repository.backupKey(1, 1))).toBe(backupBeforeReconcile);
+    expect(repository.exists(1)).toBe(true);
+    expect(repository.listSlots()[0]?.status).toBe("recoverable");
+    expect(repository.load(1).survival_days).toBe(6);
+  });
+
+  it("部分备份删除失败时保留墓碑并在后续启动协调中完成清理", () => {
+    const storage = new RemoveFaultStorage();
+    const repository = createRepository(storage);
+    repository.save(createState({ survivalDays: 2 }), 2);
+    repository.save(createState({ survivalDays: 12 }), 2);
+    repository.save(createState({ survivalDays: 22 }), 2);
+    repository.save(createState({ survivalDays: 32 }), 1);
+    storage.setItem("settings-meta", "preserved");
+    const failedBackupKey = repository.backupKey(1, 2);
+    storage.failRemovalFor(failedBackupKey);
+
+    expect(() => {
+      repository.deleteSlot(2);
+    }).not.toThrow();
+
+    expect(repository.exists(2)).toBe(false);
+    expect(repository.listSlots()[1]?.status).toBe("empty");
+    expect(storage.getItem(repository.slotKey(2))).not.toBeNull();
+    expect(storage.getItem(failedBackupKey)).not.toBeNull();
+    expect(() => repository.load(2)).toThrow("不存在");
+    expect(repository.load(1).survival_days).toBe(32);
+    expect(storage.getItem("settings-meta")).toBe("preserved");
+
+    storage.restoreRemovalFor(failedBackupKey);
+    const reloadedRepository = createRepository(storage);
+    reloadedRepository.reconcilePendingDeletions();
+
+    expect(storage.getItem(reloadedRepository.slotKey(2))).toBeNull();
+    expect(storage.getItem(reloadedRepository.backupKey(1, 2))).toBeNull();
+    expect(storage.getItem(reloadedRepository.backupKey(2, 2))).toBeNull();
+    expect(reloadedRepository.listSlots()[1]?.status).toBe("empty");
+    expect(reloadedRepository.load(1).survival_days).toBe(32);
+    expect(storage.getItem("settings-meta")).toBe("preserved");
+  });
+
   it("拒绝未配置槽数和越界显式操作", () => {
     const options = {
       storage: new MemoryStorage(),
@@ -325,5 +452,11 @@ describe("LocalStorageSaveRepository 配置化手动槽位", () => {
       repository.save(createState(), 4);
     }).toThrow(RangeError);
     expect(() => repository.load(4)).toThrow(RangeError);
+    expect(() => {
+      repository.markSlotForDeletion(4);
+    }).toThrow(RangeError);
+    expect(() => {
+      repository.deleteSlot(4);
+    }).toThrow(RangeError);
   });
 });

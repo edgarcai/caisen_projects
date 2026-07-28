@@ -23,6 +23,7 @@ import {
   type DashboardNavigationPolicy,
 } from "./navigation/DashboardNavigationStrategy";
 import { DeferredResizeCoordinator } from "./interactions/DeferredResizeCoordinator";
+import { FailureReturnCoordinator } from "./interactions/FailureReturnCoordinator";
 import type { NativeTextInputPolicyPort } from "./interactions/NativeTextInputPolicy";
 import {
   buildCoverThemeSelectionStates,
@@ -59,7 +60,10 @@ import {
   buildCommunicationLogDocument,
   DashboardPage,
 } from "./pages/DashboardPage";
-import { createDocumentPage } from "./pages/DocumentPage";
+import {
+  createDocumentPage,
+  createForcedEndingPage,
+} from "./pages/DocumentPage";
 import {
   createArchiveCollectionPage,
   createArchiveDocumentPage,
@@ -185,6 +189,7 @@ export class GameShell {
   private exitVerificationTimer: ReturnType<typeof setTimeout> | null;
   private connectionTimer: ReturnType<typeof setTimeout> | null;
   private readonly resizeCoordinator: DeferredResizeCoordinator;
+  private readonly failureReturnCoordinator: FailureReturnCoordinator;
   private viewportListenersInstalled: boolean;
   private expeditionDraft: ExpeditionDraft;
   private encounterSelection: EncounterBattleSelection;
@@ -244,6 +249,10 @@ export class GameShell {
       this.hasActiveTextEntry,
       this.commitResize,
     );
+    this.failureReturnCoordinator = new FailureReturnCoordinator(
+      config.failure_flow.forced_return_delay_ms,
+      (): void => { void this.completeFailedGame(); },
+    );
     this.viewportListenersInstalled = false;
     this.expeditionDraft = emptyExpeditionDraft();
     this.encounterSelection = emptyEncounterBattleSelection();
@@ -274,6 +283,7 @@ export class GameShell {
     ]);
     this.snapshot = snapshot;
     this.canLoad = canLoad;
+    this.routeToFailureEndingIfNeeded(snapshot);
     this.render(true);
   }
 
@@ -292,6 +302,7 @@ export class GameShell {
     this.resizeCoordinator.destroy();
     this.clearExitVerificationTimer();
     this.clearConnectionTimer();
+    this.failureReturnCoordinator.destroy();
     this.destroyRenderedPages();
     this.host.offAll();
     this.host.destroy(true);
@@ -322,6 +333,7 @@ export class GameShell {
    */
   private readonly handleSnapshot = (snapshot: GameUiSnapshot): void => {
     this.snapshot = snapshot;
+    this.routeToFailureEndingIfNeeded(snapshot);
     if (this.mounted && !this.executing) {
       this.render(true);
     }
@@ -446,6 +458,7 @@ export class GameShell {
       browserWindow.document.body.dataset.gameCoverAsset =
         resolveCoverThemeArtwork(activeCoverTheme, layout).asset;
     }
+    this.syncFailureReturnFlow();
   }
 
   /** 按稳定路由对象保存页面瞬态状态，避免把状态误套到新路由。 */
@@ -635,13 +648,22 @@ export class GameShell {
           this.goBack,
         );
       case "ending":
-        return this.createDocumentRoute(
-          layout,
-          "page-ending",
-          snapshot.ending ?? route.context?.document ?? this.emptyDocument(""),
-          this.config.texts.close,
-          this.closeEnding,
-        );
+        return snapshot.endingOutcome === "failure"
+          ? createForcedEndingPage(
+              this.runtime,
+              this.factory,
+              this.config,
+              layout,
+              "page-ending",
+              snapshot.ending ?? route.context?.document ?? this.emptyDocument(""),
+            )
+          : this.createDocumentRoute(
+              layout,
+              "page-ending",
+              snapshot.ending ?? route.context?.document ?? this.emptyDocument(""),
+              this.config.texts.close,
+              this.closeVictoryEnding,
+            );
       case "return_menu_confirm":
         return this.createReturnConfirm(layout);
       case "function_menu":
@@ -2679,13 +2701,59 @@ export class GameShell {
     this.render();
   };
 
-  /**
-   * 关闭结局后回到已结束的指挥台。
-   */
-  private readonly closeEnding = (): void => {
+  /** 关闭胜利结局后回到已结束的指挥台；失败结局不会绑定此入口。 */
+  private readonly closeVictoryEnding = (): void => {
     this.navigation.reset({ screen: "dashboard" });
     this.render();
   };
+
+  /** 根据当前快照和顶层路由启停唯一失败结算倒计时。 */
+  private syncFailureReturnFlow(): void {
+    if (this.isFailureEndingActive()) {
+      this.failureReturnCoordinator.activate();
+    } else {
+      this.failureReturnCoordinator.deactivate();
+    }
+  }
+
+  /** 判断当前是否处于不可跳过的失败结局页。 */
+  private isFailureEndingActive(): boolean {
+    return this.navigation.current().screen === "ending"
+      && this.snapshot?.endingOutcome === "failure";
+  }
+
+  /** 删除失败本局的活动存档与备份，刷新可读槽位并强制回到封面。 */
+  private async completeFailedGame(): Promise<void> {
+    if (!this.mounted || !this.isFailureEndingActive()) return;
+    await this.execute(
+      { type: "discard_failed_game" },
+      (): void => {
+        this.expeditionDraft = emptyExpeditionDraft();
+        this.encounterSelection = emptyEncounterBattleSelection();
+        this.encounterPreparationSelection = emptyEncounterPreparationSelection();
+        this.pendingNewGameRequest = null;
+        this.navigation.reset({ screen: "menu" });
+      },
+    );
+    if (!this.isMounted()) return;
+    this.canLoad = await Promise.resolve(this.port.canLoadGame());
+    if (!this.isMounted()) return;
+    this.render(true);
+  }
+
+  /** 在异步边界后重新读取宿主挂载状态，避免销毁后继续刷新。 */
+  private isMounted(): boolean {
+    return this.mounted;
+  }
+
+  /** 把任意来源的失败快照统一锁定到失败结局根路由。 */
+  private routeToFailureEndingIfNeeded(snapshot: GameUiSnapshot): boolean {
+    if (snapshot.endingOutcome !== "failure") return false;
+    if (this.navigation.current().screen !== "ending") {
+      this.navigation.reset({ screen: "ending" });
+    }
+    return true;
+  }
 
   /**
    * 向应用层提交新游戏命令。
@@ -3338,13 +3406,20 @@ export class GameShell {
       const result = await Promise.resolve(this.port.execute(command));
       this.snapshot =
         result.snapshot ?? (await Promise.resolve(this.port.getSnapshot()));
-      if (result.navigation !== undefined) {
-        this.applyNavigation(result.navigation);
-      } else if (result.accepted) {
-        fallbackNavigation();
+      const failureEnding = this.routeToFailureEndingIfNeeded(this.snapshot);
+      if (!failureEnding) {
+        if (result.navigation !== undefined) {
+          this.applyNavigation(result.navigation);
+        } else if (result.accepted) {
+          fallbackNavigation();
+        }
       }
       const notice = result.notice ?? this.snapshot.notice;
-      if (notice !== null && (showNoticePage || !result.accepted)) {
+      if (
+        !failureEnding
+        && notice !== null
+        && (showNoticePage || !result.accepted)
+      ) {
         this.navigation.push({
           screen: "message",
           context: {
@@ -3393,6 +3468,7 @@ export class GameShell {
       screen === "publisher_splash"
       || screen === "menu"
       || screen === "connection"
+      || this.isFailureEndingActive()
     ) {
       return;
     }
@@ -3438,7 +3514,8 @@ export class GameShell {
       return;
     }
     if (screen === "ending") {
-      this.closeEnding();
+      if (this.snapshot?.endingOutcome === "failure") return;
+      this.closeVictoryEnding();
       return;
     }
     this.goBack();

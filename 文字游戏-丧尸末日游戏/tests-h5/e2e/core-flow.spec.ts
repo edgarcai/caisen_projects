@@ -10,6 +10,11 @@ interface E2eWebConfig {
   readonly motion: {
     readonly cover_menu_description_delay_ms: number;
   };
+  readonly assets: {
+    readonly cover_themes: {
+      readonly default_id: string;
+    };
+  };
   readonly new_game_setup: {
     readonly name_input: {
       readonly html_type: string;
@@ -27,11 +32,16 @@ interface E2eWebConfig {
     }[];
   };
   readonly storage: {
+    readonly key: string;
+    readonly backup_slots: number;
     readonly save_slot_count: number;
     readonly settings_key: string;
     readonly settings_schema_version: number;
     readonly achievement_key: string;
     readonly achievement_schema_version: number;
+  };
+  readonly failure_flow: {
+    readonly forced_return_delay_ms: number;
   };
   readonly texts: {
     readonly profile_name_label: string;
@@ -64,6 +74,10 @@ interface E2eSurvivalSystemsConfig {
   };
 }
 
+interface E2eCoopConfig {
+  readonly account_storage_key: string;
+}
+
 /** 从权威 H5 配置读取移动端测试阈值，避免测试复制产品参数。 */
 function loadE2eWebConfig(): E2eWebConfig {
   const configPath = resolve(
@@ -93,12 +107,34 @@ function loadE2eSurvivalSystemsConfig(): E2eSurvivalSystemsConfig {
   return JSON.parse(readFileSync(configPath, "utf8")) as E2eSurvivalSystemsConfig;
 }
 
+/** 读取账户与联机持久化键，验证失败删档不会越界清理元数据。 */
+function loadE2eCoopConfig(): E2eCoopConfig {
+  const configPath = resolve(import.meta.dirname, "../../config/coop.json");
+  return JSON.parse(readFileSync(configPath, "utf8")) as E2eCoopConfig;
+}
+
 const webConfigDocument = loadE2eWebConfig();
 const expeditionBranchingConfigDocument =
   loadE2eExpeditionBranchingEventsConfig();
 const survivalSystemsConfigDocument = loadE2eSurvivalSystemsConfig();
+const coopConfigDocument = loadE2eCoopConfig();
 const qualityConfig = webConfigDocument.quality_assurance;
 const responsiveConfig = webConfigDocument.responsive;
+const failureMetadataValues = {
+  settings: JSON.stringify({
+    schema_version: webConfigDocument.storage.settings_schema_version,
+    reduced_motion: false,
+    selected_cover_theme_id: webConfigDocument.assets.cover_themes.default_id,
+  }),
+  achievements: JSON.stringify({
+    schema_version: webConfigDocument.storage.achievement_schema_version,
+    unlocked_achievement_ids: [],
+  }),
+  account: JSON.stringify({
+    accountId: "qa-failure-account",
+    displayName: "删档隔离所长",
+  }),
+} as const;
 
 interface DebugNodeBounds {
   readonly x: number;
@@ -226,6 +262,11 @@ interface BrowserGameDebugHandle {
         Record<string, readonly DebugEncounterAvailableAction[]>
       >;
     } | null;
+    readonly ending: {
+      readonly title: string;
+      readonly body: string;
+    } | null;
+    readonly endingOutcome: "victory" | "failure" | null;
   };
 }
 
@@ -792,6 +833,131 @@ async function startSingleGame(page: Page, playerName: string): Promise<void> {
   await startGame(page, "single", playerName);
 }
 
+/** 创建含主档与滚动备份的合法失败存档夹具，并保留一个无关存储键供隔离性断言。 */
+async function createFailedSaveFixture(
+  page: Page,
+  targetSlotId: number,
+  playerName: string,
+): Promise<void> {
+  await startSingleGame(page, playerName);
+  await page.keyboard.press("Escape");
+  await waitForScreen(page, "function_menu");
+  await clickScrollableLayaNode(
+    page,
+    "page-function-menu-option-save",
+    "page-function-menu-scroll",
+  );
+  await waitForScreen(page, "save_slots");
+  const saveCount = webConfigDocument.storage.backup_slots + 1;
+  for (let saveIndex = 0; saveIndex < saveCount; saveIndex += 1) {
+    await clickScrollableLayaNode(
+      page,
+      `page-save-slots-slot-${String(targetSlotId)}`,
+      "page-save-slots-scroll",
+    );
+    await waitForScreen(page, "message");
+    if (saveIndex < saveCount - 1) {
+      await clickLayaNode(page, "page-message-close");
+      await waitForScreen(page, "function_menu");
+      await clickScrollableLayaNode(
+        page,
+        "page-function-menu-option-save",
+        "page-function-menu-scroll",
+      );
+      await waitForScreen(page, "save_slots");
+    }
+  }
+  await page.evaluate(({ storageKey, slotId, preservedMetadata }) => {
+    const slotKey = `${storageKey}:slot:${String(slotId)}`;
+    const serialized = localStorage.getItem(slotKey);
+    if (serialized === null) throw new Error("失败流程测试没有生成目标主存档。");
+    const document = JSON.parse(serialized) as {
+      game_state: {
+        shelter: { hope: number };
+        ending: unknown;
+      };
+    };
+    document.game_state.shelter.hope = 0;
+    document.game_state.ending = {
+      ending_id: "hope_extinguished",
+      outcome: "failure",
+      message: [
+        "失败原因：希望归零，幸存者不再相信明天值得等待。",
+        "对应失败结局：无人守望",
+        "门被从内部打开。人们各自走入雨里。",
+      ].join("\n\n"),
+    };
+    localStorage.setItem(slotKey, JSON.stringify(document));
+    localStorage.setItem("qa-unrelated-meta", "preserved");
+    for (const entry of preservedMetadata) {
+      localStorage.setItem(entry.key, entry.value);
+    }
+  }, {
+    storageKey: webConfigDocument.storage.key,
+    slotId: targetSlotId,
+    preservedMetadata: [
+      {
+        key: webConfigDocument.storage.settings_key,
+        value: failureMetadataValues.settings,
+      },
+      {
+        key: webConfigDocument.storage.achievement_key,
+        value: failureMetadataValues.achievements,
+      },
+      {
+        key: coopConfigDocument.account_storage_key,
+        value: failureMetadataValues.account,
+      },
+    ],
+  });
+  const backupsBeforeFailure = await page.evaluate(({ storageKey, slotId, backups }) => {
+    const slotKey = `${storageKey}:slot:${String(slotId)}`;
+    return Array.from(
+      { length: backups },
+      (_value, index) => localStorage.getItem(`${slotKey}:backup:${String(index + 1)}`),
+    );
+  }, {
+    storageKey: webConfigDocument.storage.key,
+    slotId: targetSlotId,
+    backups: webConfigDocument.storage.backup_slots,
+  });
+  expect(backupsBeforeFailure.every((value) => value !== null)).toBe(true);
+}
+
+/** 等待一次完整重载稳定下来，并兼容闪屏、自动更新日志或已在封面的启动状态。 */
+async function reloadToMainMenu(page: Page): Promise<void> {
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.locator("#boot-status")).toBeHidden();
+  await expect.poll(async () => page.evaluate(() => (
+    document.body.dataset.gameScreen ?? null
+  ))).toMatch(/^(publisher_splash|update_log|menu)$/);
+  let screen = await page.evaluate(() => document.body.dataset.gameScreen ?? null);
+  if (screen === "publisher_splash") {
+    await advancePublisherSplash(page);
+    screen = await page.evaluate(() => document.body.dataset.gameScreen ?? null);
+  }
+  if (screen === "update_log") {
+    await closeAutomaticUpdateLog(page);
+  }
+  await waitForScreen(page, "menu");
+}
+
+/** 打开目标失败槽，并停在尚未选择槽位的读档页面。 */
+async function openFailedSaveSlots(page: Page): Promise<void> {
+  await reloadToMainMenu(page);
+  await clickLayaNode(page, "menu-load-game");
+  await waitForScreen(page, "save_slots");
+}
+
+/** 在目标槽点击前冻结浏览器时间，返回配置化失败倒计时时长。 */
+async function pauseBeforeFailureCountdown(page: Page): Promise<number> {
+  const failureDelayMs = webConfigDocument.failure_flow.forced_return_delay_ms;
+  const failureClockAnchor = Date.now();
+  await page.clock.install({ time: failureClockAnchor });
+  await page.clock.pauseAt(failureClockAnchor + failureDelayMs);
+  return failureDelayMs;
+}
+
 /** 打开一局剧情模式游戏。 */
 async function startStoryGame(page: Page, playerName: string): Promise<void> {
   await startGame(page, "story", playerName);
@@ -1176,6 +1342,177 @@ test("ESC 六栏存档可写入指定栏位并刷新后按槽读档", async ({ p
   await waitForScreen(page, "dashboard");
 
   expect((await readDebugSnapshot(page)).activePlayer?.name).toBe("守夜人");
+});
+
+test("失败结局锁定返回并在配置化三秒后删除本局存档", async ({ page }) => {
+  test.slow();
+  await closeAutomaticUpdateLog(page);
+  const targetSlotId = 2;
+  await createFailedSaveFixture(page, targetSlotId, "终局所长");
+  await openFailedSaveSlots(page);
+  const failureDelayMs = await pauseBeforeFailureCountdown(page);
+  await clickScrollableLayaNode(
+    page,
+    `page-save-slots-slot-${String(targetSlotId)}`,
+    "page-save-slots-scroll",
+  );
+  await waitForScreen(page, "ending");
+
+  const lockedEnding = await page.evaluate(() => {
+    const debug = window.__SHELTER_GAME__;
+    if (debug === undefined) throw new Error("失败页缺少只读诊断接口。");
+    return {
+      screen: debug.getCurrentScreen(),
+      routes: debug.getRouteScreens(),
+      snapshot: debug.getSnapshot(),
+      content: debug.getNodeBounds("page-ending-content"),
+      close: debug.getNodeBounds("page-ending-close"),
+      back: debug.getNodeBounds("page-ending-back"),
+    };
+  });
+  expect(lockedEnding.screen).toBe("ending");
+  expect(lockedEnding.routes.at(-1)).toBe("ending");
+  expect(lockedEnding.snapshot.endingOutcome).toBe("failure");
+  expect(lockedEnding.snapshot.ending?.body).toContain("失败原因：");
+  expect(lockedEnding.snapshot.ending?.body).toContain("对应失败结局：无人守望");
+  expect(lockedEnding.content).not.toBeNull();
+  expect(lockedEnding.close).toBeNull();
+  expect(lockedEnding.back).toBeNull();
+
+  await page.keyboard.press("Escape");
+  expect(await page.evaluate(() => document.body.dataset.gameScreen)).toBe("ending");
+  await page.evaluate(() => {
+    history.pushState({ failureBackProbe: "forward-target" }, document.title);
+    history.back();
+  });
+  await expect.poll(async () => page.evaluate(() => ({
+    screen: document.body.dataset.gameScreen ?? null,
+    probe: (history.state as { failureBackProbe?: unknown } | null)
+      ?.failureBackProbe ?? null,
+  }))).toEqual({ screen: "ending", probe: null });
+  await page.evaluate(() => { history.forward(); });
+  await page.waitForTimeout(qualityConfig.scroll_settle_ms * 2);
+  expect(await page.evaluate(() => ({
+    screen: document.body.dataset.gameScreen ?? null,
+    probe: (history.state as { failureBackProbe?: unknown } | null)
+      ?.failureBackProbe ?? null,
+  }))).toEqual({ screen: "ending", probe: null });
+
+  await page.clock.fastForward(failureDelayMs - 1);
+  expect(await page.evaluate(() => document.body.dataset.gameScreen ?? null)).toBe("ending");
+  expect(await page.evaluate(({ storageKey, slotId }) =>
+    localStorage.getItem(`${storageKey}:slot:${String(slotId)}`),
+  { storageKey: webConfigDocument.storage.key, slotId: targetSlotId })).not.toBeNull();
+  await page.clock.fastForward(1);
+  await expect.poll(async () => page.evaluate(() =>
+    document.body.dataset.gameScreen ?? null,
+  ), {
+    timeout: failureDelayMs + 3000,
+  }).toBe("menu");
+  const storageAfterFailure = await page.evaluate(({
+    storageKey,
+    slotId,
+    backups,
+    metadataKeys,
+  }) => {
+    const slotKey = `${storageKey}:slot:${String(slotId)}`;
+    return {
+      primary: localStorage.getItem(slotKey),
+      backupValues: Array.from(
+        { length: backups },
+        (_value, index) => localStorage.getItem(`${slotKey}:backup:${String(index + 1)}`),
+      ),
+      unrelated: localStorage.getItem("qa-unrelated-meta"),
+      metadata: {
+        settings: localStorage.getItem(metadataKeys.settings),
+        achievements: localStorage.getItem(metadataKeys.achievements),
+        account: localStorage.getItem(metadataKeys.account),
+      },
+      slotStatus: window.__SHELTER_GAME__?.getSnapshot().saveSlots.find(
+        (slot) => slot.slotId === slotId,
+      )?.status,
+    };
+  }, {
+    storageKey: webConfigDocument.storage.key,
+    slotId: targetSlotId,
+    backups: webConfigDocument.storage.backup_slots,
+    metadataKeys: {
+      settings: webConfigDocument.storage.settings_key,
+      achievements: webConfigDocument.storage.achievement_key,
+      account: coopConfigDocument.account_storage_key,
+    },
+  });
+  expect(storageAfterFailure.primary).toBeNull();
+  expect(storageAfterFailure.backupValues).toEqual(
+    Array.from({ length: webConfigDocument.storage.backup_slots }, () => null),
+  );
+  expect(storageAfterFailure.unrelated).toBe("preserved");
+  expect(storageAfterFailure.metadata).toEqual(failureMetadataValues);
+  expect(storageAfterFailure.slotStatus).toBe("empty");
+});
+
+test("失败页倒计时内重载仍清除旧档且目标槽不可恢复", async ({ page }) => {
+  test.slow();
+  await closeAutomaticUpdateLog(page);
+  const targetSlotId = 2;
+  await createFailedSaveFixture(page, targetSlotId, "重载测试所长");
+  await openFailedSaveSlots(page);
+  await pauseBeforeFailureCountdown(page);
+  await clickScrollableLayaNode(
+    page,
+    `page-save-slots-slot-${String(targetSlotId)}`,
+    "page-save-slots-scroll",
+  );
+  await waitForScreen(page, "ending");
+  expect((await readDebugSnapshot(page)).endingOutcome).toBe("failure");
+
+  await page.clock.resume();
+  await reloadToMainMenu(page);
+  const reloadedSlot = (await readDebugSnapshot(page)).saveSlots.find(
+    (slot) => slot.slotId === targetSlotId,
+  );
+  expect(reloadedSlot).toMatchObject({
+    status: "empty",
+    loadable: false,
+    writable: true,
+  });
+
+  const storageAfterReload = await page.evaluate(({
+    storageKey,
+    slotId,
+    backups,
+    metadataKeys,
+  }) => {
+    const slotKey = `${storageKey}:slot:${String(slotId)}`;
+    return {
+      primary: localStorage.getItem(slotKey),
+      backupValues: Array.from(
+        { length: backups },
+        (_value, index) => localStorage.getItem(`${slotKey}:backup:${String(index + 1)}`),
+      ),
+      unrelated: localStorage.getItem("qa-unrelated-meta"),
+      metadata: {
+        settings: localStorage.getItem(metadataKeys.settings),
+        achievements: localStorage.getItem(metadataKeys.achievements),
+        account: localStorage.getItem(metadataKeys.account),
+      },
+    };
+  }, {
+    storageKey: webConfigDocument.storage.key,
+    slotId: targetSlotId,
+    backups: webConfigDocument.storage.backup_slots,
+    metadataKeys: {
+      settings: webConfigDocument.storage.settings_key,
+      achievements: webConfigDocument.storage.achievement_key,
+      account: coopConfigDocument.account_storage_key,
+    },
+  });
+  expect(storageAfterReload.primary).toBeNull();
+  expect(storageAfterReload.backupValues).toEqual(
+    Array.from({ length: webConfigDocument.storage.backup_slots }, () => null),
+  );
+  expect(storageAfterReload.unrelated).toBe("preserved");
+  expect(storageAfterReload.metadata).toEqual(failureMetadataValues);
 });
 
 test("启动更新日志关闭后展示五个主入口且不再提供封面退出", async ({

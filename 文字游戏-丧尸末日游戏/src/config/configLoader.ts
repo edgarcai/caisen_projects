@@ -8,6 +8,7 @@ import type {
   DashboardNavigationConfig,
   EngineConfig,
   EscMenuLayoutVariantConfig,
+  FailureFlowConfig,
   GuidedTutorialConfig,
   LayoutConfig,
   ManagementCategoryShortcutConfig,
@@ -1592,6 +1593,22 @@ function parseStorage(value: unknown): StorageConfig {
   return config;
 }
 
+/** 解析失败页不可跳过时长与强制返回提示模板。 */
+function parseFailureFlow(value: unknown): FailureFlowConfig {
+  const source = expectObject(value, "failure_flow");
+  return {
+    forced_return_delay_ms: expectInteger(
+      source.forced_return_delay_ms,
+      "failure_flow.forced_return_delay_ms",
+      1,
+    ),
+    return_notice_format: expectPresentString(
+      source.return_notice_format,
+      "failure_flow.return_notice_format",
+    ),
+  };
+}
+
 /** 解析更新日志首次挂载时的自动展示策略。 */
 function parseUpdateLog(value: unknown): UpdateLogConfig {
   const source = expectObject(value, "update_log");
@@ -1791,6 +1808,7 @@ export function parseWebGameConfig(value: unknown): WebGameConfig {
     publisher_splash: parsePublisherSplash(source.publisher_splash),
     layout: parseLayout(source.layout),
     storage: parseStorage(source.storage),
+    failure_flow: parseFailureFlow(source.failure_flow),
     update_log: parseUpdateLog(source.update_log),
     web_exit: parseWebExit(source.web_exit),
     navigation,

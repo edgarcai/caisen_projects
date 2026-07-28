@@ -1,10 +1,11 @@
-import type {
-  CampaignDifficultyConfig,
-  CampaignOriginConfig,
-  CampaignShelterTypeConfig,
-  CampaignTraitConfig,
-  GameConfigDocument,
-  NumericEffectConfig,
+import {
+  formatTemplate,
+  type CampaignDifficultyConfig,
+  type CampaignOriginConfig,
+  type CampaignShelterTypeConfig,
+  type CampaignTraitConfig,
+  type GameConfigDocument,
+  type NumericEffectConfig,
 } from "../domain/content";
 import { isStaticStateOperationTargetSupported } from "../domain/state-operation-targets";
 import type {
@@ -77,6 +78,10 @@ function mergeFailureEndingExpansion(
   game: GameConfigDocument,
   endings: readonly FailureEndingConfig[],
 ): void {
+  const messageTemplate = game.texts.failure_ending_message_format;
+  if (messageTemplate === undefined || messageTemplate.trim().length === 0) {
+    throw new Error("失败结局文案模板 failure_ending_message_format 不能为空。");
+  }
   const entries = endings.map((ending) => {
     if (!(ending.triggerId in FAILURE_RULE_ID_BY_TRIGGER)) {
       throw new Error(`失败结局 ${ending.endingId} 使用了未映射触发器：${ending.triggerId}。`);
@@ -85,7 +90,7 @@ function mergeFailureEndingExpansion(
       ending.triggerId as keyof typeof FAILURE_RULE_ID_BY_TRIGGER
     ];
     const textKey = `failure_ending_${ending.endingId}`;
-    game.texts[textKey] = formatFailureEndingText(ending);
+    game.texts[textKey] = formatFailureEndingText(messageTemplate, ending);
     return [ruleId, {
       ending_id: ending.endingId,
       text_key: textKey,
@@ -105,9 +110,16 @@ function mergeFailureEndingExpansion(
   game.rules.failure_endings = Object.fromEntries(entries);
 }
 
-/** 把目录标题、摘要与尾声组合为完整中文结算文案。 */
-function formatFailureEndingText(ending: FailureEndingConfig): string {
-  return `【${ending.displayName}】\n${ending.summary}\n\n${ending.epilogue}`;
+/** 使用配置模板组合失败原因、结局标题与尾声。 */
+function formatFailureEndingText(
+  template: string,
+  ending: FailureEndingConfig,
+): string {
+  return formatTemplate(template, {
+    failure_reason: ending.summary,
+    ending_title: ending.displayName,
+    epilogue: ending.epilogue,
+  });
 }
 
 /** 把扩展难度转为领域可直接消费的难度配置。 */

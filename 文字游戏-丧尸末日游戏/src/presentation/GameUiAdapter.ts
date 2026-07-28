@@ -279,6 +279,7 @@ export class GameUiAdapter implements GameUiPort {
             body: state.ending.message,
             tone: isVictory(state) ? "success" : "danger",
           },
+      endingOutcome: state?.ending?.outcome ?? null,
       notice: this.notice,
     };
   }
@@ -309,7 +310,11 @@ export class GameUiAdapter implements GameUiPort {
         this.updateLogsFromReport(command, execution.report);
         this.notice = this.noticeFromReport(command, execution.report);
         if (execution.report.stateChanged) {
-          this.autoSave();
+          if (this.isFailedGame()) {
+            this.armTerminalFailureDiscard();
+          } else {
+            this.autoSave();
+          }
         }
       } else {
         this.notice = null;
@@ -554,6 +559,11 @@ export class GameUiAdapter implements GameUiPort {
         const report = this.application.performAction(command.actionId);
         return { accepted: report.stateChanged, report };
       }
+      case "discard_failed_game":
+        this.application.discardFailedGame();
+        this.lastAutoSavedCheckpointDay = null;
+        this.sessionLogs = [];
+        return { accepted: true, report: null };
       case "return_to_menu":
         return { accepted: true, report: null };
     }
@@ -585,6 +595,16 @@ export class GameUiAdapter implements GameUiPort {
       ability_id: command.abilityId,
       ...(command.targetId === undefined ? {} : { target_id: command.targetId }),
     };
+  }
+
+  /** 失败产生时立即持久锁定活动槽，避免刷新或关闭使旧备份复活。 */
+  private armTerminalFailureDiscard(): void {
+    this.application.armFailedGameDiscard();
+  }
+
+  /** 判断当前聚合是否已经生成失败结局。 */
+  private isFailedGame(): boolean {
+    return this.application.state?.ending?.outcome === "failure";
   }
 
   /** 仅在领域生成新的十日检查点时自动落盘，避免每次行动覆盖存档。 */

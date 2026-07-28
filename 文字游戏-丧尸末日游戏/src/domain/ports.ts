@@ -58,6 +58,12 @@ export interface SaveRepository {
 
   /** 返回当前活动槽的稳定正整数 ID。 */
   activeSlot(): number;
+
+  /** 把指定槽或当前活动槽持久标记为不可恢复。 */
+  markSlotForDeletion(slotId?: number): void;
+
+  /** 删除指定槽或当前活动槽的主档与全部滚动备份。 */
+  deleteSlot(slotId?: number): void;
 }
 
 /** 跨存档栏保留的成就元进度端口。 */

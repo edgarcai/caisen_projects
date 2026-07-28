@@ -66,6 +66,10 @@ class FixtureRepository implements SaveRepository {
   public selectSlot(): void { /* 迁移夹具不记录栏位。 */ }
   /** 为应用层提供稳定的一号测试栏位。 */
   public activeSlot(): number { return 1; }
+  /** 迁移夹具忽略失败槽的持久锁定。 */
+  public markSlotForDeletion(): void { /* 迁移夹具不落盘。 */ }
+  /** 迁移夹具忽略失败局清理调用。 */
+  public deleteSlot(): void { /* 迁移夹具不落盘。 */ }
 }
 
 /** 使用权威配置创建 v6 存档校验器。 */

@@ -571,6 +571,10 @@
     "backup_slots": 2,
     "save_slot_count": 6
   },
+  "failure_flow": {
+    "forced_return_delay_ms": 3000,
+    "return_notice_format": "本局存档将在 {seconds} 秒后删除，随后强制返回主界面。"
+  },
   "update_log": {
     "auto_open": true
   },

@@ -119,6 +119,16 @@ class FixtureSaveRepository implements SaveRepository {
   public activeSlot(): number {
     return this.selectedSlotId;
   }
+
+  /** 迁移夹具忽略失败槽的持久锁定。 */
+  public markSlotForDeletion(): void {
+    // 迁移单测不创建外部存档。
+  }
+
+  /** 迁移夹具忽略失败局清理调用。 */
+  public deleteSlot(): void {
+    // 迁移单测不创建外部存档。
+  }
 }
 
 /** 使用真实配置创建存档语义校验器。 */

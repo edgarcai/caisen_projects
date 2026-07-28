@@ -303,6 +303,29 @@ export class GameApplication {
     return this.repository.listSlots();
   }
 
+  /** 在真实失败结局生成时立即锁定活动槽，阻止刷新后恢复旧备份。 */
+  public armFailedGameDiscard(): void {
+    const state = this.requireState();
+    if (state.ending?.outcome !== "failure") {
+      throw new GameApplicationError(
+        this.content.text("discard_failed_game_requires_failure"),
+      );
+    }
+    this.repository.markSlotForDeletion();
+  }
+
+  /** 仅在真实失败结局中删除活动存档及其备份，并释放本局内存状态。 */
+  public discardFailedGame(): void {
+    const state = this.requireState();
+    if (state.ending?.outcome !== "failure") {
+      throw new GameApplicationError(
+        this.content.text("discard_failed_game_requires_failure"),
+      );
+    }
+    this.repository.deleteSlot();
+    this.state = null;
+  }
+
   /** 返回跨存档栏保留的已解锁成就 ID 副本。 */
   public unlockedAchievementIds(): readonly string[] {
     return this.achievements.unlockedAchievementIds();

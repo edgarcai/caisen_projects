@@ -133,17 +133,21 @@ export class PageScaffold implements PageView {
         onClick: onBack,
       },
     ];
-    createPageActionBar(
-      factory,
-      config,
-      surface,
-      `${testId}-actions`,
-      pageWidth,
-      pageHeight,
-      actions,
-    );
+    const hasFooterActions = actions.length > 0;
+    if (hasFooterActions) {
+      createPageActionBar(
+        factory,
+        config,
+        surface,
+        `${testId}-actions`,
+        pageWidth,
+        pageHeight,
+        actions,
+      );
+    }
     const bodyTop = config.layout.page.header_height;
-    const bodyBottom = pageHeight - config.layout.page.footer_height;
+    const footerHeight = hasFooterActions ? config.layout.page.footer_height : 0;
+    const bodyBottom = pageHeight - footerHeight;
     const bodyHeight = Math.max(
       config.controls.minimum_touch_size,
       bodyBottom - bodyTop,

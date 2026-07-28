@@ -493,6 +493,12 @@ export interface StorageConfig {
   readonly save_slot_count: number;
 }
 
+/** 失败结局的不可跳过展示与存档销毁策略。 */
+export interface FailureFlowConfig {
+  readonly forced_return_delay_ms: number;
+  readonly return_notice_format: string;
+}
+
 /** 更新日志的自动展示策略。 */
 export interface UpdateLogConfig {
   readonly auto_open: boolean;
@@ -950,6 +956,7 @@ export interface WebGameConfig {
   readonly publisher_splash: PublisherSplashConfig;
   readonly layout: LayoutConfig;
   readonly storage: StorageConfig;
+  readonly failure_flow: FailureFlowConfig;
   readonly update_log: UpdateLogConfig;
   readonly web_exit: WebExitConfig;
   readonly navigation: readonly NavigationConfig[];

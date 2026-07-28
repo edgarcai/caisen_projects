@@ -461,6 +461,12 @@ export interface GameUpdateLogTokens {
   readonly auto_open: boolean;
 }
 
+/** 失败页强制结算倒计时与提示文案。 */
+export interface GameFailureFlowTokens {
+  readonly forced_return_delay_ms: number;
+  readonly return_notice_format: string;
+}
+
 /** 局内导航允许出现的位置。 */
 export type NavigationPlacementToken =
   | "mobile_bottom"
@@ -809,6 +815,7 @@ export interface GameUiConfig {
   readonly publisher_splash: PublisherSplashTokens;
   readonly layout: GameLayoutTokens;
   readonly web_exit: GameWebExitTokens;
+  readonly failure_flow: GameFailureFlowTokens;
   readonly update_log: GameUpdateLogTokens;
   readonly navigation: readonly NavigationToken[];
   readonly texts: GameTextTokens;

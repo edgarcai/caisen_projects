@@ -384,7 +384,7 @@ function createRepository(
     archiveStorage,
     expeditionBranchCursor,
   );
-  return new LocalStorageSaveRepository({
+  const repository = new LocalStorageSaveRepository({
     storage: options.storage ?? browserStorageOrMemory(),
     storageKey: options.storageKey ?? storageConfig.key,
     schemaVersion: game.save_schema_version,
@@ -412,6 +412,8 @@ function createRepository(
     ],
     now: options.now,
   });
+  repository.reconcilePendingDeletions();
+  return repository;
 }
 
 /** 优先读取浏览器 localStorage，访问受限时降级到内存存储。 */

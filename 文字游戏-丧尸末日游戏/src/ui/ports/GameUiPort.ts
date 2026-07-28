@@ -86,6 +86,9 @@ export type GameScreenId =
  */
 export type GameMode = "single" | "multiplayer" | "story" | "endless";
 
+/** 结局页用于区分可关闭胜利与不可跳过失败流程的稳定结果。 */
+export type UiEndingOutcome = "victory" | "failure";
+
 /** 存档栏位页当前执行的稳定读写语义。 */
 export type SaveSlotsPageMode = "load" | "save";
 
@@ -728,6 +731,7 @@ export interface GameUiSnapshot {
   readonly weeklyArchives: readonly UiWeeklyArchiveView[];
   readonly tutorial: UiDocumentView | null;
   readonly ending: UiDocumentView | null;
+  readonly endingOutcome: UiEndingOutcome | null;
   readonly notice: UiNoticeView | null;
 }
 
@@ -821,6 +825,7 @@ export type GameUiCommand =
       readonly repetitions?: number;
     }
   | { readonly type: "supply_action"; readonly actionId: string }
+  | { readonly type: "discard_failed_game" }
   | { readonly type: "return_to_menu" };
 
 /**

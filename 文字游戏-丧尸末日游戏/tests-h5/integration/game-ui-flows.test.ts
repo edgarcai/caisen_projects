@@ -1,13 +1,58 @@
 import { describe, expect, it } from "vitest";
 import gameConfigDocument from "../../config/game_config.json";
+import webConfigDocument from "../../config/web_config.json";
 import { expeditionBranchingEventConfig } from "../../src/config/expeditionBranchingEventConfig";
+import { MemoryStorage } from "../../src/infrastructure";
 import type { GameUiSnapshot, UiOptionView } from "../../src/ui/ports/GameUiPort";
 import {
   buildH5Harness,
+  H5_TEST_STORAGE_KEY,
   requirePlayer,
   requireState,
   ScriptedRandomSource,
 } from "../helpers/H5TestHarness";
+
+/** 为失败存档流程注入指定键的物理删除故障。 */
+class RemoveFaultStorage extends MemoryStorage {
+  private readonly failedRemoveKeys = new Set<string>();
+  private readonly failedReadKeys = new Set<string>();
+
+  /** 使指定键的后续删除调用抛出测试异常。 */
+  public failRemovalFor(key: string): void {
+    this.failedRemoveKeys.add(key);
+  }
+
+  /** 取消指定键的删除故障，模拟下次启动时存储恢复。 */
+  public restoreRemovalFor(key: string): void {
+    this.failedRemoveKeys.delete(key);
+  }
+
+  /** 使指定键的后续回读调用抛出测试异常。 */
+  public failReadFor(key: string): void {
+    this.failedReadKeys.add(key);
+  }
+
+  /** 取消指定键的回读故障，便于验证墓碑下的残留备份。 */
+  public restoreReadFor(key: string): void {
+    this.failedReadKeys.delete(key);
+  }
+
+  /** 按故障集合决定抛错或返回存储中的当前字符串。 */
+  public override getItem(key: string): string | null {
+    if (this.failedReadKeys.has(key)) {
+      throw new Error(`注入的回读失败：${key}`);
+    }
+    return super.getItem(key);
+  }
+
+  /** 将未注入故障的键委托给标准内存存储删除。 */
+  public override removeItem(key: string): void {
+    if (this.failedRemoveKeys.has(key)) {
+      throw new Error(`注入的删除失败：${key}`);
+    }
+    super.removeItem(key);
+  }
+}
 
 /** 从同步命令结果中读取快照。 */
 function requireSnapshot(snapshot: GameUiSnapshot | undefined): GameUiSnapshot {
@@ -287,10 +332,162 @@ describe("H5 经营、物品与失败命令流", () => {
     expect(result.notice?.tone).toBe("danger");
     expect(snapshot.ended).toBe(true);
     expect(snapshot.ending).toMatchObject({ title: "长夜终局", tone: "danger" });
+    expect(snapshot.endingOutcome).toBe("failure");
+    expect(snapshot.ending?.body).toContain("失败原因：");
+    expect(snapshot.ending?.body).toContain("对应失败结局：");
     expect(requireAction(snapshot, "explore").disabled).toBe(true);
     expect(snapshot.actionGroups.some((group) => group.id === "system")).toBe(false);
-    expect(harness.adapter.execute({ type: "save_game" }).accepted).toBe(true);
+    const staleSave = harness.adapter.execute({ type: "save_game" });
+    expect(staleSave.accepted).toBe(false);
+    expect(staleSave.notice?.message).toContain("正在完成删除");
     expect(state.battle).toBeNull();
     expect(state.pending_exploration).toBeNull();
+  });
+
+  it("直接读入已失败存档时也立即锁定槽位而不等待下一次行动", () => {
+    const storage = new MemoryStorage();
+    const source = buildH5Harness({ storage });
+    source.adapter.execute({
+      type: "start_game",
+      mode: "single",
+      playerNames: ["白菜"],
+      saveSlotId: 2,
+    });
+    source.adapter.execute({ type: "save_game", slotId: 2 });
+    const sourceState = requireState(source.application);
+    sourceState.shelter.hope = 0;
+    requirePlayer(sourceState).hunger = 10;
+    const failureReport = source.application.performAction("use_food");
+    expect(failureReport.gameOver).toBe(true);
+    source.application.saveGame(2);
+
+    const reloaded = buildH5Harness({ storage });
+    const loaded = reloaded.adapter.execute({ type: "load_game", slotId: 2 });
+    const snapshot = requireSnapshot(loaded.snapshot);
+
+    expect(loaded.accepted).toBe(true);
+    expect(snapshot.endingOutcome).toBe("failure");
+    expect(reloaded.application.hasSave(2)).toBe(false);
+    expect(reloaded.application.saveSlots()[1]?.status).toBe("empty");
+    expect(() => reloaded.application.loadGame(2)).toThrow("不存在");
+  });
+
+  it("失败清理只删除本局活动槽与备份并释放当前游戏", () => {
+    const harness = buildH5Harness();
+    harness.adapter.execute({
+      type: "start_game",
+      mode: "single",
+      playerNames: ["白菜"],
+      saveSlotId: 2,
+    });
+    harness.adapter.execute({ type: "save_game", slotId: 3 });
+    for (
+      let saveIndex = 0;
+      saveIndex <= webConfigDocument.storage.backup_slots;
+      saveIndex += 1
+    ) {
+      harness.adapter.execute({ type: "save_game", slotId: 2 });
+    }
+    for (
+      let backupIndex = 1;
+      backupIndex <= webConfigDocument.storage.backup_slots;
+      backupIndex += 1
+    ) {
+      expect(harness.storage.getItem(
+        `${H5_TEST_STORAGE_KEY}:slot:2:backup:${String(backupIndex)}`,
+      )).not.toBeNull();
+    }
+    harness.storage.setItem("settings-meta", "preserved");
+    const state = requireState(harness.application);
+    state.shelter.hope = 0;
+    requirePlayer(state).hunger = 10;
+
+    const failed = harness.adapter.execute({
+      type: "supply_action",
+      actionId: "use_food",
+    });
+    expect(requireSnapshot(failed.snapshot).endingOutcome).toBe("failure");
+
+    const discarded = harness.adapter.execute({ type: "discard_failed_game" });
+
+    expect(discarded.accepted).toBe(true);
+    expect(harness.application.state).toBeNull();
+    expect(requireSnapshot(discarded.snapshot).endingOutcome).toBeNull();
+    expect(harness.application.hasSave(2)).toBe(false);
+    expect(harness.application.hasSave(3)).toBe(true);
+    expect(harness.storage.getItem(`${H5_TEST_STORAGE_KEY}:slot:2`)).toBeNull();
+    expect(harness.storage.getItem(`${H5_TEST_STORAGE_KEY}:slot:2:backup:1`)).toBeNull();
+    expect(harness.storage.getItem(`${H5_TEST_STORAGE_KEY}:slot:2:backup:2`)).toBeNull();
+    expect(harness.storage.getItem("settings-meta")).toBe("preserved");
+  });
+
+  it("备份物理删除异常时仍强制释放失败局并在重启后继续清理", () => {
+    const storage = new RemoveFaultStorage();
+    const harness = buildH5Harness({ storage });
+    harness.adapter.execute({
+      type: "start_game",
+      mode: "single",
+      playerNames: ["白菜"],
+      saveSlotId: 2,
+    });
+    harness.adapter.execute({ type: "save_game", slotId: 3 });
+    for (
+      let saveIndex = 0;
+      saveIndex <= webConfigDocument.storage.backup_slots;
+      saveIndex += 1
+    ) {
+      harness.adapter.execute({ type: "save_game", slotId: 2 });
+    }
+    storage.setItem("settings-meta", "preserved");
+    const state = requireState(harness.application);
+    state.shelter.hope = 0;
+    requirePlayer(state).hunger = 10;
+    const failed = harness.adapter.execute({
+      type: "supply_action",
+      actionId: "use_food",
+    });
+    expect(requireSnapshot(failed.snapshot).endingOutcome).toBe("failure");
+    const failedBackupKey = `${H5_TEST_STORAGE_KEY}:slot:2:backup:1`;
+    storage.failRemovalFor(failedBackupKey);
+    storage.failReadFor(failedBackupKey);
+
+    const discarded = harness.adapter.execute({ type: "discard_failed_game" });
+
+    expect(discarded.accepted).toBe(true);
+    expect(harness.application.state).toBeNull();
+    expect(requireSnapshot(discarded.snapshot).endingOutcome).toBeNull();
+    expect(harness.application.hasSave(2)).toBe(false);
+    expect(harness.application.hasSave(3)).toBe(true);
+    expect(storage.getItem(`${H5_TEST_STORAGE_KEY}:slot:2`)).not.toBeNull();
+    storage.restoreReadFor(failedBackupKey);
+    expect(storage.getItem(failedBackupKey)).not.toBeNull();
+    expect(storage.getItem("settings-meta")).toBe("preserved");
+
+    storage.restoreRemovalFor(failedBackupKey);
+    const restarted = buildH5Harness({ storage });
+
+    expect(restarted.application.hasSave(2)).toBe(false);
+    expect(restarted.application.hasSave(3)).toBe(true);
+    expect(storage.getItem(`${H5_TEST_STORAGE_KEY}:slot:2`)).toBeNull();
+    expect(storage.getItem(failedBackupKey)).toBeNull();
+    expect(storage.getItem(`${H5_TEST_STORAGE_KEY}:slot:2:backup:2`)).toBeNull();
+    expect(storage.getItem("settings-meta")).toBe("preserved");
+  });
+
+  it("没有失败结局时拒绝删除存档和当前游戏", () => {
+    const harness = buildH5Harness();
+    harness.adapter.execute({
+      type: "start_game",
+      mode: "single",
+      playerNames: ["白菜"],
+      saveSlotId: 2,
+    });
+    harness.adapter.execute({ type: "save_game", slotId: 2 });
+
+    const rejected = harness.adapter.execute({ type: "discard_failed_game" });
+
+    expect(rejected.accepted).toBe(false);
+    expect(harness.application.state).not.toBeNull();
+    expect(harness.application.hasSave(2)).toBe(true);
   });
 });
