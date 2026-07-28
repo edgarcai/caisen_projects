@@ -144,6 +144,8 @@ export interface NewGameSetupMobileTokens {
   readonly summary_height: number;
   readonly row_height: number;
   readonly panel_padding: number;
+  readonly step_navigation_tone: "default" | "muted";
+  readonly step_navigation_accent_on_press: boolean;
 }
 
 /** 开局页不依赖领域数据的配置化文案。 */

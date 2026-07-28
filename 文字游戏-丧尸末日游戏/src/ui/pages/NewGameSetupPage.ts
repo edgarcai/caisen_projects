@@ -545,7 +545,8 @@ function renderMobileSetup(
     y: stepButtonTop,
     width: navigationButtonWidth,
     height: stepButtonHeight,
-    tone: "muted",
+    tone: tokens.step_navigation_tone,
+    accentOnPress: tokens.step_navigation_accent_on_press,
     onClick: (): void => { context.moveCategory(-1); },
   });
   context.factory.button(stepPanel, {
@@ -555,7 +556,8 @@ function renderMobileSetup(
     y: stepButtonTop,
     width: navigationButtonWidth,
     height: stepButtonHeight,
-    tone: "primary",
+    tone: tokens.step_navigation_tone,
+    accentOnPress: tokens.step_navigation_accent_on_press,
     onClick: (): void => { context.moveCategory(1); },
   });
   const optionTop = startY + tokens.step_header_height + context.layout.sectionGap;

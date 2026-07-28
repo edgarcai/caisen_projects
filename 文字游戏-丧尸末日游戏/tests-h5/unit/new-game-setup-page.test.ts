@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import webConfigDocument from "../../config/web_config.json";
 import { parseWebGameConfig } from "../../src/config/configLoader";
+import { formatTemplate } from "../../src/domain/content";
 import {
   resolveResponsiveLayoutFromMetrics,
   type ResponsiveLayout,
@@ -24,16 +25,43 @@ import type {
   UiSaveSlotView,
 } from "../../src/ui/ports/GameUiPort";
 
-/** 不记录绘制内容、仅满足 UiFactory 契约的测试绘图对象。 */
+/** 测试绘图中可断言的按钮填充记录。 */
+interface DrawFillCall {
+  readonly fillColor: string;
+  readonly lineColor: string | undefined;
+}
+
+/** 记录最后一次按钮绘制颜色，并满足 UiFactory 绘图契约。 */
 class FakeGraphics {
-  /** 清空绘图记录；本测试不需要保存图元。 */
-  public clear(): void {}
+  public readonly fills: DrawFillCall[] = [];
 
-  /** 接收矩形绘制调用。 */
-  public drawRect(): void {}
+  /** 清空绘图记录，模拟 Laya 每次重绘覆盖旧图元。 */
+  public clear(): void {
+    this.fills.length = 0;
+  }
 
-  /** 接收多边形绘制调用。 */
-  public drawPoly(): void {}
+  /** 记录矩形填充和描边颜色。 */
+  public drawRect(
+    _x: number,
+    _y: number,
+    _width: number,
+    _height: number,
+    fillColor: string,
+    lineColor?: string,
+  ): void {
+    this.fills.push({ fillColor, lineColor });
+  }
+
+  /** 记录多边形填充和描边颜色。 */
+  public drawPoly(
+    _x: number,
+    _y: number,
+    _points: readonly number[],
+    fillColor: string,
+    lineColor?: string,
+  ): void {
+    this.fills.push({ fillColor, lineColor });
+  }
 
   /** 接收线段绘制调用。 */
   public drawLine(): void {}
@@ -609,6 +637,55 @@ describe("新游戏配置页", () => {
 
     mobileView.page.destroy();
     desktopView.page.destroy();
+  });
+
+  it("手机阶段导航默认统一灰色，并仅在按下时显示强调反馈", () => {
+    const view = createTestView(
+      createLayout(true),
+      createSaveSlots(),
+      "single",
+      1,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+    );
+    const root = view.page.root as unknown as FakeNode;
+    const previous = requireNode(
+      root,
+      "profile-setup-previous-step",
+    ) as FakeSprite;
+    const next = requireNode(root, "profile-setup-next-step") as FakeSprite;
+    const stepCounter = requireText(root, "profile-setup-step-counter");
+
+    expect(previous.graphics.fills.at(-1)?.fillColor).toBe(
+      webConfig.theme.background_soft,
+    );
+    expect(next.graphics.fills.at(-1)?.fillColor).toBe(
+      webConfig.theme.background_soft,
+    );
+
+    next.emit("mousedown");
+    expect(next.graphics.fills.at(-1)?.fillColor).toBe(
+      webConfig.theme.primary_pressed,
+    );
+    next.emit("mouseup");
+    next.emit("click");
+    expect(stepCounter.text).toBe(formatTemplate(
+      webConfig.new_game_setup.copy.step_format,
+      { current: 2, total: webConfig.new_game_setup.categories.length },
+    ));
+
+    previous.emit("mousedown");
+    expect(previous.graphics.fills.at(-1)?.fillColor).toBe(
+      webConfig.theme.primary_pressed,
+    );
+    previous.emit("mouseup");
+    previous.emit("click");
+    expect(stepCounter.text).toBe(formatTemplate(
+      webConfig.new_game_setup.copy.step_format,
+      { current: 1, total: webConfig.new_game_setup.categories.length },
+    ));
+    view.page.destroy();
   });
 
   it("手机横屏建档初始将姓名框完整滚入正文并避开底栏", () => {

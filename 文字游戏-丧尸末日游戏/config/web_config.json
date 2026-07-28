@@ -236,7 +236,9 @@
       "preview_height": 250,
       "summary_height": 920,
       "row_height": 92,
-      "panel_padding": 18
+      "panel_padding": 18,
+      "step_navigation_tone": "muted",
+      "step_navigation_accent_on_press": true
     },
     "copy": {
       "navigation_title": "建档阶段",

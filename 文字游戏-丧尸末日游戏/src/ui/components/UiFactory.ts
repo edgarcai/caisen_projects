@@ -53,6 +53,8 @@ export interface ButtonSpec {
   readonly skin?: ButtonSkinSpec;
   /** 无图片皮肤时，悬停与按压阶段使用主题强调色。 */
   readonly accentOnHover?: boolean;
+  /** 无图片皮肤时，仅在指针按下期间使用主题强调色。 */
+  readonly accentOnPress?: boolean;
   readonly fontSize?: number;
   readonly wordWrap?: boolean;
   readonly hoverableWhenDisabled?: boolean;
@@ -256,6 +258,7 @@ export class UiFactory {
         spec.tone ?? "default",
         state,
         spec.accentOnHover === true,
+        spec.accentOnPress === true,
       );
       const fillColor = usesLockedAppearance
         ? this.theme.background_soft
@@ -530,8 +533,12 @@ export class UiFactory {
     tone: UiTone,
     state: "idle" | "hover" | "pressed",
     accentOnHover: boolean,
+    accentOnPress: boolean,
   ): { readonly fill: string; readonly text: string; readonly border: string } {
-    if (accentOnHover && state !== "idle") {
+    const usesAccentFeedback =
+      (accentOnHover && state !== "idle") ||
+      (accentOnPress && state === "pressed");
+    if (usesAccentFeedback) {
       return {
         fill: state === "pressed"
           ? this.theme.primary_pressed

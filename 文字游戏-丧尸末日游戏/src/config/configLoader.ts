@@ -97,6 +97,7 @@ const NEW_GAME_SETUP_CATEGORIES = [
   "shelter",
   "slot",
 ] as const satisfies readonly NewGameSetupCategoryId[];
+const NEW_GAME_SETUP_STEP_NAVIGATION_TONES = ["default", "muted"] as const;
 
 const SKIN_KEYS = [
   "cover_button_idle",
@@ -1288,6 +1289,15 @@ function parseNewGameSetupMobile(value: unknown): NewGameSetupConfig["mobile"] {
     summary_height: expectNumber(source.summary_height, "new_game_setup.mobile.summary_height", 1),
     row_height: expectNumber(source.row_height, "new_game_setup.mobile.row_height", 1),
     panel_padding: expectNumber(source.panel_padding, "new_game_setup.mobile.panel_padding"),
+    step_navigation_tone: expectEnum(
+      source.step_navigation_tone,
+      NEW_GAME_SETUP_STEP_NAVIGATION_TONES,
+      "new_game_setup.mobile.step_navigation_tone",
+    ),
+    step_navigation_accent_on_press: expectBoolean(
+      source.step_navigation_accent_on_press,
+      "new_game_setup.mobile.step_navigation_accent_on_press",
+    ),
   };
 }
 

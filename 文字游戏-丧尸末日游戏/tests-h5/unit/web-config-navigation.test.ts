@@ -24,6 +24,10 @@ interface MutableWebConfigDocument {
     preset_names: string[];
     mode_options: Array<{ id: string; label: string; description: string }>;
     entry_mode_ids: string[];
+    mobile: {
+      step_navigation_tone: string;
+      step_navigation_accent_on_press: boolean;
+    };
   };
   guided_tutorial: {
     header_step_width_ratio: number;
@@ -208,6 +212,27 @@ describe("局内导航配置完整性", () => {
 });
 
 describe("新游戏姓名配置完整性", () => {
+  it("阶段导航使用统一灰色基调，并由配置启用按压强调", () => {
+    const parsed = parseWebGameConfig(webConfigDocument);
+    expect(parsed.new_game_setup.mobile).toMatchObject({
+      step_navigation_tone: "muted",
+      step_navigation_accent_on_press: true,
+    });
+
+    const invalidTone = cloneWebConfig();
+    invalidTone.new_game_setup.mobile.step_navigation_tone = "primary";
+    expect(() => parseWebGameConfig(invalidTone)).toThrow(
+      "new_game_setup.mobile.step_navigation_tone",
+    );
+
+    const invalidFeedback = cloneWebConfig();
+    invalidFeedback.new_game_setup.mobile.step_navigation_accent_on_press =
+      "true" as unknown as boolean;
+    expect(() => parseWebGameConfig(invalidFeedback)).toThrow(
+      "new_game_setup.mobile.step_navigation_accent_on_press",
+    );
+  });
+
   it("解析文本键盘属性和六个不重复中文预设名", () => {
     const parsed = parseWebGameConfig(webConfigDocument);
 
